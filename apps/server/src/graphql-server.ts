@@ -1,5 +1,6 @@
 import type { Server } from 'node:http';
-import { GraphQLError, Kind, getOperationAST } from 'graphql';
+// Match Pothos/Yoga's CJS GraphQL instance under both tsx and Vitest.
+import { GraphQLError, Kind, getOperationAST, parse, visit } from 'graphql/index.js';
 import type { DocumentNode, ExecutionArgs, OperationDefinitionNode } from 'graphql';
 import { createYoga } from 'graphql-yoga';
 import type { Plugin, YogaInitialContext } from 'graphql-yoga';
@@ -108,7 +109,25 @@ export async function authenticate(
   return { actor: null, sessionId: null, sessionToken: null, csrfToken: null, method: 'none' };
 }
 
-const AUTH_OPERATIONS = /\b(login|setupWorkspace|acceptInvite|signup)\s*[({]/;
+const AUTH_FIELDS = new Set(['login', 'setupWorkspace', 'acceptInvite', 'signup']);
+
+// Memoized: the same query strings arrive every request; re-parsing them each
+// time showed up in CPU profiles of the hot list path (SPEC §4.16).
+const authOperationCache = new Map<string, boolean>();
+
+function hasAuthOperation(query: string): boolean {
+  const cached = authOperationCache.get(query);
+  if (cached !== undefined) return cached;
+  let found = false;
+  try {
+    visit(parse(query), { Field(node) { if (AUTH_FIELDS.has(node.name.value)) found = true; } });
+  } catch {
+    found = false; // Yoga returns the syntax error without executing a resolver.
+  }
+  if (authOperationCache.size >= 1_000) authOperationCache.clear();
+  authOperationCache.set(query, found);
+  return found;
+}
 
 interface PerRequest {
   cookies: string[];
@@ -183,13 +202,18 @@ export function createGraphQLServer(opts: { services: Services; pubsub: Velocity
     },
     onParams({ params, request }) {
       // Credential endpoints: 10/min per IP (SPEC §6.3), checked before anything else runs.
-      if (params.query && AUTH_OPERATIONS.test(params.query)) {
+      if (params.query && hasAuthOperation(params.query)) {
         const ip = request.headers.get('x-velocity-client-ip') ?? 'unknown';
         const d = authLimiter.check(`auth:${ip}`);
         if (!d.allowed) {
           rateLimited.inc({ kind: 'auth' });
           throw new GraphQLError(`Too many sign-in attempts. Retry in ${d.retryAfter}s.`, {
-            extensions: { code: 'RATE_LIMITED', retryAfter: d.retryAfter, http: { status: 429 } },
+            extensions: { code: 'RATE_LIMITED', retryAfter: d.retryAfter, http: { status: 429, headers: {
+              'retry-after': String(d.retryAfter),
+              'x-ratelimit-limit': String(d.limit),
+              'x-ratelimit-remaining': String(d.remaining),
+              'x-ratelimit-reset': String(Math.ceil(Date.now() / 1000) + d.resetSeconds),
+            } } },
           });
         }
       }
@@ -270,7 +294,7 @@ export function createGraphQLServer(opts: { services: Services; pubsub: Velocity
             if (typeof params.authorization === 'string') headers.set('authorization', params.authorization);
             if (typeof params['x-mcp-session-id'] === 'string') headers.set('x-mcp-session-id', params['x-mcp-session-id'] as string);
             const usesCookie = !extractApiKey(headers);
-            if (usesCookie && headers.get('origin') && headers.get('origin') !== origin) return false;
+            if (usesCookie && headers.get('origin') !== origin) return false;
             const ip = (req.headers['x-velocity-client-ip'] as string | undefined) ?? req.socket.remoteAddress ?? null;
             try {
               const auth = await authenticate(services, headers, ip);

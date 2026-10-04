@@ -15,13 +15,16 @@ import type { ServiceActor } from '@velocity/services';
 import { loadConfig } from './config';
 
 const { values } = parseArgs({
+  // pnpm forwards the optional separator to the script verbatim.
+  args: process.argv.slice(2).filter((arg, index) => index !== 0 || arg !== '--'),
   options: {
     issues: { type: 'string', default: '600' },
     username: { type: 'string', default: 'demo' },
-    password: { type: 'string', default: 'demo-password-velocity' },
+    password: { type: 'string', default: 'correct-horse-battery-staple' },
   },
 });
-const total = Math.max(0, Number(values.issues));
+const total = Number(values.issues);
+if (!Number.isSafeInteger(total) || total < 0) throw new Error('--issues must be a non-negative integer.');
 const config = loadConfig();
 const pool = new pg.Pool({ connectionString: config.databaseUrl, max: 5 });
 await runMigrations(pool);
@@ -42,7 +45,7 @@ const status = await services.auth.setupStatus();
 if (status.needsSetup) {
   const s = await services.auth.setupWorkspace({ workspaceName: 'Demo', username: values.username!, password: values.password!, name: 'Demo Owner' }, {});
   owner = memberActor(s.user);
-  console.log(`created owner ${values.username} / ${values.password}`);
+  console.log(`created demo owner ${values.username}`);
 } else {
   const r = await pool.query<{ id: string }>('select id from users where is_owner limit 1');
   const u = await services.users.get(r.rows[0]!.id);
@@ -53,7 +56,7 @@ const members: string[] = [owner.userId];
 for (const name of ['alex', 'sam', 'jordan']) {
   if (!(await services.users.byUsername(name))) {
     const inv = await services.auth.createInvite(owner, { name });
-    const s = await services.auth.acceptInvite({ token: inv.token, username: name, password: `${name}-password-velocity`, name: name[0]!.toUpperCase() + name.slice(1) }, {});
+    const s = await services.auth.acceptInvite({ token: inv.token, username: name, password: 'correct-horse-battery-staple', name: name[0]!.toUpperCase() + name.slice(1) }, {});
     members.push(s.user.id);
   } else members.push((await services.users.byUsername(name))!.id);
 }
@@ -65,7 +68,13 @@ const teamSpecs = [
 ];
 const teams = [];
 for (const spec of teamSpecs) {
-  teams.push((await services.teams.getByKey(spec.key)) ?? (await services.teams.create(owner, { ...spec, color: pick(['blue', 'green', 'purple'] as const) })));
+  const existing = await services.teams.getByKey(spec.key);
+  if (existing) {
+    // The first-run wizard creates ENG with cycles off; the seed's cycle scenario needs them on.
+    teams.push(existing.cycleEnabled === spec.cycleEnabled ? existing : await services.teams.update(owner, existing.id, { cycleEnabled: spec.cycleEnabled }));
+  } else {
+    teams.push(await services.teams.create(owner, { ...spec, color: pick(['blue', 'green', 'purple'] as const) }));
+  }
 }
 const labels = (await services.labels.list()).filter((l) => !l.isGroup);
 const projects = [];
@@ -95,6 +104,9 @@ if (existingCycles.length === 0) {
 }
 await services.cycles.rotateTeam(eng.id);
 const openCycles = (await services.cycles.list(eng.id)).filter((c) => !c.closedAt);
+// The list is newest-first, so the active (current) cycle is the last open one, not openCycles[0]
+// (which is the upcoming window). Scope seeded issues onto the current cycle (SPEC §3.8).
+const activeCycleId = openCycles.length ? openCycles[openCycles.length - 1]!.id : null;
 
 const words = ['login', 'cache', 'billing', 'webhook', 'search', 'sidebar', 'export', 'import', 'latency', 'onboarding', 'invite', 'theme', 'keyboard', 'palette', 'cycle', 'board', 'filter', 'notification', 'avatar', 'upload'];
 const verbs = ['Fix', 'Add', 'Improve', 'Refactor', 'Investigate', 'Remove', 'Document', 'Speed up', 'Polish', 'Support'];
@@ -127,7 +139,7 @@ for (const team of teams) {
         uuidv7(), team.id, first + i, `${pick(verbs)} ${pick(words)} ${pick(words)}`, '', st.id, Math.random() < 0.6 ? pick(members) : null,
         rand(5), Math.random() < 0.7 ? pick([1, 2, 3, 5, 8]) : null, (first + i) * 1000,
         Math.random() < 0.3 ? pick(projects).id : null,
-        team === eng && openCycles.length && Math.random() < 0.3 ? openCycles[0]!.id : null,
+        team === eng && activeCycleId && Math.random() < 0.3 ? activeCycleId : null,
         owner.userId, createdAt, completedAt ?? createdAt, completedAt, cat === 'canceled' ? createdAt : null,
       ]);
     }

@@ -100,6 +100,13 @@ export class AuthService extends ServiceBase {
   private readonly throttle = new LoginThrottle();
   /** sha256(key) → verified key id, so argon2 runs once per key per TTL (SPEC §6.2). */
   private readonly keyCache = new Map<string, { apiKeyId: string; expires: number }>();
+  /**
+   * tokenHash → resolved session. Session resolution runs on every request
+   * (SPEC §7.1.2), so a short-lived cache keeps the hot list path off the DB
+   * (SPEC §4.16). Every path that revokes sessions invalidates explicitly, so
+   * cached entries can never outlive their revocation.
+   */
+  private readonly sessionCache = new Map<string, { user: UserRow; session: SessionRow; expires: number }>();
   private audit!: AuditService;
 
   bind(audit: AuditService): void {
@@ -206,11 +213,17 @@ export class AuthService extends ServiceBase {
 
   async resolveSession(token: string): Promise<{ user: UserRow; session: SessionRow } | null> {
     if (!token || token.length > 128) return null;
+    const cacheKey = sha256Hex(token);
+    const cached = this.sessionCache.get(cacheKey);
+    if (cached) {
+      if (cached.expires > Date.now()) return { user: cached.user, session: cached.session };
+      this.sessionCache.delete(cacheKey);
+    }
     const rows = await this.db
       .select({ s: sessions, u: users })
       .from(sessions)
       .innerJoin(users, eq(users.id, sessions.userId))
-      .where(and(eq(sessions.tokenHash, sha256Hex(token)), isNull(sessions.revokedAt), gt(sessions.expiresAt, this.now())))
+      .where(and(eq(sessions.tokenHash, cacheKey), isNull(sessions.revokedAt), gt(sessions.expiresAt, this.now())))
       .limit(1);
     const row = rows[0];
     if (!row || row.u.suspendedAt || row.u.deletedAt) return null;
@@ -218,10 +231,24 @@ export class AuthService extends ServiceBase {
     if (this.now().getTime() - last > 60_000) {
       await this.db.update(sessions).set({ lastUsedAt: this.now() }).where(eq(sessions.id, row.s.id));
     }
+    this.sessionCache.set(cacheKey, { user: row.u, session: row.s, expires: Date.now() + 10_000 });
+    if (this.sessionCache.size > 5000) this.sessionCache.clear();
     return { user: row.u, session: row.s };
   }
 
+  /** Drop one cached session (logout) or every session of a user (revoke/suspend/remove). */
+  forgetSession(token: string): void {
+    this.sessionCache.delete(sha256Hex(token));
+  }
+
+  forgetSessionsForUser(userId: string): void {
+    for (const [key, entry] of this.sessionCache) {
+      if (entry.user.id === userId) this.sessionCache.delete(key);
+    }
+  }
+
   async logout(token: string, actor: ServiceActor | null): Promise<void> {
+    this.forgetSession(token);
     await this.db.update(sessions).set({ revokedAt: this.now() }).where(eq(sessions.tokenHash, sha256Hex(token)));
     if (actor) await this.audit.log(this.db, actor, { action: 'auth.logout', objectType: 'user', objectId: actor.userId });
   }
@@ -263,6 +290,9 @@ export class AuthService extends ServiceBase {
       .update(sessions)
       .set({ revokedAt: this.now() })
       .where(and(eq(sessions.id, sessionId), eq(sessions.userId, actor.userId)));
+    for (const [key, entry] of this.sessionCache) {
+      if (entry.session.id === sessionId) this.sessionCache.delete(key);
+    }
   }
 
   async changePassword(actor: ServiceActor, input: { currentPassword: string; newPassword: string }, currentSessionId?: string | null): Promise<void> {
@@ -282,6 +312,7 @@ export class AuthService extends ServiceBase {
         .where(and(eq(sessions.userId, user.id), isNull(sessions.revokedAt), currentSessionId ? sql`${sessions.id} <> ${currentSessionId}` : undefined));
       await this.audit.log(tx, actor, { action: 'auth.password_changed', objectType: 'user', objectId: user.id });
     });
+    this.forgetSessionsForUser(user.id);
   }
 
   // ───────────── API keys (resolution; CRUD lives in ApiKeyService) ─────────────

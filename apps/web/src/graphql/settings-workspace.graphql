@@ -1,0 +1,14 @@
+query TeamsMemberCounts {
+  teams {
+    id
+    members {
+      id
+    }
+  }
+}
+
+query TeamsAdmin {
+  teams(includeArchived: true) {
+    ...TeamFields
+  }
+}

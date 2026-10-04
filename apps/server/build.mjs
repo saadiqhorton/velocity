@@ -7,7 +7,10 @@ import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, '../..');
-const pkgs = ['apps/server', 'packages/schema', 'packages/events', 'packages/services', 'packages/graphql', 'packages/mcp-tools', 'packages/importers'];
+// pnpm exposes only the server's direct dependencies at /app/node_modules.
+// Bundle dependencies owned solely by workspace packages (Pothos, Octokit, etc.)
+// so the flattened server bundle never relies on undeclared root imports.
+const pkgs = ['apps/server'];
 const external = new Set();
 for (const p of pkgs) {
   const pj = JSON.parse(readFileSync(join(root, p, 'package.json'), 'utf8'));

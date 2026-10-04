@@ -22,6 +22,13 @@
       "when": 1791034367732,
       "tag": "0002_triggers_search",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791075849868,
+      "tag": "0003_safe_yellowjacket",
+      "breakpoints": true
     }
   ]
 }

@@ -6,6 +6,8 @@
 #                           reachable from the internet; DNS must point here).
 {$CADDY_DOMAIN::80} {
 	encode zstd gzip
+	# Metrics are internal-only, including when an operator configures a token.
+	respond /metrics 403
 
 	# 25 MB default upload limit (MAX_UPLOAD_MB) plus multipart overhead.
 	# Raise this together with MAX_UPLOAD_MB.

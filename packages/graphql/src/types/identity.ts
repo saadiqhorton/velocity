@@ -435,6 +435,20 @@ builder.mutationFields((t) => ({
     args: { input: t.arg({ type: ProfileInput, required: true }) },
     resolve: (_r, { input }, ctx) => ctx.services.users.updateProfile(requireActor(ctx), input),
   }),
+  uploadAvatar: t.field({
+    type: UserRef,
+    description: 'Upload a profile image. Re-encoded as WebP with metadata removed, at most 256px.',
+    args: { file: t.arg({ type: 'File', required: true }) },
+    resolve: async (_r, { file }, ctx) => {
+      const actor = requireActor(ctx);
+      return ctx.services.users.uploadAvatar(actor, Buffer.from(await file.arrayBuffer()));
+    },
+  }),
+  removeAvatar: t.field({
+    type: UserRef,
+    description: 'Clear the profile image and delete the stored file.',
+    resolve: (_r, _a, ctx) => ctx.services.users.removeAvatar(requireActor(ctx)),
+  }),
 
   // Members (owner)
   createInvite: t.field({

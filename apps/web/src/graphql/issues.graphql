@@ -1,0 +1,390 @@
+query IssueList(
+  $filter: String
+  $teamId: ID
+  $teamKey: String
+  $projectId: ID
+  $cycleId: ID
+  $milestoneId: ID
+  $parentId: ID
+  $groupBy: GroupBy
+  $ordering: Ordering
+  $includeArchived: Boolean
+  $includeSubIssues: Boolean
+  $subscribed: Boolean
+  $onlyTrashed: Boolean
+  $first: Int
+  $after: String
+) {
+  issues(
+    filter: $filter
+    teamId: $teamId
+    teamKey: $teamKey
+    projectId: $projectId
+    cycleId: $cycleId
+    milestoneId: $milestoneId
+    parentId: $parentId
+    groupBy: $groupBy
+    ordering: $ordering
+    includeArchived: $includeArchived
+    includeSubIssues: $includeSubIssues
+    subscribed: $subscribed
+    onlyTrashed: $onlyTrashed
+    first: $first
+    after: $after
+  ) {
+    nodes {
+      ...IssueRowFields
+    }
+    pageInfo {
+      endCursor
+      hasNextPage
+    }
+  }
+}
+
+query IssueGroupCounts(
+  $filter: String
+  $teamId: ID
+  $teamKey: String
+  $projectId: ID
+  $cycleId: ID
+  $milestoneId: ID
+  $parentId: ID
+  $groupBy: GroupBy!
+  $includeArchived: Boolean
+  $includeSubIssues: Boolean
+  $subscribed: Boolean
+  $onlyTrashed: Boolean
+) {
+  issueGroupCounts(
+    filter: $filter
+    teamId: $teamId
+    teamKey: $teamKey
+    projectId: $projectId
+    cycleId: $cycleId
+    milestoneId: $milestoneId
+    parentId: $parentId
+    groupBy: $groupBy
+    includeArchived: $includeArchived
+    includeSubIssues: $includeSubIssues
+    subscribed: $subscribed
+    onlyTrashed: $onlyTrashed
+  ) {
+    key
+    count
+  }
+}
+
+query IssueDetail($id: ID!) {
+  issue(id: $id) {
+    ...IssueRowFields
+    descriptionMd
+    url
+    startedAt
+    canceledAt
+    subscribed
+    movedToIssueId
+    team {
+      id
+      key
+      name
+    }
+    creator {
+      id
+      name
+      avatarUrl
+    }
+    project {
+      id
+      name
+      color
+      icon
+    }
+    cycle {
+      id
+      name
+      number
+    }
+    milestone {
+      id
+      name
+    }
+    parent {
+      id
+      identifier
+      title
+      status {
+        ...StatusFields
+      }
+    }
+    children {
+      ...IssueRowFields
+    }
+    relations {
+      id
+      type
+      issue {
+        id
+        identifier
+        title
+        status {
+          ...StatusFields
+        }
+      }
+    }
+    subscribers {
+      id
+      name
+      avatarUrl
+    }
+    githubLinks {
+      ...GithubLinkFields
+    }
+    attachments {
+      id
+      filename
+      mime
+      size
+      url
+      createdAt
+    }
+  }
+}
+
+fragment GithubLinkFields on GithubLink {
+  id
+  kind
+  repo
+  prNumber
+  title
+  url
+  state
+  author
+  headBranch
+  commitSha
+  mergedAt
+  closedAt
+  closesIssue
+  autoClose
+  createdAt
+}
+
+fragment CommentFields on Comment {
+  id
+  issueId
+  bodyMd
+  createdAt
+  editedAt
+  source
+  authorName
+  author {
+    id
+    name
+    avatarUrl
+    isMe
+  }
+  reactions {
+    emoji
+    count
+    reacted
+    userIds
+  }
+}
+
+query IssueComments($id: ID!) {
+  issue(id: $id) {
+    id
+    commentCount
+    comments {
+      ...CommentFields
+    }
+  }
+  reactionEmoji
+}
+
+query IssueActivity($id: ID!) {
+  issue(id: $id) {
+    id
+    activity {
+      id
+      type
+      actorKind
+      createdAt
+      fromValue
+      toValue
+      actor {
+        id
+        name
+        avatarUrl
+      }
+    }
+  }
+}
+
+query IssueSearch($query: String!, $limit: Int) {
+  search(query: $query, limit: $limit, types: [issue]) {
+    id
+    title
+    subtitle
+    issue {
+      id
+      identifier
+      title
+      teamId
+      status {
+        ...StatusFields
+      }
+    }
+  }
+}
+
+mutation CreateIssue($input: CreateIssueInput!) {
+  createIssue(input: $input) {
+    ...IssueRowFields
+  }
+}
+
+mutation UpdateIssue($id: ID!, $input: UpdateIssueInput!) {
+  updateIssue(id: $id, input: $input) {
+    ...IssueRowFields
+  }
+}
+
+mutation UpdateIssueDescription($id: ID!, $descriptionMd: String!) {
+  updateIssue(id: $id, input: { descriptionMd: $descriptionMd }) {
+    id
+    descriptionMd
+    updatedAt
+  }
+}
+
+mutation BulkUpdateIssues($ids: [ID!]!, $input: UpdateIssueInput!) {
+  bulkUpdateIssues(ids: $ids, input: $input) {
+    ...IssueRowFields
+  }
+}
+
+mutation ToggleIssueDone($id: ID!) {
+  toggleIssueDone(id: $id) {
+    ...IssueRowFields
+  }
+}
+
+mutation ArchiveIssues($ids: [ID!]!, $archived: Boolean!) {
+  archiveIssues(ids: $ids, archived: $archived) {
+    id
+    archivedAt
+  }
+}
+
+mutation TrashIssues($ids: [ID!]!, $trashed: Boolean!) {
+  trashIssues(ids: $ids, trashed: $trashed) {
+    id
+    trashedAt
+  }
+}
+
+mutation MoveIssue($id: ID!, $teamId: ID!, $statusId: ID) {
+  moveIssue(id: $id, teamId: $teamId, statusId: $statusId) {
+    ...IssueRowFields
+  }
+}
+
+mutation ReorderIssue($id: ID!, $beforeId: ID, $afterId: ID) {
+  reorderIssue(id: $id, beforeId: $beforeId, afterId: $afterId) {
+    id
+    sortOrder
+  }
+}
+
+mutation DuplicateIssue($id: ID!) {
+  duplicateIssue(id: $id) {
+    ...IssueRowFields
+  }
+}
+
+mutation SetIssueSubscribed($id: ID!, $subscribed: Boolean!) {
+  setIssueSubscribed(id: $id, subscribed: $subscribed) {
+    id
+    subscribed
+  }
+}
+
+mutation AddRelation($issueId: ID!, $targetIssueId: ID!, $type: RelationInputType!) {
+  addRelation(issueId: $issueId, targetIssueId: $targetIssueId, type: $type) {
+    id
+    type
+    issue {
+      id
+      identifier
+      title
+      status {
+        ...StatusFields
+      }
+    }
+  }
+}
+
+mutation RemoveRelation($id: ID!) {
+  removeRelation(id: $id)
+}
+
+mutation CreateComment($issueId: ID!, $bodyMd: String!, $id: ID) {
+  createComment(issueId: $issueId, bodyMd: $bodyMd, id: $id) {
+    ...CommentFields
+  }
+}
+
+mutation UpdateComment($id: ID!, $bodyMd: String!) {
+  updateComment(id: $id, bodyMd: $bodyMd) {
+    ...CommentFields
+  }
+}
+
+mutation DeleteComment($id: ID!) {
+  deleteComment(id: $id)
+}
+
+mutation ToggleReaction($commentId: ID!, $emoji: String!) {
+  toggleReaction(commentId: $commentId, emoji: $emoji) {
+    id
+    reactions {
+      emoji
+      count
+      reacted
+      userIds
+    }
+  }
+}
+
+mutation LinkPullRequest($issueId: ID!, $url: String!) {
+  linkPullRequest(issueId: $issueId, url: $url) {
+    ...GithubLinkFields
+  }
+}
+
+mutation UnlinkGithub($linkId: ID!) {
+  unlinkGithub(linkId: $linkId)
+}
+
+mutation SetGithubLinkAutoClose($linkId: ID!, $autoClose: Boolean) {
+  setGithubLinkAutoClose(linkId: $linkId, autoClose: $autoClose) {
+    id
+    autoClose
+  }
+}
+
+mutation UploadAttachment($file: File!, $issueId: ID, $commentId: ID) {
+  uploadAttachment(file: $file, issueId: $issueId, commentId: $commentId) {
+    id
+    filename
+    mime
+    size
+    url
+    createdAt
+  }
+}
+
+mutation DeleteAttachment($id: ID!) {
+  deleteAttachment(id: $id)
+}

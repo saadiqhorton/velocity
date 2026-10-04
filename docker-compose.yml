@@ -49,6 +49,7 @@ services:
       # Set DATABASE_URL in .env to point at an external Postgres instead.
       DATABASE_URL: ${DATABASE_URL:-postgres://velocity:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/velocity}
       VELOCITY_ROLE: ${VELOCITY_ROLE:-all}
+      TRUST_PROXY: "1"
     depends_on:
       postgres:
         condition: service_healthy

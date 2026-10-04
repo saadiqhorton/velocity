@@ -11,7 +11,11 @@ type FetchFn = typeof fetch;
 
 describe('client', () => {
   it('posts to /graphql with the api key', async () => {
-    const fn = vi.fn(async (_u: string | URL | Request, _i?: RequestInit) => jsonResponse({ data: { ok: 1 } }));
+    const fn = vi.fn(async (_u: string | URL | Request, _i?: RequestInit) => {
+      void _u;
+      void _i;
+      return jsonResponse({ data: { ok: 1 } });
+    });
     const client = createClient({ url: 'http://localhost:3000/', apiKey: 'vel_abc', fetch: fn as unknown as FetchFn });
     expect(await client.request<{ ok: number }>('query { ok }', { a: 1 })).toEqual({ ok: 1 });
     const [url, init] = fn.mock.calls[0]!;

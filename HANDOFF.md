@@ -1,23 +1,29 @@
 # Velocity — Engineering Handoff
 
 **Read this, then `SPEC.md`. `SPEC.md` is the source of truth; this file is the current state + how to continue.**
-Last updated: 2026-10-03. Nothing is committed yet (all files are untracked in a fresh `git init`).
+Last updated: 2026-10-04 (web rows by Claude agent 2). Baseline commit `b622999` is on `master`. **Web/UI pickup: read `apps/web/WEB_PROGRESS.md` first.** **The backend (Codex) is finished; its latest status is in `HANDOFF.CODEX.md`, which supersedes the backend rows of §1.**
 
 ---
 
-## 0. Ownership (two agents work in parallel)
+## 0. Ownership (updated 2026-10-04: Codex takes over web QA and fixes; design stays with Claude)
 
-| Owner | Owns (may edit) | Work packages |
+| Owner | Owns (may edit) | Responsibilities |
 |---|---|---|
-| **Claude (Opus 5.5) — web, UI & design** | `apps/web/**`, `packages/ui/**`, `packages/tokens/**` | WP1 web core, WP2 screens, WP7a UI lint, WP9 browser E2E / layout / a11y / visual |
-| **Codex — backend, platform & ops** | `packages/schema`, `packages/events`, `packages/services`, `packages/graphql` (incl. `schema.graphql`), `packages/importers`, `packages/mcp-tools`, `apps/server`, `apps/mcp`, `scripts/`, `Dockerfile`, `docker-compose.yml`, `Caddyfile`, `.env.example`, `.github/`, `eslint.config.js`, root docs | WP3 API tests, WP4 server tests, WP5 perf, WP6 deploy, WP7b backend lint, WP8 docs |
+| **Claude (Opus 5.5): design** | `packages/ui/**`, `packages/tokens/**`, plus the **visual layer** of `apps/web` (styling, spacing, typography, color and density, layout geometry, empty states, visual hierarchy) | Design pass (screenshot review in both themes, 1440/1024 and responsive), UI library changes, approving visual-snapshot baselines, working the design review queue |
+| **Codex: everything else** | All backend paths (as before), plus `apps/web/**` for **behavior**: logic, data, keyboard, state, routing, tests (`apps/web/e2e/**`, unit tests), and functional fixes | Web QA and fixes per **`CODEX_WEB_QA.md`**: E2E specs, end-to-end click-through review of every screen, functional bug fixes, missing features, WebKit, final gates. Also backend requests (§9) |
 
 Coordination rules:
-- **Stay in your paths.** If you need a change in the other owner's paths, add a row to §9 "Cross-team requests" and keep working around it. Don't edit their files.
-- **API changes are additive.** Codex never renames or removes a GraphQL field the web app uses without a §9 entry. After any schema change, Codex regenerates `packages/graphql/schema.graphql` (`pnpm --filter @velocity/graphql print-schema`). Web codegen reads that file.
+- **The design boundary inside `apps/web`.** Codex fixes behavior. Codex does not restyle: no changes to colors, spacing, sizes, typography, layout geometry or component choice, and no edits to `packages/ui` or `packages/tokens`.
+  - If a functional fix needs a visual change, make the smallest one possible and add an entry to the **Design review queue** in `apps/web/WEB_PROGRESS.md`.
+  - If Codex spots a visual problem, it logs it there instead of fixing it.
+  - Claude changes `apps/web` logic only where a design change requires it.
+- **File claims.** Before editing a file under `apps/web/src`, add it to the **Active claims** table in `apps/web/WEB_PROGRESS.md` (owner, files, task). Remove the claim when done. Never edit a file someone else has claimed. Re-read a file right before editing it, since others may have changed it.
+- **API changes are additive.** Never rename or remove a GraphQL field the web app uses. After any schema change, regenerate `packages/graphql/schema.graphql` (`pnpm --filter @velocity/graphql print-schema`), then web codegen (`pnpm --filter @velocity/web codegen`).
 - **One `pnpm install` at a time.** The lockfile is shared. Announce dependency additions in §9.
-- **Branches.** Work on separate branches or worktrees off a baseline commit, which still needs the repo owner's go-ahead. Never commit without being asked.
-- **Shared infrastructure.** Both owners use the dev Postgres container (§2). Use your own databases (for example `velocity_dev_web` and `velocity_dev_api`) and different server ports.
+- **Single branch.** All work happens on `master`; there are no feature branches. Never commit without the repo owner asking.
+- **Shared infrastructure.** Everyone uses the dev Postgres container (§2), each with their own databases and ports.
+  - Web dev DB: `velocity_dev_web`, API :3100, Vite :5173 (`apps/web/.dev-data/start-*.sh`).
+  - E2E runs isolate themselves with `E2E_SLOT=<n>` (n = 1–9 only; slot n uses port `32<n>0` and DB `velocity_e2e_web_<n>`), so parallel agents must use different slots.
 
 ---
 
@@ -31,13 +37,13 @@ Coordination rules:
 | Pure domain libs | `packages/services/src/lib` | Done. permissions, cycle math (DST), fractional order, identifiers, issue refs, markdown sanitizer, crypto, SSRF, password policy | 897 |
 | Domain services | `packages/services/src` | Done. All services incl. GitHub + importer pipeline | 66 DB tests (core 15, github 32, importer 19) |
 | Filter DSL parser | `packages/graphql/src/dsl` | Done. Parse / serialize / chips | 485 |
-| GraphQL API | `packages/graphql` | Done. ~100 mutations, 5 subscriptions; SDL in `schema.graphql` | **no dedicated API tests yet** (WP3) |
-| App server | `apps/server` | Done & smoke-tested over HTTP, WS, MCP-HTTP. Bundle builds (`node build.mjs`) | **no tests yet** |
+| GraphQL API | `packages/graphql` | Done. ~100 mutations, 5 subscriptions, `uploadAvatar`; SDL in `schema.graphql` | 507 (DSL + API + web-parity walk) |
+| App server | `apps/server` | Done & smoke-tested over HTTP, WS, MCP-HTTP. Bundle builds; issues-list perf budget met (p95 ~128 ms at 25 VUs on 10k issues) | 12 |
 | MCP tools + stdio server | `packages/mcp-tools`, `apps/mcp` | Done (13 tools, `velocity_guide` prompt) | 41 (e2e vs real schema + Postgres) |
 | Importers | `packages/importers` | Done. Linear CSV/API, Jira CSV, GitHub; `velocity-import` CLI | 76 |
-| UI component library | `packages/ui` | Done (32 ADS components + `ComponentGallery`). **Never rendered in a browser yet** | 32 (jsdom) |
-| Deploy / CI / lint / legal | root, `.github/` | Written. `docker compose config` validates. **`docker build` / `compose up` never run** | 6 (check-script self-tests) |
-| **Web app** | `apps/web` | **Not started** (only `package.json` + `tsconfig.json`) | — |
+| UI component library | `packages/ui` | Done (32 ADS components + `ComponentGallery`); rendered and screenshot-reviewed in both themes (gallery at `/__gallery?enable=1`). `Table` now has `min-w-160` for horizontal scroll on phones | 32 (jsdom) |
+| Deploy / CI / lint / legal | root, `.github/` | Server image builds (`--target server-runtime`). Full `docker build` fails until the web app exists (no `index.html`). Backend lint is clean | 6 (check-script self-tests) |
+| **Web app** | `apps/web` | **WP1 built + E2E-verified in part; WP2 screens all built (verification pending); WP9 harness + 13 specs on disk (6 verified green, 7 unverified).** Next agent: start at `apps/web/WEB_PROGRESS.md` → "Pickup checklist" | 476 web unit (vitest) · ui 32 · E2E chromium: wizard+seed+keyboard-loop+palette 11/11, views/theme/layout/a11y reported green |
 
 Smoke-verified end to end against a real server: first-run setup → session + CSRF cookies → create team/issue → DSL list; CSRF rejection; typed DSL errors with caret; API-key auth + audit attribution; MCP over HTTP (`initialize` → `tools/call get_issue`); WebSocket subscription receives an `issue.updated` event triggered by an HTTP mutation.
 
@@ -114,9 +120,12 @@ npx tsc --noEmit -p <package>/tsconfig.json           # every package typechecks
 - **graphql-yoga in Node**: use `yoga.requestListener(req, res)`. `handleNodeRequestAndResponse` only *returns* a Response and the request hangs.
 - **graphql dual-package in vitest**: tests that build their own executor must `import { graphql } from 'graphql/index.js'` (explicit CJS entry), or vitest loads a second `graphql` copy and schema checks fail.
 - **WebSocket origin check**: cookie-auth sockets are rejected unless `Origin === APP_URL` origin. When developing through the Vite dev server, set `APP_URL=http://localhost:5173` and proxy `/graphql` (with `ws: true`), `/files`, `/api` to `:3000`.
-- **CSP** (served with the SPA): `script-src 'self'` — no inline scripts, so the theme bootstrap (SPEC §4.5) must be an external file (e.g. `public/theme-init.js`). `style-src 'self' 'nonce-…'`: the per-request nonce is injected as `<meta name="csp-nonce">`; pass it to tiptap (`injectNonce`) or disable its CSS injection.
+- **CSP** (served with the SPA): `script-src 'self'` — no inline scripts, so the theme bootstrap (SPEC §4.5) must be an external file (e.g. `public/theme-init.js`). `style-src 'self' 'nonce-…'`: the per-request nonce is injected as `<meta name="csp-nonce" property="csp-nonce" nonce="…" content="…">`; read `content`, and pass it to tiptap (`injectNonce`) or disable its CSS injection (the app disables it). `property`/`nonce` let Vite's `__vitePreload` nonce any `<link>` it injects. Build-emitted `<script>`/`<link>` tags are not nonced; `'self'` covers them. `apps/server/test/static.test.ts` pins this contract.
 - **pnpm 11** blocks build scripts: `pnpm-workspace.yaml` → `allowBuilds: { esbuild: true, sharp: false }` (sharp uses prebuilt `@img/*` binaries; its source build fails). New deps may add `minimumReleaseAgeExclude` entries — that's expected.
-- **`pkill -f <pattern>`** matches the shell running it (exit 144). Track dev-server PIDs in a file instead.
+- **`pkill -f <pattern>`** matches the shell running it (exit 144); so does `pgrep -f`. Track dev-server PIDs in a file, or find them by port (`ss -ltnp`).
+- **Long E2E runs from an agent shell:** run detached with `setsid -f bash -c '… > /tmp/e2e-<n>.log 2>&1; echo EXIT=$? >> /tmp/e2e-<n>.log' </dev/null` and poll the log. `nohup … &` keeps the tool's stdout pipe open and hangs it. Debug one test with `-g` first; on failure read `test-results_<n>/<test>/error-context.md`.
+- **WebKit E2E on Arch-like hosts:** Playwright's WebKit build targets Ubuntu (ICU 74, `libxml2.so.2`, flite, libbacktrace) and won't start natively. Run it in the Playwright image: `apps/web/scripts/e2e-webkit-docker.sh <slot> [spec…]` (build `apps/web/dist` on the host first).
+- **WebKit noise the E2E guard tolerates:** (1) Playwright's pre-close screenshot (`screenshot: 'only-on-failure'`) injects `<style>body {}</style>` on WebKit, which the CSP blocks, so the guard freezes once the test's context fixture tears down. (2) WebKit logs "Fetch API cannot load … due to access control checks" whenever a navigation cancels an in-flight fetch, and Playwright reports that as a page error. The guard tolerates only that message, same-origin, within 3 s of a main-frame navigation (`apps/web/e2e/support/fixtures.ts`). Every other CSP violation or page error still fails the test.
 - **Pothos nullability**: builder sets `DefaultFieldNullability: false` — outputs are non-null unless `nullable: true`; inputs are optional unless `required: true`.
 - **Services API quirks**: `systemActor('import' | 'github' | 'system', userId?)` for background work; per-issue notifications/webhooks are suppressed for `kind: 'import'`. `IssueService.createInTx` accepts import overrides (`createdAt`, `completedAt`, …).
 
@@ -126,7 +135,7 @@ npx tsc --noEmit -p <package>/tsconfig.json           # every package typechecks
 
 Owners per §0. Run your package's verify commands before handing back. Don't edit another owner's paths; file a §9 request instead.
 
-### WP1 — Web app core · **Claude** · `apps/web/**` (critical path)
+### WP1 — Web app core · built (Claude); QA and fixes now **Codex** (`CODEX_WEB_QA.md`) · `apps/web/**`
 SPEC §4.10 (binding geometry), §4.12, §4.13, §5.4, §5.5, §4.5, §4.16.
 - Vite 8 + React 18 + Tailwind v4 (`@tailwindcss/vite`) + `@fontsource-variable/inter`; CSS imports tokens + `@velocity/ui/theme.css` + `@source` for `packages/ui/src`.
 - GraphQL codegen (`@graphql-codegen/client-preset`, schema from `packages/graphql/schema.graphql`) → `apps/web/src/gql/` (lint-ignored).
@@ -139,12 +148,14 @@ SPEC §4.10 (binding geometry), §4.12, §4.13, §5.4, §5.5, §4.5, §4.16.
 - Issue detail panel/page (§4.11.3): inline title (500ms autosave), property popups, lazy tiptap markdown editor, sub-issues, relations, comments/activity tabs, subscribe.
 - Create-issue modal (`C`), team Active/Backlog screens, dev route mounting `ComponentGallery` (for visual tests).
 - **Verify**: `pnpm --filter @velocity/web build` succeeds and the server serves it; keyboard-only loop create → navigate → edit → close works against a seeded DB.
+- **Status (2026-10-04, agent 2): built.** Verified by E2E under the production CSP: keyboard loop (C, J/K, Enter, title autosave, S/P/A/L/I/E/Y/#/M/R, Esc focus return, ⌘Enter, G chords, ?, /), palette (> # @ modes, Tab, Esc), layout conformance (1440/1024 × both themes), theme switch, views share-by-URL. Initial JS 175.5 KB gz (budget 350). Still to verify by running the on-disk specs: bulk, board DnD + M, ⌥↑/↓ reorder, infinite scroll, panel deep link + markdown editor under CSP, realtime two-context, offline banner + sync pulse.
 
-### WP2 — Web screens · **Claude** · `apps/web/src/screens/<area>/**` (after WP1)
+### WP2 — Web screens · built (Claude); click-through QA now **Codex**, design pass **Claude** · `apps/web/src/screens/<area>/**`
 - **Auth**: setup wizard (owner → workspace → first team → optional GitHub → done, < 2 min), login, invite accept (SPEC §3.2, §3.3).
 - **Settings** (§3.12, §4.11.9): workspace, members & invites, teams + workflow editor + cycle settings, labels, API keys (show-once, mutations/hour), sessions, profile/theme, integrations (GitHub install/settings/backfill, MCP info, webhooks + deliveries + redeliver), import wizard (upload → mapping preview → dry run → commit with live progress), export, audit log (owner).
 - **Planning**: projects list (ADS table) + detail tabs (Overview / Issues / Milestones / Activity), cycles screen (header, velocity sparkline, scope markers, closed archive), insights (2 SVG charts, each linking to its live view) — SPEC §3.8, §3.9, §4.11.4–7.
 - **Workspace**: inbox (§4.11.10), My Issues presets, search screen, views builder (filter chips + display options + save; URL-serialized state), favorites.
+- **Status (agent 2): every screen above is built** (settings shell `screens/settings/Settings.tsx` + `common.tsx`; sections in `screens/settings/{account,workspace,integrations,data}/`; planning in `screens/project`, `screens/team/TeamCycles.tsx`, `screens/insights`, `components/charts`; workspace in `screens/{inbox,search,views,my-issues}`, `components/common/FavoriteButton.tsx`) and screenshot-reviewed in dark at 1440. Remaining: click-through verification of each flow, light-theme and 1024 screenshot pass, a per-row "added after start" marker on cycle lists (needs an `IssueRow` prop), and the §9 rows 4–5 gaps.
 
 ### WP3 — GraphQL API tests · **Codex** · `packages/graphql/test/**`
 SPEC §7.3 GraphQL row: pagination, filter and orderBy combinations, typed error codes, depth and complexity limits, and the permission truth table through the API. Reuse `packages/services/test/helpers/harness.ts` and an in-process executor (see `packages/mcp-tools/test/helpers.ts`). The parity walk checks that every web operation validates against `schema.graphql`. It reads documents from `apps/web/src/**/*.graphql` and `apps/web/src/gql/` once WP1 exists, so wire it up to pass trivially until then.
@@ -159,7 +170,7 @@ Seed 10k issues; k6 scripts for SPEC §4.16 / §7.3 (issues query p95 < 150 ms @
 `docker build` + `docker compose up` on a clean checkout → wizard → first issue. Confirm `pnpm deploy --prod --legacy` works with pnpm 11, the read-only rootfs (writes only to `/data`, `/tmp`), and `pg_dump` 16 for `VELOCITY_BACKUP_BEFORE_MIGRATE`. Block `/metrics` at Caddy (the server requires `METRICS_TOKEN` or rejects proxied requests). Set `TRUST_PROXY=1` for the app behind Caddy.
 
 ### WP7 — Lint cleanup (21 ESLint errors today)
-- **WP7a · Claude:** `packages/ui` has 8 errors (react-hooks `refs`, `set-state-in-effect`, `no-useless-assignment`): Popover (3), Tooltip (4), Portal (1).
+- **WP7a · Claude:** **done.** `packages/ui` lint is clean (Popover, Tooltip, Portal fixed).
 - **WP7b · Codex:** the other 13 errors are unused vars and useless assignments:
   - `packages/services`: `issues/index.ts` (5), `exports.ts` (2)
   - `apps/server`: `static.ts` (1)
@@ -173,7 +184,7 @@ Re-run the owning package's tests after each fix.
 Claude contributes a UI section (design system usage, keyboard map) to `docs/architecture.md` through a §9 request when WP1 lands.
 Quickstart, API (auth, DSL, examples, rate limits, webhooks + signature verification snippet), import guide, architecture + the deviations in §7 below. `docs/agents.md` already exists (source of the MCP prompt; run `node packages/mcp-tools/scripts/sync-guide.mjs` after editing it).
 
-### WP9 — Browser E2E · **Claude** · `apps/web/e2e/**`, `apps/web/playwright.config.ts` (after WP1/WP2)
+### WP9 — Browser E2E · harness built (Claude); remaining specs now **Codex**; visual baselines approved by **Claude** · `apps/web/e2e/**`, `apps/web/playwright.config.ts`
 Playwright on Chromium and WebKit (browsers are cached locally). The config boots the API server itself; the CI job in `.github/workflows/ci.yml` (Codex) expects that. Scenarios:
 - first-run wizard, keyboard loop, bulk ops, cycle rotate
 - GitHub link via a mock
@@ -182,6 +193,8 @@ Playwright on Chromium and WebKit (browsers are cached locally). The config boot
 - layout conformance (§4.10.4): no top bar, sidebar 220±2, panel 400±2, row 32±2, both themes, at 1440 and 1024
 - axe with zero critical
 - visual snapshots of `ComponentGallery`
+
+**Status (agent 2):** harness done (`playwright.config.ts`, `e2e/support/{server,env,fixtures}`): boots the API serving `dist` on a fresh DB, runs the wizard through the UI (setup project) and `seed-cli --issues 400` (seed project), then specs signed in via storage state; any CSP violation or page error fails a test. Local runs use DB `velocity_e2e_web` on :3200; `E2E_SLOT=<1-9>` isolates parallel runs (:32<n>0, `velocity_e2e_web_<n>`). CI path unchanged (`CI=1` + `DATABASE_URL`/`APP_URL`, uses `apps/server/dist`). Specs on disk: keyboard-loop, palette, views, theme, layout, a11y (green); bulk, board, reorder, infinite-scroll, panel, realtime, offline (written, **unverified**). Not written yet: import-1k-CSV, visual snapshots, cycle rotate, GitHub-link mock. WebKit not run yet.
 
 ---
 
@@ -222,5 +235,9 @@ Append rows; the owner of the target path marks them done. Keep entries short an
 
 | # | From → To | Request | Status |
 |---|---|---|---|
-| 1 | Claude → Codex | Avatar upload: an `uploadAvatar(file: File!): User!` mutation plus `GET /avatars/:id` serving (SPEC §3.12 profile). `User.avatarUrl` already returns `/avatars/:id?v=…` when `avatarPath` is set. | open |
-| 2 | Claude → Codex | Before WP6's `docker build`, confirm the web build output path stays `apps/web/dist` (Claude keeps it there) and that the Dockerfile copies it to `/app/web-dist`. | open |
+| 1 | Claude → Codex | Avatar upload: an `uploadAvatar(file: File!): User!` mutation plus `GET /avatars/:id` serving (SPEC §3.12 profile). `User.avatarUrl` already returns `/avatars/:id?v=…` when `avatarPath` is set. | **done** (Codex). `GET /avatars/:id` requires a signed-in member |
+| 2 | Claude → Codex | Before WP6's `docker build`, confirm the web build output path stays `apps/web/dist` (Claude keeps it there) and that the Dockerfile copies it to `/app/web-dist`. | **confirmed** (Claude, 2026-10-04): `pnpm --filter @velocity/web build` writes `apps/web/dist` (vite `outDir: 'dist'`); `Dockerfile` copies `/repo/apps/web/dist` → `/app/web-dist` with `WEB_DIST_DIR=/app/web-dist`. Contract unchanged. |
+| 3 | Lead (Claude) | `scripts/check-legal.mjs` now ignores generated `apps/web/src/gql/` for the UI-copy rule (it mirrors schema descriptions such as the Linear importer key). Asset-host checks still apply there. Test added. | **done** |
+| 4 | Claude → Codex | Expose `before`/`after` (date range) args on the `auditLog` GraphQL field; the service already supports them. Today the web audit log date presets filter only the newest 200 entries on the client. | open |
+| 5 | Claude → Codex | Add a `removeAvatar: User!` mutation (clears `avatarPath`), so Settings → Profile can offer "Remove" next to "Upload". | open |
+| 6 | Claude → Codex | (FYI) `apps/server/dist/main.js` on disk was stale vs. source on 2026-10-04; the local E2E harness now runs the server from source unless `CI=1` or `E2E_USE_BUNDLE=1`. No action unless CI should also run from source. | info |

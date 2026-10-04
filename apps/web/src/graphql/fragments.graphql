@@ -1,0 +1,187 @@
+fragment UserFields on User {
+  id
+  name
+  username
+  avatarUrl
+  isMe
+  isOwner
+  suspended
+  removed
+}
+
+fragment LabelFields on Label {
+  id
+  name
+  color
+  description
+  isGroup
+  parentId
+}
+
+fragment StatusFields on WorkflowStatus {
+  id
+  name
+  category
+  color
+  order
+  description
+  teamId
+}
+
+fragment CycleFields on Cycle {
+  id
+  number
+  name
+  customName
+  startsAt
+  endsAt
+  closedAt
+  isActive
+  isUpcoming
+  teamId
+}
+
+fragment TeamFields on Team {
+  id
+  key
+  name
+  color
+  icon
+  description
+  sortOrder
+  cycleEnabled
+  cycleLengthWeeks
+  cycleStartDay
+  cycleTimezone
+  carryOver
+  estimateScale
+  archivedAt
+  openIssueCount
+  statuses {
+    ...StatusFields
+  }
+  activeCycle {
+    ...CycleFields
+  }
+}
+
+fragment ProjectSummaryFields on Project {
+  id
+  name
+  color
+  icon
+  status
+  health
+  targetDate
+  leadId
+  archivedAt
+  progress {
+    done
+    total
+    percent
+  }
+}
+
+fragment IssueRowFields on Issue {
+  id
+  identifier
+  number
+  title
+  priority
+  estimate
+  sortOrder
+  createdAt
+  updatedAt
+  completedAt
+  archivedAt
+  trashedAt
+  teamId
+  statusId
+  assigneeId
+  projectId
+  cycleId
+  milestoneId
+  parentId
+  labelIds
+  commentCount
+  status {
+    ...StatusFields
+  }
+  assignee {
+    id
+    name
+    avatarUrl
+  }
+  labels {
+    id
+    name
+    color
+  }
+  cycle {
+    id
+    number
+    name
+    startsAt
+  }
+  subIssueRollup {
+    done
+    total
+  }
+}
+
+fragment ViewFields on View {
+  id
+  name
+  slug
+  icon
+  color
+  filter
+  teamId
+  isMine
+  updatedAt
+  display {
+    grouping
+    ordering
+    layout
+    columns
+    showCompleted
+    showEmptyGroups
+    showSubIssues
+  }
+}
+
+fragment FavoriteFields on Favorite {
+  id
+  kind
+  targetId
+  sortOrder
+  team {
+    id
+    key
+    name
+  }
+  project {
+    id
+    name
+    color
+    icon
+  }
+  view {
+    id
+    name
+    slug
+    icon
+    color
+  }
+  cycle {
+    id
+    name
+    number
+    teamId
+  }
+  issue {
+    id
+    identifier
+    title
+  }
+}

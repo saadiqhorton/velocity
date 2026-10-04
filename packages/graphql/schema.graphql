@@ -605,6 +605,9 @@ type Mutation {
   markNotificationsRead(ids: [ID!]!, read: Boolean!): [Notification!]!
   moveIssue(id: ID!, statusId: ID, teamId: ID!): Issue!
   redeliverWebhook(deliveryId: ID!): WebhookDelivery!
+
+  """Clear the profile image and delete the stored file."""
+  removeAvatar: User!
   removeFavorite(id: ID!): Boolean!
 
   """
@@ -677,6 +680,11 @@ type Mutation {
 
   """GraphQL multipart upload. Images are re-encoded to strip EXIF."""
   uploadAttachment(commentId: ID, file: File!, issueId: ID): Attachment!
+
+  """
+  Upload a profile image. Re-encoded as WebP with metadata removed, at most 256px.
+  """
+  uploadAvatar(file: File!): User!
 }
 
 type Notification {
@@ -793,7 +801,7 @@ type Query {
     """Owner only: every member’s keys."""
     all: Boolean
   ): [ApiKey!]!
-  auditLog(action: String, actorUserId: ID, first: Int, offset: Int): AuditPage!
+  auditLog(action: String, actorUserId: ID, after: DateTime, before: DateTime, first: Int, offset: Int): AuditPage!
   createdVsCompleted(teamId: ID, weeks: Int): [WeekPoint!]!
   cycle(id: ID!): Cycle
   cycles(first: Int, includeClosed: Boolean, teamId: ID, teamKey: String): [Cycle!]!

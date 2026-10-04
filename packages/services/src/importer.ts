@@ -80,10 +80,23 @@ export interface ImportCommittedReport extends ImportDryRunReport {
   result: ImportResult;
 }
 
-// Run rows without the (potentially huge) bundle: `config` comes back as `{}`.
+// Keep source metadata for the mapping preview, but never return the large issue bundle.
 const { config: _bundleColumn, ...RUN_COLUMNS } = getTableColumns(importRuns);
 void _bundleColumn;
-const SLIM = { ...RUN_COLUMNS, config: sql<unknown>`'{}'::jsonb`.as('config') };
+const SLIM = {
+  ...RUN_COLUMNS,
+  config: sql<unknown>`jsonb_build_object(
+    'teams', coalesce(${importRuns.config}->'teams', '[]'::jsonb),
+    'statuses', coalesce(${importRuns.config}->'statuses', '[]'::jsonb),
+    'users', coalesce(${importRuns.config}->'users', '[]'::jsonb),
+    'counts', jsonb_build_object(
+      'issues', coalesce(jsonb_array_length(${importRuns.config}->'issues'), 0),
+      'labels', coalesce(jsonb_array_length(${importRuns.config}->'labels'), 0),
+      'projects', coalesce(jsonb_array_length(${importRuns.config}->'projects'), 0),
+      'cycles', coalesce(jsonb_array_length(${importRuns.config}->'cycles'), 0)
+    )
+  )`.as('config'),
+};
 
 const STATUS_COLORS: Record<StatusCategory, PaletteColor> = {
   backlog: 'grey',

@@ -128,7 +128,7 @@ export function Table<T>({
 
   return (
     <div className={clsx('overflow-auto', className)} style={{ maxHeight }}>
-      <table role="grid" aria-label={rest['aria-label']} className="w-full border-separate border-spacing-0 text-base">
+      <table role="grid" aria-label={rest['aria-label']} className="w-full min-w-160 border-separate border-spacing-0 text-base">
         <thead>
           <tr>
             {columns.map((col) => {

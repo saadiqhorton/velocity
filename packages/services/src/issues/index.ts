@@ -106,7 +106,8 @@ export interface IssueListArgs {
 
 export interface IssueListResult {
   nodes: IssueRow[];
-  totalCount: number;
+  /** Lazily-computed total matching rows (memoized). Await only when the count is actually needed. */
+  totalCount: () => Promise<number>;
   hasNextPage: boolean;
   offset: number;
 }
@@ -237,7 +238,10 @@ export class IssueService extends ServiceBase {
     const cycle = alias(cycles, 'cycle');
 
     const orderBy = [...groupOrder(args.groupBy), ...orderSql(order), sql`issues.created_at desc`, sql`issues.id`];
-    const rows = await this.db
+    // Most list sorts reference only issue columns. Avoid planning five joins
+    // on every keystroke/filter refresh unless a group or sort needs them.
+    const needsJoins = ['status', 'assignee', 'project', 'cycle', 'team'].includes(args.groupBy ?? '') || order.some(o => o.field === 'status' || o.field === 'identifier');
+    const query = needsJoins ? this.db
       .select({ issue: issues })
       .from(issues)
       .innerJoin(statuses, eq(statuses.id, issues.statusId))
@@ -245,13 +249,21 @@ export class IssueService extends ServiceBase {
       .leftJoin(assignee, eq(assignee.id, issues.assigneeId))
       .leftJoin(project, eq(project.id, issues.projectId))
       .leftJoin(cycle, eq(cycle.id, issues.cycleId))
+      : this.db.select({ issue: issues }).from(issues);
+    const rows = await query
       .where(where)
       .orderBy(...orderBy)
       .limit(first + 1)
       .offset(offset);
-    const [count] = await this.db.select({ n: sql<number>`count(*)::int` }).from(issues).where(where);
     const hasNextPage = rows.length > first;
-    return { nodes: rows.slice(0, first).map((r) => r.issue), totalCount: count?.n ?? 0, hasNextPage, offset };
+    let counted: Promise<number> | null = null;
+    const totalCount = () =>
+      (counted ??= this.db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(issues)
+        .where(where)
+        .then(([c]) => c?.n ?? 0));
+    return { nodes: rows.slice(0, first).map((r) => r.issue), totalCount, hasNextPage, offset };
   }
 
   /** Counts per group key for list headers (SPEC §4.10.2 status group headers). */
@@ -365,6 +377,7 @@ export class IssueService extends ServiceBase {
     tx: Tx,
     teamId: string,
     v: { statusId?: string | null; assigneeId?: string | null; labelIds?: string[] | null; projectId?: string | null; milestoneId?: string | null; cycleId?: string | null },
+    allowClosedCycle = false,
   ): Promise<{ status?: typeof statuses.$inferSelect; milestoneProjectId?: string | null }> {
     const out: { status?: typeof statuses.$inferSelect; milestoneProjectId?: string | null } = {};
     if (v.statusId) {
@@ -400,7 +413,7 @@ export class IssueService extends ServiceBase {
       const [c] = await tx.select().from(cycles).where(eq(cycles.id, v.cycleId));
       if (!c) throw notFound('Cycle');
       if (c.teamId !== teamId) throw validation('That cycle belongs to a different team.', { field: 'cycleId' });
-      if (c.closedAt) throw validation('That cycle is closed.', { field: 'cycleId' });
+      if (c.closedAt && !allowClosedCycle) throw validation('That cycle is closed.', { field: 'cycleId' });
     }
     return out;
   }
@@ -465,7 +478,7 @@ export class IssueService extends ServiceBase {
       projectId: input.projectId,
       milestoneId: input.milestoneId,
       cycleId: input.cycleId,
-    });
+    }, actor.kind === 'import');
     let projectId = input.projectId ?? null;
     if (input.milestoneId) {
       if (projectId && refs.milestoneProjectId !== projectId) throw validation('That milestone belongs to a different project.', { field: 'milestoneId' });
@@ -871,7 +884,9 @@ export class IssueService extends ServiceBase {
       .returning({ next: teamCounters.nextNumber });
     const number = (counter[0]?.next ?? 1) - 1;
     const now = this.now();
-    const { id: _oldId, number: _n, teamId: _t, searchVector: _sv, cycleId: _c, ...rest } = src;
+    const rest = Object.fromEntries(
+      Object.entries(src).filter(([key]) => !['id', 'number', 'teamId', 'searchVector', 'cycleId'].includes(key)),
+    ) as Omit<typeof src, 'id' | 'number' | 'teamId' | 'searchVector' | 'cycleId'>;
     const [moved] = await tx
       .insert(issues)
       .values({ ...rest, teamId: target.id, number, statusId, cycleId: null, updatedAt: now })

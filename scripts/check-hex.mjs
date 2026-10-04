@@ -32,6 +32,14 @@ import { fileURLToPath } from 'node:url';
 
 const EXTS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.css', '.html']);
 const SKIP_DIRS = new Set(['node_modules', 'dist', 'coverage', '.turbo', 'generated', 'playwright-report', 'test-results']);
+// Playwright slot runs write `test-results_<slot>/` (and `playwright-report*`), all of which
+// are gitignored build artifacts; skip them by prefix so their trace CSS is never scanned.
+const SKIP_DIR_PREFIXES = ['test-results_', 'playwright-report_'];
+
+/** True for generated/ignored dirs: exact SKIP_DIRS names plus Playwright slot output dirs. */
+export function isSkippedDir(name) {
+  return SKIP_DIRS.has(name) || SKIP_DIR_PREFIXES.some((p) => name.startsWith(p));
+}
 const SKIP_PREFIXES = ['packages/tokens/', 'apps/web/src/gql/', 'packages/importers/fixtures/'];
 
 const CANDIDATE = /#([0-9a-fA-F]{3,8})(?![0-9A-Za-z_-])/g;
@@ -66,7 +74,7 @@ export function scanText(text) {
 
 function* walk(dir, root) {
   for (const name of readdirSync(dir)) {
-    if (SKIP_DIRS.has(name)) continue;
+    if (isSkippedDir(name)) continue;
     const full = join(dir, name);
     const rel = relative(root, full).split(sep).join('/');
     const st = statSync(full);

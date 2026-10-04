@@ -3,6 +3,7 @@ import { parseFilter } from '../../../graphql/src/dsl/index';
 import type { Harness } from '../helpers/harness';
 import { addMember, apiActor, createHarness, setupOwner } from '../helpers/harness';
 import type { ServiceActor } from '../../src/index';
+import { systemActor } from '../../src/context';
 
 let h: Harness;
 let owner: ServiceActor;
@@ -87,7 +88,7 @@ describe('issues', () => {
     expect(groupLabel.nodes.map((n) => n.id)).toContain(a.id);
     const unassigned = await h.services.issues.list(member, { filter: parseFilter('assignee neq:mia') });
     expect(unassigned.nodes.every((n) => n.assigneeId !== member.userId)).toBe(true);
-    expect(unassigned.totalCount).toBeGreaterThan(40);
+    expect(await unassigned.totalCount()).toBeGreaterThan(40);
     const byIdent = await h.services.issues.list(member, { filter: parseFilter(`identifier:${ident}`) });
     expect(byIdent.nodes).toHaveLength(1);
     const ordered = await h.services.issues.list(member, { filter: parseFilter('order:createdAt asc'), first: 3 });
@@ -191,6 +192,9 @@ describe('cycles', () => {
     const c2 = all.find((c) => c.number === 2)!;
     expect((await h.services.issues.get(open.id))!.cycleId).toBe(c2.id);
     expect((await h.services.issues.get(done.id))!.cycleId).toBe(c1.id);
+    await expect(h.services.issues.create(owner, { teamId: team.id, title: 'Cannot join closed cycle', cycleId: c1.id })).rejects.toMatchObject({ code: 'VALIDATION' });
+    const historical = await h.services.issues.create(systemActor('import'), { teamId: team.id, title: 'Imported historical issue', cycleId: c1.id });
+    expect(historical.cycleId).toBe(c1.id);
     expect(all.map((c) => c.number).sort()).toEqual([1, 2, 3]);
     h.clock.now = null;
   });

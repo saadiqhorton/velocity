@@ -171,7 +171,7 @@ class Parser {
             `Unknown 'is:' value '${v.text}' (expected one of: ${Object.keys(IS_SHORTHANDS).join(', ')})`,
           );
         }
-        this.assertValueEnd(v, true);
+        this.assertValueEnd(v);
         return { type: 'cmp', field: 'relations', op: 'eq', value: { kind: 'string', value: mapped } };
       }
     }
@@ -235,7 +235,7 @@ class Parser {
       }
       break;
     }
-    this.assertValueEnd(prev, false);
+    this.assertValueEnd(prev);
 
     const isSetOp = op === 'in' || op === 'nin';
     const first = raws[0];
@@ -253,7 +253,7 @@ class Parser {
   }
 
   /** Reject a value immediately followed (no whitespace) by another word/string/paren. */
-  private assertValueEnd(last: Token, _single: boolean): void {
+  private assertValueEnd(last: Token): void {
     const n = this.peek();
     if (n.start === last.end && (n.type === 'word' || n.type === 'string' || n.type === 'lparen')) {
       throw dslError(this.input, n.start, `Unexpected ${this.describe(n)}; separate terms with whitespace`);

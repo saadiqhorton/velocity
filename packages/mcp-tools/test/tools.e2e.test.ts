@@ -6,7 +6,6 @@ import { toolDefinitions } from '../src/index';
 
 let h: Harness;
 let owner: ServiceActor;
-let bob: ServiceActor;
 let writer: { client: Client; close(): Promise<void> };
 let reader: { client: Client; close(): Promise<void> };
 let teamKey: string;
@@ -14,7 +13,7 @@ let teamKey: string;
 beforeAll(async () => {
   h = await createHarness();
   owner = await setupOwner(h, 'owner');
-  bob = await addMember(h, owner, 'bob');
+  await addMember(h, owner, 'bob');
   writer = await connect(inProcessExecutor(h, apiActor(owner, 'write')));
   reader = await connect(inProcessExecutor(h, apiActor(owner, 'read')));
   const teams = await h.services.teams.list(owner);

@@ -31,7 +31,8 @@ const COMMENT_LINE = /^\s*(?:\/\/|\/\*|\*|<!--|\{\s*\/\*|#)/;
 export function scanFile(rel, text) {
   const problems = [];
   const inImporters = rel.startsWith('packages/importers/');
-  const inWebSrc = rel.startsWith('apps/web/src/');
+  // Generated codegen output mirrors schema descriptions (e.g. the Linear importer's API key) — not UI copy.
+  const inWebSrc = rel.startsWith('apps/web/src/') && !rel.startsWith('apps/web/src/gql/');
   const exempt = /\.(?:test|spec)\.[cm]?[jt]sx?$/.test(rel) || /(?:^|\/)import/i.test(rel);
   text.split(/\r?\n/).forEach((line, i) => {
     if (line.includes('check-legal-ignore')) return;

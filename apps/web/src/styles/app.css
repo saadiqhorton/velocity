@@ -1,0 +1,175 @@
+@import 'tailwindcss';
+@import '@velocity/tokens/tokens.css';
+@import '@velocity/ui/theme.css';
+@import '@fontsource-variable/inter';
+@source '../../../../packages/ui/src';
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    margin: 0;
+    background: var(--ds-color-surface);
+    color: var(--ds-color-text);
+    overflow: hidden;
+    font-feature-settings: 'cv11', 'ss01';
+  }
+  button {
+    cursor: default;
+  }
+  /* Identifiers are always monospace (SPEC §4.6, §4.14). */
+  .identifier {
+    font-family: var(--ds-font-code);
+    font-size: var(--ds-font-size-200);
+    color: var(--ds-color-text-subtlest);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer components {
+  /* Sync pulse (SPEC §5.5): a 200ms tint on rows whose reconcile took > 300ms. */
+  .sync-pulse {
+    animation: vel-sync-pulse var(--ds-duration-200) ease-out;
+  }
+  @keyframes vel-sync-pulse {
+    from {
+      background-color: var(--ds-color-primary-subtle);
+    }
+    to {
+      background-color: transparent;
+    }
+  }
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--ds-color-border) transparent;
+  }
+}
+
+/* Markdown content (editor + viewer). Token-driven; replaces tiptap's injected CSS. */
+@layer components {
+  .prose-vel {
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+  }
+  .prose-vel > * + * {
+    margin-top: var(--ds-space-100);
+  }
+  .prose-vel h1 {
+    font-size: var(--ds-font-size-600);
+    font-weight: 600;
+    line-height: 1.3;
+    margin-top: var(--ds-space-200);
+  }
+  .prose-vel h2 {
+    font-size: var(--ds-font-size-500);
+    font-weight: 600;
+    line-height: 1.3;
+    margin-top: var(--ds-space-200);
+  }
+  .prose-vel h3 {
+    font-size: var(--ds-font-size-400);
+    font-weight: 600;
+    margin-top: var(--ds-space-150);
+  }
+  .prose-vel a {
+    color: var(--ds-color-link);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .prose-vel ul {
+    list-style: disc;
+    padding-left: var(--ds-space-300);
+  }
+  .prose-vel ol {
+    list-style: decimal;
+    padding-left: var(--ds-space-300);
+  }
+  .prose-vel li + li {
+    margin-top: var(--ds-space-050);
+  }
+  .prose-vel ul[data-type='taskList'] {
+    list-style: none;
+    padding-left: 0;
+  }
+  .prose-vel ul[data-type='taskList'] li {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--ds-space-100);
+  }
+  .prose-vel ul[data-type='taskList'] li > label {
+    flex-shrink: 0;
+    margin-top: var(--ds-space-025);
+  }
+  .prose-vel ul[data-type='taskList'] li > div {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .prose-vel ul[data-type='taskList'] li[data-checked='true'] > div {
+    color: var(--ds-color-text-subtlest);
+    text-decoration: line-through;
+  }
+  .prose-vel input[type='checkbox'] {
+    accent-color: var(--ds-color-primary);
+  }
+  .prose-vel code {
+    font-family: var(--ds-font-code);
+    font-size: 0.875em;
+    background: var(--ds-color-neutral);
+    border-radius: var(--ds-radius-4);
+    padding: 0 var(--ds-space-050);
+  }
+  .prose-vel pre {
+    font-family: var(--ds-font-code);
+    font-size: var(--ds-font-size-200);
+    background: var(--ds-color-surface-sunken);
+    border: 1px solid var(--ds-color-border);
+    border-radius: var(--ds-radius-4);
+    padding: var(--ds-space-100) var(--ds-space-150);
+    overflow-x: auto;
+  }
+  .prose-vel pre code {
+    background: transparent;
+    padding: 0;
+  }
+  .prose-vel blockquote {
+    border-left: 2px solid var(--ds-color-border);
+    padding-left: var(--ds-space-150);
+    color: var(--ds-color-text-subtle);
+  }
+  .prose-vel hr {
+    border: 0;
+    border-top: 1px solid var(--ds-color-border);
+  }
+  .prose-vel img {
+    max-width: 100%;
+    border-radius: var(--ds-radius-4);
+  }
+  /* ProseMirror essentials (normally injected by tiptap). */
+  .ProseMirror {
+    position: relative;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    font-variant-ligatures: none;
+  }
+  .ProseMirror p.is-editor-empty:first-child::before {
+    content: attr(data-placeholder);
+    float: left;
+    height: 0;
+    pointer-events: none;
+    color: var(--ds-color-text-subtlest);
+  }
+  .ProseMirror-gapcursor {
+    display: none;
+    pointer-events: none;
+    position: absolute;
+  }
+  .ProseMirror-focused .ProseMirror-gapcursor {
+    display: block;
+  }
+  .ProseMirror .ProseMirror-selectednode {
+    outline: 2px solid var(--ds-color-focus);
+  }
+}

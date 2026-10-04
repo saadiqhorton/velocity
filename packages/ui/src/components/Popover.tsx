@@ -25,8 +25,8 @@ export interface PopoverPositionOptions {
 }
 
 export interface PopoverPosition {
-  /** Pass to the floating element's `ref`. */
-  floatingRef: (el: HTMLElement | null) => void;
+  /** Pass to the floating element's `ref` (a callback ref). */
+  setFloating: (el: HTMLElement | null) => void;
   style: CSSProperties;
   /** Placement after flipping. */
   placement: Placement;
@@ -51,8 +51,8 @@ export function computePosition(
   let finalSide = side;
   const aBottom = anchor.top + anchor.height;
   const aRight = anchor.left + anchor.width;
-  let top = 0;
-  let left = 0;
+  let top: number;
+  let left: number;
 
   if (side === 'top' || side === 'bottom') {
     const spaceBelow = viewport.height - aBottom - offset;
@@ -152,7 +152,7 @@ export function usePopoverPosition(
     left: state.left,
     minWidth: state.minWidth,
   };
-  return { floatingRef: setFloating, style, placement: state.placement };
+  return { setFloating, style, placement: state.placement };
 }
 
 export interface PopoverProps extends Omit<HTMLAttributes<HTMLDivElement>, 'children'> {
@@ -222,7 +222,9 @@ function PopoverSurface({
   const elRef = useRef<HTMLDivElement | null>(null);
   const insideRef = useRef(false);
   const dismissRef = useRef(onDismiss);
-  dismissRef.current = onDismiss;
+  useIsomorphicLayoutEffect(() => {
+    dismissRef.current = onDismiss;
+  });
 
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
@@ -244,7 +246,7 @@ function PopoverSurface({
       {...rest}
       ref={(el) => {
         elRef.current = el;
-        pos.floatingRef(el);
+        pos.setFloating(el);
       }}
       onMouseDown={(e) => {
         insideRef.current = true;

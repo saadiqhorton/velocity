@@ -10,6 +10,30 @@ function contentDisposition(kind: 'inline' | 'attachment', filename: string): st
   return `${kind}; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
 }
 
+/** Avatars share workspace visibility and require a current member credential. */
+export async function handleAvatar(services: Services, req: IncomingMessage, res: ServerResponse, url: URL, ip: string | null): Promise<void> {
+  if (req.method !== 'GET' && req.method !== 'HEAD') return sendText(res, 405, 'Method not allowed');
+  const id = url.pathname.split('/')[2] ?? '';
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return sendText(res, 404, 'Not found');
+  const auth = await authenticate(services, headerGetter(req), ip).catch(() => null);
+  if (!auth?.actor) return sendText(res, 401, 'Sign in to view this image.');
+  const user = await services.users.get(id);
+  if (!user?.avatarPath || user.deletedAt) return sendText(res, 404, 'Not found');
+  const size = await services.deps.storage.size(user.avatarPath);
+  if (size === null) return sendText(res, 404, 'Not found');
+  res.writeHead(200, {
+    ...SECURITY_HEADERS,
+    'content-type': 'image/webp',
+    'content-length': size,
+    'cache-control': 'private, max-age=3600',
+    'content-security-policy': "default-src 'none'; sandbox",
+  });
+  if (req.method === 'HEAD') { res.end(); return; }
+  const stream = await services.deps.storage.get(user.avatarPath);
+  stream.on('error', () => res.destroy());
+  stream.pipe(res);
+}
+
 /**
  * Attachment downloads (SPEC §5.8): auth-scoped — either a valid signed URL
  * (time-limited, for editor embeds) or an authenticated member/API key.

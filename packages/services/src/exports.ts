@@ -66,7 +66,9 @@ export class ExportService extends ServiceBase {
         version: EXPORT_FORMAT_VERSION,
         exportedAt: this.now().toISOString(),
         workspace: ws ? { name: ws.name, slug: ws.slug, timezone: ws.timezone, locale: ws.locale } : null,
-        members: (await this.db.select().from(users)).map(({ passwordHash: _p, ...u }) => u),
+        members: (await this.db.select().from(users)).map((user) => {
+          return Object.fromEntries(Object.entries(user).filter(([key]) => key !== 'passwordHash'));
+        }),
         teams: await this.db.select().from(teams),
         workflows: await this.db.select().from(workflows),
         statuses: await this.db.select().from(statuses),
@@ -75,7 +77,9 @@ export class ExportService extends ServiceBase {
         projects: await this.db.select().from(projects),
         projectTeams: await this.db.select().from(projectTeams),
         milestones: await this.db.select().from(milestones),
-        issues: (await this.db.select().from(issues)).map(({ searchVector: _s, ...i }) => i),
+        issues: (await this.db.select().from(issues)).map((issue) => {
+          return Object.fromEntries(Object.entries(issue).filter(([key]) => key !== 'searchVector'));
+        }),
         issueLabels: await this.db.select().from(issueLabels),
         issueRelations: await this.db.select().from(issueRelations),
         comments: await this.db.select().from(comments),

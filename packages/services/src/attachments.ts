@@ -49,7 +49,7 @@ function safeFilename(name: string): string {
 }
 
 /** clamd INSTREAM scan. Resolves the verdict line, e.g. `stream: OK`. */
-function clamScan(host: string, port: number, data: Buffer): Promise<string> {
+export function clamScan(host: string, port: number, data: Buffer): Promise<string> {
   return new Promise((resolve, reject) => {
     const sock = connect({ host, port });
     let reply = '';

@@ -44,11 +44,11 @@ export function createHttpExecutor(opts: HttpExecutorOptions): GraphQLExecutor {
       body: JSON.stringify({ query, variables: variables ?? {} }),
     });
     const text = await res.text();
-    let body: unknown = null;
+    let body: unknown;
     try {
       body = text ? JSON.parse(text) : null;
     } catch {
-      body = null;
+      // Invalid JSON is handled by the generic response path below.
     }
     if (isRecord(body) && (body.data !== undefined || Array.isArray(body.errors))) {
       const out: ExecResult = {};

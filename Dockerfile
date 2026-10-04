@@ -34,20 +34,24 @@ RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
  && pnpm install --offline --frozen-lockfile
 
 # --------------------------------------------------------------- build
-FROM deps AS build
+FROM deps AS server-build
 COPY . .
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
-    pnpm turbo run build --filter=@velocity/server --filter=@velocity/web
+    pnpm turbo run build --filter=@velocity/server
+
+FROM server-build AS build
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
+    pnpm turbo run build --filter=@velocity/web
 
 # --------------------------------------------------------------- prune
 # Production-only node_modules for the server. Workspace packages are bundled
 # into dist/main.js by esbuild, so only real npm dependencies are needed.
-FROM build AS prune
+FROM server-build AS prune
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
     pnpm --filter @velocity/server deploy --prod --legacy /out
 
 # ------------------------------------------------------------- runtime
-FROM node:${NODE_VERSION}-bookworm-slim AS runtime
+FROM node:${NODE_VERSION}-bookworm-slim AS server-runtime
 
 ARG VERSION=dev
 ARG REVISION=unknown
@@ -86,13 +90,13 @@ ENV NODE_ENV=production \
     PORT=3000 \
     WEB_DIST_DIR=/app/web-dist \
     UPLOAD_DIR=/data/uploads \
-    EXPORT_DIR=/data/exports
+    EXPORT_DIR=/data/exports \
+    BACKUP_DIR=/data/backups
 
 WORKDIR /app
 COPY --from=prune /out/package.json ./package.json
 COPY --from=prune /out/node_modules ./node_modules
-COPY --from=build /repo/apps/server/dist ./dist
-COPY --from=build /repo/apps/web/dist ./web-dist
+COPY --from=server-build /repo/apps/server/dist ./dist
 
 USER 10001:10001
 VOLUME ["/data"]
@@ -103,3 +107,8 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
 
 ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["node", "dist/main.js"]
+
+# The default release target always includes the real web build. The server-runtime
+# target permits independent API/backup verification while frontend work continues.
+FROM server-runtime AS runtime
+COPY --from=build /repo/apps/web/dist ./web-dist

@@ -1,0 +1,504 @@
+query WorkspaceSettings {
+  workspace {
+    name
+    slug
+    timezone
+    locale
+    createdAt
+    deletionRequestedAt
+    deletionScheduledFor
+  }
+}
+
+mutation UpdateWorkspace($input: UpdateWorkspaceInput!) {
+  updateWorkspace(input: $input) {
+    name
+    slug
+    timezone
+    locale
+  }
+}
+
+mutation RequestWorkspaceDeletion($confirmName: String!) {
+  requestWorkspaceDeletion(confirmName: $confirmName) {
+    name
+    deletionRequestedAt
+    deletionScheduledFor
+  }
+}
+
+mutation CancelWorkspaceDeletion {
+  cancelWorkspaceDeletion {
+    name
+    deletionRequestedAt
+    deletionScheduledFor
+  }
+}
+
+query Members {
+  users(includeSuspended: true) {
+    ...UserFields
+    email
+    createdAt
+  }
+  invites {
+    id
+    name
+    createdAt
+    expiresAt
+  }
+}
+
+mutation CreateInvite($name: String, $expiresInDays: Int) {
+  createInvite(name: $name, expiresInDays: $expiresInDays) {
+    id
+    name
+    url
+    createdAt
+    expiresAt
+  }
+}
+
+mutation RevokeInvite($id: ID!) {
+  revokeInvite(id: $id)
+}
+
+mutation SetMemberSuspended($userId: ID!, $suspended: Boolean!) {
+  setMemberSuspended(userId: $userId, suspended: $suspended) {
+    id
+    suspended
+  }
+}
+
+mutation SetMemberPassword($userId: ID!, $password: String!) {
+  setMemberPassword(userId: $userId, password: $password)
+}
+
+mutation RemoveMember($userId: ID!) {
+  removeMember(userId: $userId)
+}
+
+mutation CreateTeam($input: CreateTeamInput!) {
+  createTeam(input: $input) {
+    ...TeamFields
+  }
+}
+
+mutation UpdateTeam($id: ID!, $input: UpdateTeamInput!) {
+  updateTeam(id: $id, input: $input) {
+    ...TeamFields
+  }
+}
+
+mutation ArchiveTeam($id: ID!, $archived: Boolean!) {
+  archiveTeam(id: $id, archived: $archived) {
+    id
+    archivedAt
+  }
+}
+
+mutation DeleteTeam($id: ID!, $confirmKey: String!, $moveIssuesToTeamId: ID) {
+  deleteTeam(id: $id, confirmKey: $confirmKey, moveIssuesToTeamId: $moveIssuesToTeamId)
+}
+
+mutation ReorderTeam($id: ID!, $beforeId: ID, $afterId: ID) {
+  reorderTeam(id: $id, beforeId: $beforeId, afterId: $afterId) {
+    id
+    sortOrder
+  }
+}
+
+query TeamMembers($id: ID!) {
+  team(id: $id) {
+    id
+    members {
+      id
+      name
+      avatarUrl
+    }
+  }
+}
+
+mutation SetTeamMembership($teamId: ID!, $userId: ID!, $member: Boolean!) {
+  setTeamMembership(teamId: $teamId, userId: $userId, member: $member)
+}
+
+mutation CreateStatus($teamId: ID!, $input: CreateStatusInput!) {
+  createStatus(teamId: $teamId, input: $input) {
+    ...StatusFields
+  }
+}
+
+mutation UpdateStatus($id: ID!, $input: UpdateStatusInput!) {
+  updateStatus(id: $id, input: $input) {
+    ...StatusFields
+  }
+}
+
+mutation DeleteStatus($id: ID!, $replacementStatusId: ID) {
+  deleteStatus(id: $id, replacementStatusId: $replacementStatusId)
+}
+
+mutation ReorderStatus($id: ID!, $beforeId: ID, $afterId: ID) {
+  reorderStatus(id: $id, beforeId: $beforeId, afterId: $afterId) {
+    id
+    order
+  }
+}
+
+mutation CreateLabel($input: CreateLabelInput!) {
+  createLabel(input: $input) {
+    ...LabelFields
+  }
+}
+
+mutation UpdateLabel($id: ID!, $input: UpdateLabelInput!) {
+  updateLabel(id: $id, input: $input) {
+    ...LabelFields
+  }
+}
+
+mutation DeleteLabel($id: ID!) {
+  deleteLabel(id: $id)
+}
+
+query ApiKeys($all: Boolean) {
+  apiKeys(all: $all) {
+    id
+    name
+    prefix
+    scope
+    createdAt
+    lastUsedAt
+    expiresAt
+    user {
+      id
+      name
+    }
+    mutationsPerHour {
+      hour
+      count
+    }
+  }
+}
+
+mutation CreateApiKey($name: String!, $scope: ApiKeyScope!, $expiresInDays: Int) {
+  createApiKey(name: $name, scope: $scope, expiresInDays: $expiresInDays) {
+    plaintext
+    apiKey {
+      id
+      name
+      prefix
+      scope
+      createdAt
+      lastUsedAt
+      expiresAt
+      user {
+        id
+        name
+      }
+      mutationsPerHour {
+        hour
+        count
+      }
+    }
+  }
+}
+
+mutation RevokeApiKey($id: ID!) {
+  revokeApiKey(id: $id)
+}
+
+query Sessions {
+  sessions {
+    id
+    current
+    createdAt
+    lastUsedAt
+    expiresAt
+    ip
+    userAgent
+  }
+}
+
+mutation RevokeSession($id: ID!) {
+  revokeSession(id: $id)
+}
+
+mutation RevokeOtherSessions {
+  revokeOtherSessions
+}
+
+mutation ChangePassword($currentPassword: String!, $newPassword: String!) {
+  changePassword(currentPassword: $currentPassword, newPassword: $newPassword)
+}
+
+mutation UploadAvatar($file: File!) {
+  uploadAvatar(file: $file) {
+    id
+    avatarUrl
+  }
+}
+
+mutation RemoveAvatar {
+  removeAvatar {
+    id
+    avatarUrl
+  }
+}
+
+fragment GithubInstallFields on GithubInstall {
+  id
+  installationId
+  accountLogin
+  accountType
+  repos
+  autoCloseOnMerge
+  issueSync
+  issueSyncTeamId
+  repoTeamMap
+  backfillStatus
+  backfillProgress
+  suspendedAt
+  createdAt
+}
+
+query Integrations {
+  githubIntegration {
+    configured
+    installUrl
+    installs {
+      ...GithubInstallFields
+    }
+  }
+  mcpInfo {
+    httpEnabled
+    httpEndpoint
+    serverUrl
+    stdioCommand
+  }
+}
+
+mutation GithubCompleteInstall($installationId: Int!) {
+  githubCompleteInstall(installationId: $installationId) {
+    ...GithubInstallFields
+  }
+}
+
+mutation UpdateGithubSettings($installId: ID!, $input: GithubSettingsInput!) {
+  updateGithubSettings(installId: $installId, input: $input) {
+    ...GithubInstallFields
+  }
+}
+
+mutation GithubStartBackfill($installId: ID!) {
+  githubStartBackfill(installId: $installId)
+}
+
+mutation GithubCancelBackfill($installId: ID!) {
+  githubCancelBackfill(installId: $installId)
+}
+
+mutation UninstallGithub($installId: ID!) {
+  uninstallGithub(installId: $installId)
+}
+
+fragment WebhookFields on Webhook {
+  id
+  url
+  description
+  enabled
+  eventTypes
+  createdAt
+  updatedAt
+}
+
+query Webhooks {
+  webhooks {
+    ...WebhookFields
+  }
+}
+
+query WebhookDeliveries($webhookId: ID!, $first: Int, $offset: Int) {
+  webhook(id: $webhookId) {
+    ...WebhookFields
+  }
+  webhookDeliveries(webhookId: $webhookId, first: $first, offset: $offset) {
+    totalCount
+    nodes {
+      id
+      eventType
+      status
+      statusCode
+      attempt
+      createdAt
+      deliveredAt
+      durationMs
+      nextRetryAt
+      error
+      payload
+    }
+  }
+}
+
+mutation CreateWebhook($input: WebhookInput!) {
+  createWebhook(input: $input) {
+    secret
+    webhook {
+      ...WebhookFields
+    }
+  }
+}
+
+mutation UpdateWebhook($id: ID!, $input: WebhookInput!) {
+  updateWebhook(id: $id, input: $input) {
+    ...WebhookFields
+  }
+}
+
+mutation DeleteWebhook($id: ID!) {
+  deleteWebhook(id: $id)
+}
+
+mutation TestWebhook($id: ID!) {
+  testWebhook(id: $id) {
+    id
+    status
+    statusCode
+    eventType
+    createdAt
+  }
+}
+
+mutation RedeliverWebhook($deliveryId: ID!) {
+  redeliverWebhook(deliveryId: $deliveryId) {
+    id
+    status
+    statusCode
+    attempt
+    createdAt
+  }
+}
+
+mutation RotateWebhookSecret($id: ID!) {
+  rotateWebhookSecret(id: $id)
+}
+
+mutation RevealWebhookSecret($id: ID!) {
+  revealWebhookSecret(id: $id)
+}
+
+fragment ImportRunFields on ImportRun {
+  id
+  source
+  status
+  fileName
+  progress
+  committedCount
+  error
+  summary
+  mapping
+  suggestedMapping
+  report
+  createdAt
+  updatedAt
+}
+
+query ImportRuns {
+  importRuns {
+    ...ImportRunFields
+  }
+}
+
+query ImportRun($id: ID!) {
+  importRun(id: $id) {
+    ...ImportRunFields
+  }
+}
+
+mutation CreateImportRunFromCsv($input: CsvImportInput!) {
+  createImportRunFromCsv(input: $input) {
+    ...ImportRunFields
+  }
+}
+
+mutation CreateImportRunFromApi($input: ApiImportInput!) {
+  createImportRunFromApi(input: $input) {
+    ...ImportRunFields
+  }
+}
+
+mutation UpdateImportMapping($id: ID!, $mapping: JSON!) {
+  updateImportMapping(id: $id, mapping: $mapping) {
+    ...ImportRunFields
+  }
+}
+
+mutation DryRunImport($id: ID!) {
+  dryRunImport(id: $id) {
+    ...ImportRunFields
+  }
+}
+
+mutation CommitImport($id: ID!) {
+  commitImport(id: $id) {
+    ...ImportRunFields
+  }
+}
+
+mutation CancelImport($id: ID!) {
+  cancelImport(id: $id) {
+    ...ImportRunFields
+  }
+}
+
+subscription ImportProgress($runId: ID!) {
+  importProgress(runId: $runId) {
+    ...ImportRunFields
+  }
+}
+
+query Exports {
+  exports {
+    id
+    status
+    createdAt
+    completedAt
+    size
+    error
+    downloadUrl
+  }
+}
+
+mutation RequestExport {
+  requestExport {
+    id
+    status
+    createdAt
+    completedAt
+    size
+    error
+    downloadUrl
+  }
+}
+
+query AuditLog($first: Int, $offset: Int, $action: String, $actorUserId: ID, $before: DateTime, $after: DateTime) {
+  auditLog(first: $first, offset: $offset, action: $action, actorUserId: $actorUserId, before: $before, after: $after) {
+    totalCount
+    nodes {
+      id
+      action
+      createdAt
+      objectType
+      objectId
+      ip
+      changes
+      actorApiKeyId
+      actorMcpSessionId
+      actor {
+        id
+        name
+      }
+    }
+  }
+}

@@ -68,7 +68,8 @@ describe('linear csv fixture', () => {
     expect(Object.values(m.teams).map((t) => (t.mode === 'create' ? t.key : 'existing')).sort()).toEqual(['DES', 'ENG', 'OPS']);
     expect(m.include).toEqual({ projects: true, cycles: true, comments: true, relations: true, archived: false });
     const read = await c.h.services.importer.get(c.owner, run.id);
-    expect(read!.config).toEqual({});
+    expect(read!.config).toMatchObject({ counts: { issues: 21 }, teams: expect.any(Array), statuses: expect.any(Array), users: expect.any(Array) });
+    expect(read!.config).not.toHaveProperty('issues');
     const audit = await q(c.h, `select * from audit_log where action = 'import.started'`);
     expect(audit).toHaveLength(1);
     expect(JSON.stringify(audit[0])).not.toContain('Set up CI pipeline');
@@ -187,7 +188,8 @@ describe('linear csv fixture', () => {
   it('lists runs newest first', async () => {
     const list = await c.h.services.importer.list(c.owner);
     expect(list[0]!.id).toBe(run.id);
-    expect(list[0]!.config).toEqual({});
+    expect(list[0]!.config).toMatchObject({ counts: { issues: 21 }, teams: expect.any(Array), statuses: expect.any(Array), users: expect.any(Array) });
+    expect(list[0]!.config).not.toHaveProperty('issues');
   });
 });
 
@@ -236,6 +238,12 @@ describe('resumability', () => {
   it('resumes after a failure between chunks without duplicates', async () => {
     const s = c.h.services.importer;
     const run = await s.createRunFromCsv(c.owner, { source: 'linear', csv: generateLinearCsv(1000) });
+    const summary = run.config as { teams: unknown[]; statuses: unknown[]; users: unknown[]; counts: { issues: number }; issues?: unknown[] };
+    expect(summary.counts.issues).toBe(1000);
+    expect(summary.teams).toHaveLength(3);
+    expect(summary.statuses.length).toBeGreaterThan(0);
+    expect(summary.users.length).toBeGreaterThan(0);
+    expect(summary.issues).toBeUndefined();
     const dry = dryReport(await s.dryRun(c.owner, run.id));
     await s.commit(c.owner, run.id);
 

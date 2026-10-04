@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "graphql-codegen --config codegen.ts && vite build",
     "preview": "vite preview",
     "codegen": "graphql-codegen --config codegen.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
@@ -36,7 +36,8 @@
     "@tiptap/extension-task-item": "^3.31.4",
     "@tiptap/extension-placeholder": "^3.31.4",
     "@fontsource-variable/inter": "^5.3.0",
-    "clsx": "^2.1.1"
+    "clsx": "^2.1.1",
+    "@velocity/schema": "workspace:*"
   },
   "devDependencies": {
     "vite": "^8.0.0",
@@ -50,6 +51,8 @@
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "jsdom": "^26.1.0",
-    "@testing-library/react": "^16.3.0"
+    "@testing-library/react": "^16.3.0",
+    "@testing-library/dom": "^10.4.0",
+    "@graphql-typed-document-node/core": "^3.2.0"
   }
 }

@@ -6,9 +6,9 @@ phones home, there is no analytics and no version check unless you enable one.
 
 ## Requirements
 
-- Linux host with Docker Engine 24+ and the Compose plugin (v2.24+).
-- Sizing: 1 vCPU, 1 GB RAM and 2 GB disk comfortably run a workspace of about 10,000 issues.
-  Add disk for attachments and backups; scale CPU and RAM roughly linearly with active users.
+- Linux host with Docker Engine 25+ and the Compose plugin (v2.24+).
+- As a starting point, allow 2 vCPU, 4 GB RAM and 20 GB disk for the app and database.
+  Actual needs depend on workload; monitor usage and add disk for attachments and backups.
 
 ## Install
 
@@ -35,19 +35,24 @@ Open `APP_URL` and complete the first-run wizard. Sign-up is closed after the fi
 ## Configuration
 
 All configuration is environment variables in `.env`; `.env.example` documents each one
-(purpose and default). No secrets are stored in the database. Highlights:
+(purpose and default). Webhook signing secrets are encrypted at rest in the database; API keys
+and session tokens are stored as hashes. Highlights:
 
 | Variable | Notes |
 |---|---|
-| `APP_URL`, `APP_SECRET`, `POSTGRES_PASSWORD` | required |
+| `APP_URL`, `APP_SECRET` | required by the app |
+| `POSTGRES_PASSWORD` | required for the bundled Compose database; set `DATABASE_URL` to use an external Postgres 16 instance |
 | `CADDY_DOMAIN` | enables automatic HTTPS |
-| `UPLOAD_DIR`, `MAX_UPLOAD_MB`, `EXPORT_DIR` | under the `app_data` volume (`/data`) |
+| `UPLOAD_DIR`, `MAX_UPLOAD_MB`, `EXPORT_DIR`, `BACKUP_DIR` | Docker defaults are under `app_data` (`/data`); `BACKUP_DIR` defaults to `/data/backups` in the image |
 | `DISABLE_SIGNUP` | default `true` |
 | `GITHUB_APP_*`, `GITHUB_WEBHOOK_SECRET` | optional GitHub integration (`GITHUB_APP_SECRET` is accepted as an alias of `GITHUB_APP_CLIENT_SECRET`) |
 | `MCP_HTTP_ENABLED`, `MCP_HTTP_TOKEN` | optional HTTP transport for remote agents |
+| `TRUST_PROXY` | Compose sets this to `1` for Caddy; set it when running behind a trusted reverse proxy |
+| `METRICS_TOKEN` | optional Bearer token for `/metrics`; set one when scraping through a forwarded request |
 | `ALLOW_PRIVATE_WEBHOOK_TARGETS` | default `0` (SSRF protection) |
-| `LOG_LEVEL`, `SENTRY_DSN` | `SENTRY_DSN` is opt-in |
-| `VELOCITY_BACKUP_BEFORE_MIGRATE` | pg_dump before migrations |
+| `LOG_LEVEL` | server log verbosity |
+| `SENTRY_DSN` | reserved; Sentry reporting is not integrated yet |
+| `VELOCITY_BACKUP_BEFORE_MIGRATE`, `BACKUP_DIR` | when enabled, runs `pg_dump` on every non-worker app startup before checking or applying migrations |
 
 After editing `.env`: `docker compose up -d` (containers are recreated when needed).
 
@@ -65,25 +70,43 @@ sets its own Content-Security-Policy. Uploads are capped at 26 MB by Caddy; rais
 `request_body max_size` in `Caddyfile` together with `MAX_UPLOAD_MB`.
 
 Already behind another reverse proxy or load balancer? Remove the `caddy` service, publish
-`app:3000` from the compose file and proxy to it, forwarding `X-Forwarded-*` headers and WebSocket upgrades.
+port 3000 for the `app` service (for example, `3000:3000`) and proxy to it, forwarding
+`X-Forwarded-*` headers and WebSocket upgrades. Compose sets `TRUST_PROXY=1`; only use this
+behind a proxy you trust.
 
 ## Upgrades
 
 ```sh
-docker compose pull
-docker compose up -d
+git pull
+docker compose up -d --build
 ```
 
-(If you build locally from a checkout instead: `git pull && docker compose build && docker compose up -d`.)
+The Compose file builds from the checkout. No public release image has been verified yet.
 Migrations run automatically on boot under a Postgres advisory lock, so they are safe with several replicas.
 Releases keep N-1 compatibility: upgrade one release at a time. Take a backup first (below).
+
+## Partial server image check
+
+The `server-runtime` Docker target builds the API runtime without building or copying the web UI.
+Use it for a partial server and backup-path check while frontend work is incomplete:
+
+```sh
+docker build --target server-runtime -t velocity-server-runtime:check .
+```
+
+To start this image, provide the usual `DATABASE_URL`, `APP_SECRET` and `APP_URL`, connect it to
+Postgres, and mount `/data` as a writable volume. Then check `/healthz` and `/readyz`. This image
+does not include `web-dist`, so `/` responds with a “web app has not been built yet” message; it is
+not a complete user-facing deployment. The default final Docker target includes the web build.
 
 ## Backups
 
 State lives in two volumes: `pg_data` (database) and `app_data` (attachments, exports, backups).
 
-Automatic pre-migration dump: set `VELOCITY_BACKUP_BEFORE_MIGRATE=1` in `.env`. On boot, before applying
-migrations, the app runs `pg_dump` into `/data/backups/` (inside `app_data`). Copy those files off the host.
+Automatic startup dump: set `VELOCITY_BACKUP_BEFORE_MIGRATE=1` in `.env`. On every non-worker app
+startup, before checking or applying migrations, the app runs `pg_dump` into `BACKUP_DIR` (Docker
+default `/data/backups`, inside `app_data`). This can create a dump even when no migration is pending;
+copy the files off the host and manage old dumps to control disk use.
 
 Manual database backup and restore:
 
@@ -144,7 +167,9 @@ if users upload files that other people open, enable ClamAV.
 ## Monitoring
 
 - `GET /healthz` (process up) and `GET /readyz` (database and storage OK) for health checks.
-- `GET /metrics` serves Prometheus metrics. Scrape it from inside the compose network, and do not expose it publicly (block `/metrics` in the Caddyfile if your app build does not require auth for it).
+- `GET /metrics` serves Prometheus metrics. Caddy always blocks this path; scrape `app:3000/metrics`
+  directly from inside the Compose network. If `METRICS_TOKEN` is set, send it as a Bearer token.
+  Without a token, the app rejects requests that include `X-Forwarded-For`.
 - Logs are structured JSON on stdout: `docker compose logs -f app`.
 
 ## Troubleshooting
@@ -158,7 +183,7 @@ if users upload files that other people open, enable ClamAV.
 | Login loops or CSRF errors | `APP_URL` must exactly match the URL in the browser (scheme and host). |
 | Realtime updates stop | Another proxy in front of Caddy is not forwarding WebSocket upgrades on `/graphql`. |
 | Upload rejected with 413 | Raise both `MAX_UPLOAD_MB` and the Caddyfile `max_size`. |
-| Backups missing | Requires `VELOCITY_BACKUP_BEFORE_MIGRATE=1`, and only run when migrations are pending. |
+| Backups missing | Requires `VELOCITY_BACKUP_BEFORE_MIGRATE=1`; check `BACKUP_DIR` and app startup logs. |
 | Permission denied writing `/data` | The volume must be writable by uid 10001: `docker compose run --rm --user root app chown -R 10001:10001 /data`. |
 
 Reset everything (destroys all data): `docker compose down -v`.

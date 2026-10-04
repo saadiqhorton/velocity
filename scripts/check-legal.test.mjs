@@ -17,3 +17,8 @@ test('flags "Linear" in web UI copy, allows sanctioned comments', () => {
   assert.equal(scanFile('apps/web/src/import/Wizard.tsx', '<p>Import from Linear</p>').length, 0);
   assert.equal(scanFile('apps/server/src/a.ts', 'Linear').length, 0);
 });
+
+test('generated codegen output is not UI copy, but asset hosts are still flagged there', () => {
+  assert.equal(scanFile('apps/web/src/gql/graphql.ts', '/** Linear API key — used in memory only, never stored. */').length, 0);
+  assert.equal(scanFile('apps/web/src/gql/graphql.ts', '"https://cdn.linear.app/x.png"').length, 1);
+});

@@ -200,12 +200,12 @@ ImportRunRef.implement({
       type: 'JSON',
       description: 'Source overview for the mapping preview: teams, statuses, users, counts.',
       resolve: (r) => {
-        const b = r.config as { teams?: unknown[]; statuses?: unknown[]; users?: unknown[]; labels?: unknown[]; issues?: unknown[]; projects?: unknown[]; cycles?: unknown[]; warnings?: unknown[] };
+        const b = r.config as { teams?: unknown[]; statuses?: unknown[]; users?: unknown[]; labels?: unknown[]; issues?: unknown[]; projects?: unknown[]; cycles?: unknown[]; warnings?: unknown[]; counts?: { issues?: number; labels?: number; projects?: number; cycles?: number } };
         return {
           teams: b.teams ?? [],
           statuses: b.statuses ?? [],
           users: b.users ?? [],
-          counts: { issues: b.issues?.length ?? 0, labels: b.labels?.length ?? 0, projects: b.projects?.length ?? 0, cycles: b.cycles?.length ?? 0 },
+          counts: { issues: b.counts?.issues ?? b.issues?.length ?? 0, labels: b.counts?.labels ?? b.labels?.length ?? 0, projects: b.counts?.projects ?? b.projects?.length ?? 0, cycles: b.counts?.cycles ?? b.cycles?.length ?? 0 },
           warnings: (b.warnings ?? []).slice(0, 200),
         };
       },
@@ -345,8 +345,16 @@ builder.queryFields((t) => ({
   exports: t.field({ type: [ExportRef], resolve: (_r, _a, ctx) => ctx.services.exports.list(requireActor(ctx)) }),
   auditLog: t.field({
     type: AuditPageRef,
-    args: { action: t.arg.string(), actorUserId: t.arg.id(), first: t.arg.int(), offset: t.arg.int() },
-    resolve: (_r, a, ctx) => ctx.services.audit.list(requireActor(ctx), { action: a.action, actorUserId: a.actorUserId, limit: a.first ?? 50, offset: a.offset ?? 0 }),
+    args: { action: t.arg.string(), actorUserId: t.arg.id(), before: t.arg({ type: 'DateTime' }), after: t.arg({ type: 'DateTime' }), first: t.arg.int(), offset: t.arg.int() },
+    resolve: (_r, a, ctx) =>
+      ctx.services.audit.list(requireActor(ctx), {
+        action: a.action,
+        actorUserId: a.actorUserId,
+        before: a.before,
+        after: a.after,
+        limit: a.first ?? 50,
+        offset: a.offset ?? 0,
+      }),
   }),
   mcpInfo: t.field({
     type: McpInfoRef,

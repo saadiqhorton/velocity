@@ -1,0 +1,139 @@
+query SetupStatus {
+  setupStatus {
+    needsSetup
+    setupCompleted
+    signupEnabled
+    workspaceName
+  }
+}
+
+query Viewer {
+  viewer {
+    ...UserFields
+    email
+    theme
+    locale
+    timezone
+  }
+}
+
+query Bootstrap {
+  workspace {
+    name
+    slug
+    timezone
+    locale
+    setupCompleted
+    deletionRequestedAt
+    deletionScheduledFor
+  }
+  teams {
+    ...TeamFields
+  }
+  users {
+    ...UserFields
+  }
+  labels {
+    ...LabelFields
+  }
+  projects {
+    ...ProjectSummaryFields
+  }
+  favorites {
+    ...FavoriteFields
+  }
+  views {
+    ...ViewFields
+  }
+}
+
+query SidebarCounts {
+  unreadNotificationCount
+}
+
+query CyclesClosingSoon {
+  cyclesClosingSoon {
+    id
+    name
+    endsAt
+    team {
+      id
+      key
+      name
+    }
+  }
+}
+
+query InviteInfo($token: String!) {
+  inviteInfo(token: $token) {
+    valid
+    name
+    workspaceName
+  }
+}
+
+mutation Login($input: LoginInput!) {
+  login(input: $input) {
+    csrfToken
+    expiresAt
+    user {
+      ...UserFields
+    }
+  }
+}
+
+mutation Logout {
+  logout
+}
+
+mutation SetupWorkspace($input: SetupWorkspaceInput!) {
+  setupWorkspace(input: $input) {
+    csrfToken
+    user {
+      ...UserFields
+    }
+  }
+}
+
+mutation CompleteSetup {
+  completeSetup
+}
+
+mutation AcceptInvite($input: AcceptInviteInput!) {
+  acceptInvite(input: $input) {
+    csrfToken
+    user {
+      ...UserFields
+    }
+  }
+}
+
+mutation UpdateProfile($input: UpdateProfileInput!) {
+  updateProfile(input: $input) {
+    ...UserFields
+    email
+    theme
+    locale
+    timezone
+  }
+}
+
+subscription WorkspaceEvents {
+  workspaceEvents {
+    topic
+    entityId
+    issueId
+    teamId
+    projectId
+    actorUserId
+    changedFields
+  }
+}
+
+subscription NotificationCreated {
+  notificationCreated {
+    id
+    type
+    createdAt
+  }
+}

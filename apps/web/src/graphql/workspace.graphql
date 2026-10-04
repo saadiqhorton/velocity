@@ -1,0 +1,132 @@
+query Notifications($preset: NotificationPreset, $first: Int) {
+  notifications(preset: $preset, first: $first) {
+    id
+    type
+    createdAt
+    readAt
+    payload
+    issueId
+    actor {
+      id
+      name
+      avatarUrl
+    }
+    issue {
+      id
+      identifier
+      title
+      status {
+        ...StatusFields
+      }
+    }
+  }
+  unreadNotificationCount
+}
+
+mutation MarkNotificationsRead($ids: [ID!]!, $read: Boolean!) {
+  markNotificationsRead(ids: $ids, read: $read) {
+    id
+    readAt
+  }
+}
+
+mutation MarkAllNotificationsRead {
+  markAllNotificationsRead
+}
+
+mutation DeleteNotifications($ids: [ID!]!) {
+  deleteNotifications(ids: $ids)
+}
+
+mutation AddFavorite($kind: FavoriteKind!, $targetId: ID!) {
+  addFavorite(kind: $kind, targetId: $targetId) {
+    ...FavoriteFields
+  }
+}
+
+mutation RemoveFavorite($id: ID!) {
+  removeFavorite(id: $id)
+}
+
+mutation ReorderFavorite($id: ID!, $beforeId: ID, $afterId: ID) {
+  reorderFavorite(id: $id, beforeId: $beforeId, afterId: $afterId) {
+    id
+    sortOrder
+  }
+}
+
+query ViewBySlug($id: ID!) {
+  view(id: $id) {
+    ...ViewFields
+  }
+}
+
+mutation CreateView($input: ViewInput!) {
+  createView(input: $input) {
+    ...ViewFields
+  }
+}
+
+mutation UpdateView($id: ID!, $input: ViewInput!) {
+  updateView(id: $id, input: $input) {
+    ...ViewFields
+  }
+}
+
+mutation DeleteView($id: ID!) {
+  deleteView(id: $id)
+}
+
+query ValidateFilter($dsl: String!) {
+  parseFilter(dsl: $dsl) {
+    ok
+    canonical
+    error {
+      message
+      position
+      caret
+    }
+  }
+}
+
+query GlobalSearch($query: String!, $limit: Int, $types: [SearchType!]) {
+  search(query: $query, limit: $limit, types: $types) {
+    id
+    type
+    title
+    subtitle
+    rank
+    issue {
+      id
+      identifier
+      title
+      teamId
+      priority
+      status {
+        ...StatusFields
+      }
+    }
+    team {
+      id
+      key
+      name
+    }
+    project {
+      id
+      name
+      color
+      icon
+    }
+    user {
+      id
+      name
+      username
+      avatarUrl
+    }
+    view {
+      id
+      name
+      slug
+    }
+  }
+}

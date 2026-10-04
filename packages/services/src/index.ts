@@ -76,7 +76,7 @@ export function createServices(deps: ServiceDeps): Services {
     events: new EventProcessor(deps),
   };
   s.auth.bind(s.audit);
-  s.users.bind(s.audit);
+  s.users.bind(s.audit, s.auth);
   s.apiKeys.bind(s.audit, s.auth);
   s.workspace.bind(s.audit);
   s.teams.bind(s.audit, s.issues);

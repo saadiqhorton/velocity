@@ -172,6 +172,9 @@ importers:
       '@velocity/graphql':
         specifier: workspace:*
         version: link:../../packages/graphql
+      '@velocity/schema':
+        specifier: workspace:*
+        version: link:../../packages/schema
       '@velocity/tokens':
         specifier: workspace:*
         version: link:../../packages/tokens
@@ -215,12 +218,18 @@ importers:
       '@graphql-codegen/client-preset':
         specifier: ^6.2.0
         version: 6.2.0(graphql@16.14.2)
+      '@graphql-typed-document-node/core':
+        specifier: ^3.2.0
+        version: 3.2.0(graphql@16.14.2)
       '@playwright/test':
         specifier: ^1.63.0
         version: 1.63.0
       '@tailwindcss/vite':
         specifier: ^4.3.3
         version: 4.3.3(vite@8.3.2(@types/node@22.20.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
+      '@testing-library/dom':
+        specifier: ^10.4.0
+        version: 10.4.2
       '@testing-library/react':
         specifier: ^16.3.0
         version: 16.3.3(@testing-library/dom@10.4.2)(@types/react-dom@18.3.7(@types/react@18.3.31))(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)

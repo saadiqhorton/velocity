@@ -200,7 +200,7 @@ AttachmentRef.implement({
 
 interface IssueConnectionShape {
   nodes: IssueRow[];
-  totalCount: number;
+  totalCount: () => Promise<number>;
   offset: number;
   hasNextPage: boolean;
 }
@@ -212,7 +212,7 @@ IssueConnectionRef.implement({
   fields: (t) => ({
     nodes: t.field({ type: [IssueRef], resolve: (c) => c.nodes }),
     edges: t.field({ type: [IssueEdgeRef], resolve: (c) => c.nodes.map((node, i) => ({ node, cursor: encodeCursor(c.offset + i + 1) })) }),
-    totalCount: t.exposeInt('totalCount'),
+    totalCount: t.field({ type: 'Int', resolve: (c) => c.totalCount() }),
     pageInfo: t.field({
       type: PageInfoRef,
       resolve: (c) => ({ hasNextPage: c.hasNextPage, endCursor: c.nodes.length ? encodeCursor(c.offset + c.nodes.length) : null }),
@@ -274,6 +274,7 @@ async function toListArgs(ctx: GqlContext, a: ListArgValues): Promise<IssueListA
   if (!teamId && a.teamKey) {
     const team = await ctx.services.teams.getByKey(a.teamKey);
     if (!team) throw new GraphQLError(`No team with key ${a.teamKey}.`, { extensions: { code: 'NOT_FOUND' } });
+    ctx.loaders.team.prime(team.id, team);
     teamId = team.id;
   }
   return {

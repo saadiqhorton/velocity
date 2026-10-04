@@ -56,7 +56,11 @@ export function createStaticHandler(webDistDir: string) {
       return;
     }
     const nonce = randomBytes(16).toString('base64');
-    const html = tpl.replace('<head>', `<head>\n    <meta name="csp-nonce" content="${nonce}">`);
+    // `content` is the documented contract (HANDOFF §5): the app reads the per-request style nonce
+    // from `meta[name=csp-nonce]`. `property` + `nonce` additionally let Vite's `__vitePreload`
+    // helper nonce any <link> it injects at runtime. Build-emitted tags need no nonce: they are
+    // same-origin files, which `'self'` already allows.
+    const html = tpl.replace('<head>', `<head>\n    <meta name="csp-nonce" property="csp-nonce" nonce="${nonce}" content="${nonce}">`);
     res.writeHead(200, {
       ...SECURITY_HEADERS,
       'content-type': 'text/html; charset=utf-8',
@@ -77,12 +81,13 @@ export function createStaticHandler(webDistDir: string) {
       sendText(res, 400, 'Bad path');
       return;
     }
-    let st: ReturnType<typeof statSync> | null = null;
-    try {
-      st = statSync(file);
-    } catch {
-      st = null;
-    }
+    const st = (() => {
+      try {
+        return statSync(file);
+      } catch {
+        return null;
+      }
+    })();
     if (st?.isFile()) {
       const ext = extname(file);
       const immutable = pathname.startsWith('/assets/');

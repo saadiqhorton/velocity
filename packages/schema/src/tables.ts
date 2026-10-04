@@ -411,6 +411,9 @@ export const issues = pgTable(
   (t) => [
     uniqueIndex('issues_team_number_uq').on(t.teamId, t.number),
     index('issues_team_status_idx').on(t.teamId, t.statusId),
+    // SPEC §7.3: ordered active lists at 10k issues without sorting the whole team.
+    index('issues_active_team_priority_idx').on(t.teamId, t.priority, t.updatedAt.desc(), t.createdAt.desc(), t.id)
+      .where(sql`${t.trashedAt} is null and ${t.archivedAt} is null and ${t.movedToIssueId} is null`),
     index('issues_assignee_idx').on(t.assigneeId),
     index('issues_cycle_idx').on(t.cycleId),
     index('issues_project_idx').on(t.projectId),

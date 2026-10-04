@@ -49,6 +49,12 @@ function sortStatuses(rows: StatusRow[]): StatusRow[] {
 export class TeamService extends ServiceBase {
   private audit!: AuditService;
   private issueService!: IssueService;
+  /**
+   * Uppercase-key → team row. `getByKey` runs on every list request (SPEC §4.16),
+   * so it is cached in-process; every mutation below clears it, so cached rows
+   * can never be stale.
+   */
+  private readonly keyCache = new Map<string, TeamRow | null>();
   bind(audit: AuditService, issueService: IssueService): void {
     this.audit = audit;
     this.issueService = issueService;
@@ -75,8 +81,13 @@ export class TeamService extends ServiceBase {
   }
 
   async getByKey(key: string): Promise<TeamRow | null> {
-    const [t] = await this.db.select().from(teams).where(and(eq(teams.key, key.toUpperCase()), isNull(teams.deletedAt)));
-    return t ?? null;
+    const upper = key.toUpperCase();
+    const cached = this.keyCache.get(upper);
+    if (cached !== undefined) return cached;
+    const [t] = await this.db.select().from(teams).where(and(eq(teams.key, upper), isNull(teams.deletedAt)));
+    const row = t ?? null;
+    this.keyCache.set(upper, row);
+    return row;
   }
 
   async require(id: string, executor: DbOrTx = this.db): Promise<TeamRow> {
@@ -139,6 +150,7 @@ export class TeamService extends ServiceBase {
         return t;
       });
       if (team.cycleEnabled) await this.jobs.send('cycles', { type: 'rotate_team', teamId: team.id });
+      this.keyCache.clear();
       return team;
     } catch (err) {
       if (isUniqueViolation(err, 'teams_key_uq')) throw conflict(`A team with key ${key} already exists.`, { field: 'key' });
@@ -171,6 +183,7 @@ export class TeamService extends ServiceBase {
         return t;
       });
       if (team.cycleEnabled && !current.cycleEnabled) await this.jobs.send('cycles', { type: 'rotate_team', teamId: id });
+      this.keyCache.clear();
       return team;
     } catch (err) {
       if (isUniqueViolation(err, 'teams_key_uq')) throw conflict(`A team with key ${key} already exists.`, { field: 'key' });
@@ -187,6 +200,7 @@ export class TeamService extends ServiceBase {
       .returning();
     if (!t) throw notFound('Team');
     await publish(this.db, 'team.updated', { teamId: id, actor: toActorRef(actor) });
+    this.keyCache.clear();
     return t;
   }
 
@@ -198,6 +212,7 @@ export class TeamService extends ServiceBase {
     const after = neighbours.find((n) => n.id === afterId)?.sortOrder ?? null;
     const [t] = await this.db.update(teams).set({ sortOrder: orderBetween(before, after) }).where(eq(teams.id, id)).returning();
     if (!t) throw notFound('Team');
+    this.keyCache.clear();
     return t;
   }
 
@@ -226,6 +241,7 @@ export class TeamService extends ServiceBase {
     });
     // Free the key for reuse: deleted teams keep a tombstone key (team keys are unique).
     await this.db.update(teams).set({ key: `X${id.replace(/-/g, '').slice(-9).toUpperCase()}` }).where(eq(teams.id, id));
+    this.keyCache.clear();
   }
 
   // ───────────── Membership (optional, SPEC §3.4.1) ─────────────

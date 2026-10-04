@@ -1,0 +1,185 @@
+fragment MilestoneFields on Milestone {
+  id
+  name
+  description
+  status
+  targetDate
+  sortOrder
+  projectId
+  progress {
+    done
+    total
+    percent
+    pointsDone
+    pointsTotal
+  }
+}
+
+fragment ProjectFields on Project {
+  ...ProjectSummaryFields
+  descriptionMd
+  createdAt
+  updatedAt
+  url
+  lead {
+    id
+    name
+    avatarUrl
+  }
+  teams {
+    id
+    key
+    name
+  }
+  progress {
+    done
+    total
+    percent
+    pointsDone
+    pointsTotal
+  }
+}
+
+query Projects($includeArchived: Boolean, $teamId: ID, $status: [ProjectStatus!]) {
+  projects(includeArchived: $includeArchived, teamId: $teamId, status: $status) {
+    ...ProjectFields
+  }
+}
+
+query ProjectDetail($id: ID!) {
+  project(id: $id) {
+    ...ProjectFields
+    milestones {
+      ...MilestoneFields
+    }
+  }
+}
+
+mutation CreateProject($input: ProjectInput!) {
+  createProject(input: $input) {
+    ...ProjectFields
+  }
+}
+
+mutation UpdateProject($id: ID!, $input: ProjectInput!) {
+  updateProject(id: $id, input: $input) {
+    ...ProjectFields
+  }
+}
+
+mutation ArchiveProject($id: ID!, $archived: Boolean!) {
+  archiveProject(id: $id, archived: $archived) {
+    id
+    archivedAt
+  }
+}
+
+mutation DeleteProject($id: ID!) {
+  deleteProject(id: $id)
+}
+
+mutation CreateMilestone($projectId: ID!, $input: MilestoneInput!) {
+  createMilestone(projectId: $projectId, input: $input) {
+    ...MilestoneFields
+  }
+}
+
+mutation UpdateMilestone($id: ID!, $input: MilestoneInput!) {
+  updateMilestone(id: $id, input: $input) {
+    ...MilestoneFields
+  }
+}
+
+mutation DeleteMilestone($id: ID!) {
+  deleteMilestone(id: $id)
+}
+
+mutation ReorderMilestone($id: ID!, $beforeId: ID, $afterId: ID) {
+  reorderMilestone(id: $id, beforeId: $beforeId, afterId: $afterId) {
+    id
+    sortOrder
+  }
+}
+
+fragment CycleDetailFields on Cycle {
+  ...CycleFields
+  addedAfterStartIssueIds
+  liveStats {
+    scopeCount
+    scopePoints
+    completedCount
+    completedPoints
+    startedCount
+    canceledCount
+    addedAfterStartCount
+  }
+  stats {
+    scopeCount
+    scopePoints
+    completedCount
+    completedPoints
+    canceledCount
+    addedAfterStartCount
+    removedCount
+    carriedOverCount
+  }
+}
+
+query TeamCycles($teamId: ID!, $includeClosed: Boolean, $first: Int) {
+  cycles(teamId: $teamId, includeClosed: $includeClosed, first: $first) {
+    ...CycleDetailFields
+  }
+  teamVelocity(teamId: $teamId, cycles: 6) {
+    points
+    count
+    history {
+      cycleId
+      number
+      completedPoints
+      completedCount
+      scopePoints
+    }
+  }
+}
+
+query CycleDetail($id: ID!) {
+  cycle(id: $id) {
+    ...CycleDetailFields
+  }
+}
+
+mutation CloseCycle($id: ID!) {
+  closeCycle(id: $id) {
+    ...CycleDetailFields
+  }
+}
+
+mutation RenameCycle($id: ID!, $name: String) {
+  renameCycle(id: $id, name: $name) {
+    ...CycleFields
+  }
+}
+
+mutation RotateCycles($teamId: ID!) {
+  rotateCycles(teamId: $teamId)
+}
+
+query Insights($weeks: Int, $cycles: Int) {
+  createdVsCompleted(weeks: $weeks) {
+    weekStart
+    created
+    completed
+  }
+  velocityByTeam(cycles: $cycles) {
+    teamId
+    key
+    name
+    cycles {
+      cycleId
+      number
+      completedPoints
+      completedCount
+      scopePoints
+    }
+  }
+}

@@ -1,0 +1,15 @@
+# Merge with docker-compose.yml in an isolated project. Requires Compose >=2.24.4.
+# Supply POSTGRES_PASSWORD, APP_SECRET and VELOCITY_IMAGE via --env-file.
+services:
+  app:
+    env_file: !reset []
+    environment:
+      APP_SECRET: ${APP_SECRET:?set APP_SECRET for smoke checks}
+      APP_URL: http://localhost:8089
+      VELOCITY_BACKUP_BEFORE_MIGRATE: "1"
+      METRICS_TOKEN: smoke-metrics-token
+  caddy:
+    ports: !override
+      - "127.0.0.1:8089:80"
+    environment:
+      CADDY_DOMAIN: ":80"

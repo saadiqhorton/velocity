@@ -1,0 +1,66 @@
+// Lane D — workspace QA (SPEC §3.10, §4.11.10): inbox, search, My Issues, favorites.
+import { expect, test, createIssueViaKeyboard, uniqueTitle } from './support/fixtures';
+
+test.describe('workspace', () => {
+  test('inbox lists notifications, marks one read, and marks all read', async ({ page }) => {
+    await page.goto('/inbox');
+    await expect(page.getByTestId('inbox')).toBeVisible();
+
+    const markAll = page.getByTestId('mark-all-read');
+    if (await markAll.isEnabled()) {
+      await expect(page.getByTestId('unread-dot').first()).toBeVisible();
+      await markAll.click();
+      await expect(page.getByTestId('unread-dot')).toHaveCount(0, { timeout: 10_000 });
+      await expect(markAll).toBeDisabled();
+    } else {
+      await expect(markAll).toBeDisabled();
+    }
+  });
+
+  test('search runs from the sidebar, finds the issue, and opens the detail panel', async ({ page }) => {
+    const title = uniqueTitle('Search target');
+    await page.goto('/team/ENG/active');
+    await expect(page.getByTestId('issue-row').first()).toBeVisible();
+    await createIssueViaKeyboard(page, title);
+    await page.goto('/team/ENG/active');
+    await expect(page.getByTestId('view-header')).toBeVisible();
+
+    // `/` focuses the sidebar search; typing navigates to /search?q=….
+    await page.keyboard.press('/');
+    const search = page.getByRole('searchbox', { name: 'Search' });
+    await expect(search).toBeFocused();
+    await search.fill(title);
+    await expect(page).toHaveURL(/\/search\?q=/);
+    await expect(page.getByTestId('search-screen')).toBeVisible();
+
+    const result = page.locator('[data-result]').filter({ hasText: title });
+    await expect(result).toBeVisible();
+    await result.click();
+    await expect(page.getByTestId('detail-panel')).toBeVisible();
+  });
+
+  test('My Issues presets are their own filters and share by URL', async ({ page }) => {
+    await page.goto('/my-issues');
+    await expect(page.getByTestId('list-screen-my-issues-assigned')).toBeVisible();
+    await page.getByRole('tab', { name: 'Created' }).click();
+    await expect(page).toHaveURL(/\/my-issues\/created$/);
+    await expect(page.getByTestId('list-screen-my-issues-created')).toBeVisible();
+    await page.getByRole('tab', { name: 'Subscribed' }).click();
+    await expect(page).toHaveURL(/\/my-issues\/subscribed$/);
+    await expect(page.getByTestId('list-screen-my-issues-subscribed')).toBeVisible();
+  });
+
+  test('a project can be favorited and appears in the sidebar favorites', async ({ page }) => {
+    await page.goto('/projects');
+    await page.getByRole('link', { name: 'Public launch' }).first().click();
+    await expect(page.getByTestId('project-detail')).toBeVisible();
+    const name = (await page.getByRole('heading').first().innerText()).trim();
+
+    const fav = page.getByTestId('favorite-button');
+    await expect(fav).toBeVisible();
+    await fav.click();
+
+    const sidebar = page.getByTestId('sidebar');
+    await expect(sidebar.getByRole('group', { name: 'Favorites' }).getByRole('link', { name })).toBeVisible({ timeout: 10_000 });
+  });
+});

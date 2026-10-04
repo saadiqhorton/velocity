@@ -17,7 +17,7 @@ import type { OutboxListener } from '@velocity/events';
 import type { ServerConfig } from './config';
 import { createGraphQLServer } from './graphql-server';
 import type { GraphQLServer } from './graphql-server';
-import { handleExportDownload, handleFile } from './http/files';
+import { handleAvatar, handleExportDownload, handleFile } from './http/files';
 import { handleGithubSetup, handleGithubWebhook } from './http/github';
 import { createMcpHandler } from './http/mcp';
 import { createStaticHandler } from './http/static';
@@ -83,6 +83,7 @@ async function backupDatabase(config: ServerConfig, logger: Logger): Promise<voi
 function routeLabel(pathname: string): string {
   if (pathname === '/graphql') return '/graphql';
   if (pathname.startsWith('/files/')) return '/files/:id';
+  if (pathname.startsWith('/avatars/')) return '/avatars/:id';
   if (pathname.startsWith('/api/')) return pathname.split('/').slice(0, 3).join('/');
   if (pathname.startsWith('/assets/')) return '/assets/*';
   if (['/healthz', '/readyz', '/metrics', '/mcp'].includes(pathname)) return pathname;
@@ -178,6 +179,7 @@ export async function createApp(config: ServerConfig, opts: { logger?: Logger; i
       return;
     }
     if (pathname.startsWith('/files/')) return handleFile(services, req, res, url, ip);
+    if (pathname.startsWith('/avatars/')) return handleAvatar(services, req, res, url, ip);
     if (/^\/api\/exports\/[0-9a-f-]{36}\/download$/i.test(pathname)) return handleExportDownload(services, req, res, url, ip);
     if (pathname === '/api/github/webhook') return handleGithubWebhook(services, logger, req, res);
     if (pathname === '/api/github/setup') return handleGithubSetup(res, url);

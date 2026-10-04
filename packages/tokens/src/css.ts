@@ -34,7 +34,9 @@ function foundations(): string {
   for (const [k, v] of Object.entries(duration)) lines.push(`  --ds-duration-${k}: ${v};`);
   for (const [k, v] of Object.entries(zIndex)) lines.push(`  --ds-z-index-${k}: ${v};`);
   lines.push(`  --ds-layout-sidebar: ${layout.sidebarWidth}px;`);
+  lines.push(`  --ds-layout-sidebar-compact: ${layout.sidebarWidthCompact}px;`);
   lines.push(`  --ds-layout-panel: ${layout.panelWidth}px;`);
+  lines.push(`  --ds-layout-panel-compact: ${layout.panelWidthCompact}px;`);
   lines.push(`  --ds-layout-header: ${layout.viewHeaderHeight}px;`);
   lines.push(`  --ds-layout-row: ${layout.issueRowHeight}px;`);
   lines.push(`  --ds-layout-table-row: ${layout.tableRowHeight}px;`);

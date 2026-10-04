@@ -1,0 +1,1 @@
+CREATE INDEX "issues_active_team_priority_idx" ON "issues" USING btree ("team_id","priority","updated_at" DESC NULLS LAST,"created_at" DESC NULLS LAST,"id") WHERE "issues"."trashed_at" is null and "issues"."archived_at" is null and "issues"."moved_to_issue_id" is null;

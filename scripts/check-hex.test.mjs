@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { scanText } from './check-hex.mjs';
+import { isSkippedDir, scanText } from './check-hex.mjs';
 
 const flagged = (s) => scanText(s).map((h) => h.text);
 
@@ -41,4 +41,15 @@ test('ignores anchors, issue refs, entities, id selectors', () => {
 
 test('escape hatch', () => {
   assert.deepEqual(flagged('a: #fff // check-hex-ignore'), []);
+});
+
+test('skips generated output dirs, including Playwright slot runs', () => {
+  assert.equal(isSkippedDir('node_modules'), true);
+  assert.equal(isSkippedDir('dist'), true);
+  assert.equal(isSkippedDir('test-results'), true);
+  assert.equal(isSkippedDir('test-results_1'), true);
+  assert.equal(isSkippedDir('playwright-report'), true);
+  assert.equal(isSkippedDir('playwright-report_3'), true);
+  assert.equal(isSkippedDir('src'), false);
+  assert.equal(isSkippedDir('test-results-notes'), false);
 });

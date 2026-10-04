@@ -6,7 +6,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./theme.css": "./src/styles/theme.css"
+    "./theme.css": "./src/styles/theme.css",
+    "./brand": "./src/brand.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",

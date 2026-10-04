@@ -1,13 +1,17 @@
 import { and, asc, eq, inArray, isNull, notInArray, sql } from 'drizzle-orm';
+import { randomUUID } from 'node:crypto';
+import sharp from 'sharp';
 import { apiKeys, issues, sessions, statuses, users } from '@velocity/schema';
 import { ServiceBase } from './base';
 import type { AuditService } from './audit';
 import type { ServiceActor } from './context';
 import { notFound, validation } from './errors';
 import { hashSecret, validateEmail, validateUsername } from './auth';
+import type { AuthService } from './auth';
 import { randomToken } from './lib/crypto';
 import { validatePassword } from './lib/password-policy';
 import { assertCan } from './lib/permissions';
+import { clamScan } from './attachments';
 
 export type UserRow = typeof users.$inferSelect;
 
@@ -19,8 +23,10 @@ export function assertTimezone(tz: string): void {
 
 export class UserService extends ServiceBase {
   private audit!: AuditService;
-  bind(audit: AuditService): void {
+  private auth: AuthService | null = null;
+  bind(audit: AuditService, auth?: AuthService): void {
     this.audit = audit;
+    if (auth) this.auth = auth;
   }
 
   async list(_actor: ServiceActor, opts: { includeSuspended?: boolean } = {}): Promise<UserRow[]> {
@@ -50,6 +56,8 @@ export class UserService extends ServiceBase {
     actor: ServiceActor,
     patch: { name?: string | null; email?: string | null; username?: string | null; timezone?: string | null; locale?: string | null; theme?: 'dark' | 'light' | 'system' | null },
   ): Promise<UserRow> {
+    // Own-profile writes need an authenticated writer; read-scoped keys stay read-only (SPEC §3.2.3).
+    assertCan(actor, 'issue.write');
     const set: Partial<typeof users.$inferInsert> = { updatedAt: this.now() };
     if (patch.name != null) {
       const n = patch.name.trim();
@@ -77,26 +85,72 @@ export class UserService extends ServiceBase {
   }
 
   async setAvatar(actor: ServiceActor, avatarPath: string | null): Promise<UserRow> {
+    assertCan(actor, 'issue.write');
     const [u] = await this.db.update(users).set({ avatarPath, updatedAt: this.now() }).where(eq(users.id, actor.userId)).returning();
     if (!u) throw notFound('User');
     return u;
+  }
+
+  /** Clear the profile image and delete the stored file (SPEC §3.12 profile). */
+  async removeAvatar(actor: ServiceActor): Promise<UserRow> {
+    const current = await this.get(actor.userId);
+    if (!current || current.deletedAt) throw notFound('User');
+    const prev = current.avatarPath;
+    const updated = await this.setAvatar(actor, null);
+    if (prev) await this.storage.delete(prev).catch(() => {});
+    return updated;
+  }
+
+  /** Profile images are decoded, bounded and re-encoded; client MIME is never trusted. */
+  async uploadAvatar(actor: ServiceActor, data: Buffer): Promise<UserRow> {
+    assertCan(actor, 'issue.write');
+    if (!data.length || data.length > this.config.maxUploadMb * 1024 * 1024) {
+      throw validation(`Choose a non-empty image smaller than ${this.config.maxUploadMb} MB.`);
+    }
+    const current = await this.get(actor.userId);
+    if (!current || current.deletedAt) throw notFound('User');
+    let image: Buffer;
+    try {
+      const decoder = sharp(data, { failOn: 'error', limitInputPixels: 25_000_000 });
+      const metadata = await decoder.metadata();
+      if (!['png', 'jpeg', 'webp', 'gif'].includes(metadata.format ?? '')) throw new Error('Unsupported format');
+      image = await decoder.rotate().resize(256, 256, { fit: 'cover', withoutEnlargement: true }).webp({ quality: 85 }).toBuffer();
+    } catch {
+      throw validation('Choose a valid PNG, JPEG, GIF or WebP image, up to 25 megapixels.');
+    }
+    if (this.config.clamav && !(await clamScan(this.config.clamav.host, this.config.clamav.port, image)).endsWith('OK')) {
+      throw validation('The virus scanner rejected this image. Choose another image.');
+    }
+    const path = `avatars/${actor.userId}/${randomUUID()}.webp`;
+    await this.storage.put(path, image);
+    let updated: UserRow;
+    try {
+      updated = await this.setAvatar(actor, path);
+    } catch (err) {
+      await this.storage.delete(path).catch(() => {});
+      throw err;
+    }
+    if (current.avatarPath) await this.storage.delete(current.avatarPath).catch(() => {});
+    return updated;
   }
 
   /** Owner: suspend/reactivate a member. Suspension revokes sessions and API keys stop resolving. */
   async setSuspended(actor: ServiceActor, userId: string, suspended: boolean): Promise<UserRow> {
     assertCan(actor, 'member.manage');
     if (userId === actor.userId) throw validation('You can’t suspend your own account.');
-    return this.tx(async (tx) => {
-      const [u] = await tx
+    const u = await this.tx(async (tx) => {
+      const [row] = await tx
         .update(users)
         .set({ suspendedAt: suspended ? this.now() : null, updatedAt: this.now() })
         .where(and(eq(users.id, userId), isNull(users.deletedAt)))
         .returning();
-      if (!u) throw notFound('Member');
+      if (!row) throw notFound('Member');
       if (suspended) await tx.update(sessions).set({ revokedAt: this.now() }).where(and(eq(sessions.userId, userId), isNull(sessions.revokedAt)));
       await this.audit.log(tx, actor, { action: suspended ? 'member.suspended' : 'member.unsuspended', objectType: 'user', objectId: userId });
-      return u;
+      return row;
     });
+    if (suspended) this.auth?.forgetSessionsForUser(userId);
+    return u;
   }
 
   /** Owner: reset a member's password (no email flow in v1.1). */
@@ -112,6 +166,7 @@ export class UserService extends ServiceBase {
       await tx.update(sessions).set({ revokedAt: this.now() }).where(and(eq(sessions.userId, userId), isNull(sessions.revokedAt)));
       await this.audit.log(tx, actor, { action: 'member.password_reset', objectType: 'user', objectId: userId });
     });
+    this.auth?.forgetSessionsForUser(userId);
   }
 
   /**
@@ -120,6 +175,8 @@ export class UserService extends ServiceBase {
    * sessions and keys are revoked.
    */
   async remove(actor: ServiceActor, userId: string): Promise<void> {
+    // Self-removal still needs an authenticated writer; read-scoped keys stay read-only (SPEC §3.2.3).
+    assertCan(actor, 'issue.write');
     if (userId !== actor.userId) assertCan(actor, 'member.manage');
     const u = await this.get(userId);
     if (!u || u.deletedAt) throw notFound('Member');
@@ -146,6 +203,7 @@ export class UserService extends ServiceBase {
       await tx.update(apiKeys).set({ revokedAt: this.now() }).where(and(eq(apiKeys.userId, userId), isNull(apiKeys.revokedAt)));
       await this.audit.log(tx, actor, { action: 'member.removed', objectType: 'user', objectId: userId });
     });
+    this.auth?.forgetSessionsForUser(userId);
   }
 
   async count(): Promise<number> {

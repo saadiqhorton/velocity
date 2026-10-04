@@ -78,3 +78,4 @@ export { StatusIcon, statusCategoryNames } from './components/StatusIcon';
 export type { StatusCategory, StatusIconProps } from './components/StatusIcon';
 export { ComponentGallery } from './gallery/Gallery';
 export { useControllableState, useEnterStyle } from './utils/react';
+export { PRODUCT_NAME } from './brand';
