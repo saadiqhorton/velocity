@@ -32,9 +32,9 @@ export const healthLabel = (h: string): string => (m.project.healths as Record<s
 
 /** Health is color + dot + text, never color alone. */
 export function HealthBadge({ health }: { health: string | null | undefined }) {
-  if (!health) return <span className="text-fg-subtlest">{m.project.noHealth}</span>;
+  if (!health) return <span className="whitespace-nowrap text-fg-subtlest">{m.project.noHealth}</span>;
   return (
-    <span className="inline-flex items-center gap-2 text-fg">
+    <span className="inline-flex items-center gap-2 whitespace-nowrap text-fg">
       <ColorDot color={healthColor(health)} size={8} />
       {healthLabel(health)}
     </span>
@@ -42,7 +42,7 @@ export function HealthBadge({ health }: { health: string | null | undefined }) {
 }
 
 export function LeadCell({ lead }: { lead: { name: string; avatarUrl: string | null } | null | undefined }) {
-  if (!lead) return <span className="text-fg-subtlest">{m.project.noLead}</span>;
+  if (!lead) return <span className="whitespace-nowrap text-fg-subtlest">{m.project.noLead}</span>;
   return (
     <span className="inline-flex min-w-0 items-center gap-2 text-fg">
       <Avatar name={lead.name} src={lead.avatarUrl} size={20} />

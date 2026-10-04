@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@apollo/client';
-import clsx from 'clsx';
 import { Button, ConfirmDialog, EmptyState, Icon, IconButton, InlineMessage, Lozenge, Popover, ProgressBar, useFlags } from '@velocity/ui';
 import { CloseCycleDocument, IssueListDocument, RenameCycleDocument, RotateCyclesDocument, TeamCyclesDocument } from '@/gql/graphql';
 import type { CycleDetailFieldsFragment } from '@/gql/graphql';
@@ -9,6 +8,7 @@ import { useTeamByKey } from '@/app/workspace';
 import { ListScreen } from '@/components/issues/ListScreen';
 import { ViewHeader } from '@/components/shell/ViewHeader';
 import { ContentSkeleton } from '@/components/shell/ShellSkeleton';
+import { segmentClass } from '@/components/common/PresetTabs';
 import { TeamIcon } from '@/components/common/EntityIcons';
 import { Sparkline } from '@/components/charts/Sparkline';
 import { NotFound } from '@/screens/workspace/NotFound';
@@ -330,11 +330,12 @@ export function TeamCycles() {
         <ViewHeader title={m.team.cyclesTitle} icon={<TeamIcon team={team} />} create={false} />
         <EmptyState
           icon="cycle"
+          fill
           message={m.team.cyclesOff}
           action={
             <Link
               to={`/settings/teams/${team.key}/cycles`}
-              className="inline-flex h-8 items-center rounded-sm bg-primary px-3 text-base font-medium text-fg-inverse hover:opacity-90"
+              className="inline-flex h-8 items-center rounded-sm bg-primary px-3 text-base font-medium text-fg-inverse transition-colors duration-100 hover:bg-primary-hover"
               data-testid="enable-cycles"
             >
               {m.team.enableCycles}
@@ -366,7 +367,7 @@ export function TeamCycles() {
             type="button"
             aria-pressed={on}
             onClick={() => setView(v)}
-            className={clsx('h-7 rounded-sm px-2 text-base transition-colors duration-100', on ? 'bg-neutral font-medium text-fg' : 'text-fg-subtle hover:bg-hover hover:text-fg')}
+            className={segmentClass(on)}
           >
             {v === 'cycle' ? m.cycles.viewCycle : `${m.cycles.closed} (${closed.length})`}
           </button>

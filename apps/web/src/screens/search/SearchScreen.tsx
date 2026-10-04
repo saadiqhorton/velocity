@@ -43,7 +43,7 @@ export function Highlight({ text, query }: { text: string; query: string }): Rea
   const parts = text.split(re);
   return parts.map((p, i) =>
     i % 2 === 1 ? (
-      <mark key={i} className="rounded-sm bg-primary-subtle px-0.5 text-fg">
+      <mark key={i} className="rounded-sm bg-primary-subtle text-fg">
         {p}
       </mark>
     ) : (
@@ -229,7 +229,7 @@ export function SearchScreen() {
           </ul>
         </div>
       ) : (
-        <EmptyState icon="search" message={m.search.empty} className="py-16" />
+        <EmptyState icon="search" message={m.search.empty} fill />
       );
   } else if (firstLoad || (!shown && !error)) {
     body = <SearchSkeleton />;
@@ -242,7 +242,7 @@ export function SearchScreen() {
       </div>
     );
   } else if (groups.length === 0) {
-    body = <EmptyState icon="search" message={m.search.noResults(debounced)} className="py-16" />;
+    body = <EmptyState icon="search" message={m.search.noResults(debounced)} fill />;
   } else {
     body = (
       <div ref={listRef} role="grid" aria-label={m.search.results} onKeyDown={onListKeyDown} className={clsx('pb-4', pending && 'opacity-80')}>
@@ -332,13 +332,13 @@ function ResultRow({ r, query, tabStop, selected, onFocus, onOpen, teamIcon }: R
       onFocus={onFocus}
       onClick={onOpen}
       className={clsx(
-        'flex h-9 cursor-pointer items-center gap-3 px-5 hover:bg-hover focus-visible:bg-hover',
+        'flex h-8 cursor-pointer items-center gap-3 px-5 hover:bg-hover focus-visible:bg-hover',
         selected && 'bg-primary-subtle hover:bg-primary-subtle',
       )}
     >
       <div role="gridcell" className="flex min-w-0 flex-1 items-center gap-3">
         <span className="flex w-5 shrink-0 items-center justify-center">{lead}</span>
-        {r.type === 'issue' ? <span className="w-16 shrink-0">{meta}</span> : null}
+        {r.type === 'issue' ? <span className="flex w-16 shrink-0 items-center">{meta}</span> : null}
         <span className="min-w-0 truncate text-base text-fg">{primary}</span>
         {r.type !== 'issue' ? meta : null}
       </div>

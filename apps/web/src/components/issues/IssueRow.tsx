@@ -69,7 +69,8 @@ export const IssueRow = memo(function IssueRow({
         if (!focused) onFocusRow(issue);
       }}
       className={clsx(
-        'group/row relative flex h-8 cursor-default select-none items-center gap-2 pl-1 pr-5 text-base outline-none',
+        // Container queries: metadata gives way to the title when the list is narrow (panel open, 1024).
+        '@container/row group/row relative flex h-8 cursor-default select-none items-center gap-2 pl-1 pr-5 text-base outline-none',
         'before:absolute before:inset-y-0 before:left-0 before:w-0.5',
         selected ? 'bg-primary-subtle' : focused ? 'bg-sunken' : 'hover:bg-sunken',
         focused ? 'before:bg-primary' : 'before:bg-transparent',
@@ -116,15 +117,19 @@ export const IssueRow = memo(function IssueRow({
         ) : null}
       </div>
       <div role="gridcell" className="flex shrink-0 items-center gap-2 pl-2">
-        {has('labels') && issue.labels.length > 0 ? <LabelChips labels={issue.labels} max={2} /> : null}
+        {has('labels') && issue.labels.length > 0 ? (
+          <span className="hidden @xl/row:flex">
+            <LabelChips labels={issue.labels} max={2} />
+          </span>
+        ) : null}
         {has('project') && project ? (
-          <span className="hidden max-w-36 items-center gap-1 truncate rounded-sm border border-border px-1.5 text-sm text-fg-subtle lg:flex">
+          <span className="hidden max-w-36 items-center gap-1 truncate rounded-sm border border-border px-1.5 text-sm text-fg-subtle @3xl/row:flex">
             <ProjectIcon project={project} />
             <span className="truncate">{project.name}</span>
           </span>
         ) : null}
         {has('cycle') && issue.cycle ? (
-          <span className="hidden items-center gap-1 text-sm text-fg-subtle lg:flex">
+          <span className="hidden items-center gap-1 text-sm text-fg-subtle @3xl/row:flex">
             <Icon name="cycle" className="h-3 w-3" />
             {issue.cycle.number}
           </span>

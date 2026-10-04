@@ -164,13 +164,14 @@ export function ViewsList() {
         count={views.length}
         create={false}
         actions={
-          <Button variant="primary" iconBefore={<Icon name="add" />} onClick={() => navigate(newHref)}>
-            {m.view.newView}
+          <Button variant="primary" iconBefore={<Icon name="add" />} onClick={() => navigate(newHref)} aria-label={m.view.newView}>
+            <span className="hidden sm:inline">{m.view.newView}</span>
           </Button>
         }
       />
-      <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto px-2 pt-2">
+      <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto">
         <Table
+          inset
           aria-label={m.view.list.table}
           columns={columns}
           rows={views}

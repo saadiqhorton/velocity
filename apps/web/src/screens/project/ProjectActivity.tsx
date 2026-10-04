@@ -14,7 +14,7 @@ export function ProjectActivity({ projectId }: { projectId: string }) {
   });
   const issues = data?.issues.nodes ?? [];
   return (
-    <div className="mx-auto flex max-w-240 flex-col gap-2 p-5" data-testid="project-activity">
+    <div className="mx-auto flex w-full max-w-240 flex-col gap-2 p-5" data-testid="project-activity">
       <h2 className="text-base font-semibold text-fg">{m.project.recentChanges}</h2>
       {error && !data ? (
         <InlineMessage appearance="error" title={describeError(error).message} />

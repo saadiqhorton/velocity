@@ -28,6 +28,8 @@ interface Props {
   children: ReactNode;
   /** Called before the children mount again; reset the `retryableLazy` component here. */
   onRetry: () => void;
+  /** Places the inline message in its region (e.g. under a panel header). Default: the message alone. */
+  frame?: (message: ReactNode) => ReactNode;
 }
 
 /**
@@ -48,16 +50,19 @@ export class ChunkBoundary extends Component<Props, { failed: boolean }> {
 
   override render() {
     if (!this.state.failed) return this.props.children;
-    return (
+    // ADS inline message: icon + one sentence, the recovery action beside it.
+    const message = (
       <InlineMessage
         appearance="error"
-        title={m.shell.loadError}
         action={
           <Button size="sm" onClick={this.retry}>
             {m.common.retry}
           </Button>
         }
-      />
+      >
+        {m.shell.loadError}
+      </InlineMessage>
     );
+    return this.props.frame ? this.props.frame(message) : message;
   }
 }

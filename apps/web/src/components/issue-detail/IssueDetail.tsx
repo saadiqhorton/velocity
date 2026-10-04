@@ -25,8 +25,10 @@ import { formatRelative } from '@/lib/format';
 import { useUi } from '@/stores/ui';
 import { useDetailIssue } from '@/stores/detail';
 import { useRecent } from '@/stores/recent';
+import { useMediaQuery } from '@/lib/useMediaQuery';
 import { LazyEditor } from '@/components/editor/LazyEditor';
 import { IssueProperties } from '@/components/issues/IssueProperties';
+import { TeamIcon } from '@/components/common/EntityIcons';
 import { useArchiveIssues, useDuplicateIssue, useUpdateIssues } from '@/components/issues/actions';
 import { SubIssues } from './SubIssues';
 import { Relations } from './Relations';
@@ -258,10 +260,16 @@ function Section({ title, children, action }: { title: string; children: ReactNo
 
 export function DetailSkeleton() {
   return (
-    <div className="flex flex-col gap-4 p-5" aria-busy="true">
-      <Skeleton width="40%" height={14} />
-      <Skeleton width="85%" height={22} />
-      <Skeleton rows={4} />
+    <div className="flex h-full flex-col" aria-busy="true">
+      {/* Same 48px header as the loaded detail, so nothing shifts when it arrives. */}
+      <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4">
+        <Skeleton width={56} height={12} />
+        <Skeleton width={64} height={16} />
+      </div>
+      <div className="flex flex-col gap-4 p-5">
+        <Skeleton width="70%" height={24} />
+        <Skeleton rows={4} />
+      </div>
     </div>
   );
 }
@@ -275,6 +283,8 @@ export interface IssueDetailProps {
 /** Issue detail (SPEC §4.11.3) — right panel by default, full page optional. */
 export function IssueDetail({ id, mode, onClose }: IssueDetailProps) {
   const ws = useWorkspace();
+  // Full page: properties move from the side column (lg and up) into the main column below that.
+  const wide = useMediaQuery('(min-width: 1024px)');
   const { data, loading, error } = useQuery(IssueDetailDocument, { variables: { id }, fetchPolicy: 'cache-and-network' });
   const issue = data?.issue;
   // The cache redirect can hand back a list row before the detail fields arrive.
@@ -316,6 +326,7 @@ export function IssueDetail({ id, mode, onClose }: IssueDetailProps) {
   }
 
   const creator = issue.creator?.name ?? m.common.unknown;
+  const team = ws.teamsById.get(issue.teamId);
   const parent = issue.parent;
 
   const tabs = [
@@ -336,7 +347,8 @@ export function IssueDetail({ id, mode, onClose }: IssueDetailProps) {
         ) : null}
         <TitleEditor issue={issue} />
       </div>
-      {mode === 'panel' ? <IssueProperties issue={issue} layout="inline" /> : null}
+      {/* The page shows properties in its side column from lg up; below that they sit inline, as in the panel. */}
+      {mode === 'panel' || !wide ? <IssueProperties issue={issue} layout="inline" /> : null}
       <DescriptionEditor issue={issue} />
       <Section title={m.issue.subIssues}>
         <SubIssues issue={issue} />
@@ -344,7 +356,9 @@ export function IssueDetail({ id, mode, onClose }: IssueDetailProps) {
       <Section title={m.issue.relations}>
         <Relations issue={issue} />
       </Section>
-      <Tabs aria-label={m.issue.activity} items={tabs} defaultValue="comments" />
+      <div className="px-1">
+        <Tabs aria-label={m.issue.activity} items={tabs} defaultValue="comments" />
+      </div>
       <div className="px-1 pb-6 text-sm text-fg-subtlest">
         {m.issue.createdBy(creator, formatRelative(issue.createdAt))} · {m.issue.updatedAt(formatRelative(issue.updatedAt))}
       </div>
@@ -367,10 +381,20 @@ export function IssueDetail({ id, mode, onClose }: IssueDetailProps) {
         <div className="scrollbar-thin min-h-0 min-w-0 flex-1 overflow-y-auto">
           <div className="mx-auto w-full max-w-3xl px-8 py-8">{main}</div>
         </div>
-        <aside className="scrollbar-thin hidden w-72 shrink-0 overflow-y-auto border-l border-border bg-surface px-3 py-4 lg:block" aria-label={m.issue.status}>
-          <IssueProperties issue={issue} layout="stacked" />
-          <div className="mt-4 border-t border-border px-2 pt-4 text-sm text-fg-subtlest">{ws.teamsById.get(issue.teamId)?.name}</div>
+        {wide ? (
+        <aside className="scrollbar-thin w-80 shrink-0 overflow-y-auto border-l border-border bg-surface px-3 py-4" aria-label={m.issue.status}>
+          {team ? (
+            <div className="mb-0.5 flex min-w-0 items-center gap-2">
+              <span className="w-24 shrink-0 pl-2 text-sm text-fg-subtlest">{m.issue.team}</span>
+              <span className="flex h-7 min-w-0 items-center gap-2 px-2 text-base text-fg">
+                <TeamIcon team={team} />
+                <span className="truncate">{team.name}</span>
+              </span>
+            </div>
+          ) : null}
+          <IssueProperties issue={issue} layout="inline" />
         </aside>
+        ) : null}
       </div>
     </div>
   );

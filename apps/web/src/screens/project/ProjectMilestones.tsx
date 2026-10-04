@@ -249,7 +249,7 @@ export function ProjectMilestones({ projectId, milestones }: { projectId: string
   };
 
   return (
-    <div className="mx-auto flex max-w-240 flex-col gap-6 p-5" data-testid="project-milestones">
+    <div className="mx-auto flex w-full max-w-240 flex-col gap-6 p-5" data-testid="project-milestones">
       <section aria-label={m.project.timeline} className="flex flex-col gap-2">
         <h2 className="text-base font-semibold text-fg">{m.project.timeline}</h2>
         <Timeline milestones={sorted} />

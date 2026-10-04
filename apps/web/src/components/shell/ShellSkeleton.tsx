@@ -18,16 +18,23 @@ export function ShellSkeleton() {
   );
 }
 
-export function ContentSkeleton({ rows = 14 }: { rows?: number }) {
+/**
+ * Content placeholder. `header={false}` when the screen's real 48px header is already drawn
+ * (lists, boards, tables), so the skeleton never stacks a second header under it.
+ * Rows follow the issue-row anatomy: icon at the row's 32px inset, mono id, title.
+ */
+export function ContentSkeleton({ rows = 14, header = true }: { rows?: number; header?: boolean }) {
   return (
     <div className="flex min-w-0 flex-1 flex-col" role="status" aria-label="Loading">
-      <div className="flex h-12 shrink-0 items-center gap-3 border-b border-border px-6">
-        <Skeleton width={120} height={16} />
-        <Skeleton width={28} height={16} />
-      </div>
-      <div className="flex flex-col">
+      {header ? (
+        <div className="flex h-12 shrink-0 items-center gap-3 border-b border-border px-5">
+          <Skeleton width={120} height={16} />
+          <Skeleton width={28} height={16} />
+        </div>
+      ) : null}
+      <div className="flex flex-col pt-1">
         {Array.from({ length: rows }, (_, i) => (
-          <div key={i} className="flex h-8 items-center gap-3 px-6">
+          <div key={i} className="flex h-8 items-center gap-2 pl-8 pr-5">
             <Skeleton width={16} height={16} />
             <Skeleton width={52} height={12} />
             <Skeleton width={`${30 + ((i * 37) % 40)}%`} height={12} />

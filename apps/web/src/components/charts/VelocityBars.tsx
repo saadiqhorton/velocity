@@ -81,7 +81,7 @@ export function VelocityBars({ teamKey, teamName, bars, height = 160 }: Velocity
               className="cursor-pointer rounded-sm outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
             >
               <rect x={cx - slot / 2} y={MARGIN.top} width={slot} height={ih + MARGIN.bottom} fill="transparent" />
-              <path d={topRounded(x0, y(b.scopePoints), bw, ih - (y(b.scopePoints) - MARGIN.top), 4)} className="fill-neutral" />
+              <path d={topRounded(x0, y(b.scopePoints), bw, ih - (y(b.scopePoints) - MARGIN.top), 4)} className="fill-neutral-hover" />
               <path d={topRounded(x0, y(b.completedPoints), bw, ih - (y(b.completedPoints) - MARGIN.top), 4)} style={{ fill: FILL, opacity: on ? 1 : 0.9 }} />
               <text x={cx} y={MARGIN.top + ih + 16} textAnchor="middle" fontSize={11} fill="currentColor" className={on ? 'font-semibold' : undefined}>
                 {m.insights.cycleShort(b.number)}

@@ -96,7 +96,7 @@ export function TeamActive() {
         )}
       />
       {progress ? (
-        <div className="hidden w-36 items-center gap-2 lg:flex" title={m.cycles.stats(progress.done, progress.total)}>
+        <div className="hidden w-36 items-center gap-2 lg:flex" title={m.cycles.stats(progress.done, progress.total)} data-testid="cycle-progress">
           <ProgressBar value={progress.percent} label={m.cycles.progress} className="flex-1" />
           <span className="shrink-0 text-sm text-fg-subtle">{Math.round(progress.percent)}%</span>
         </div>

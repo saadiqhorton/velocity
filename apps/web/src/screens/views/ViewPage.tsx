@@ -53,7 +53,7 @@ function ViewMissing() {
       <EmptyState
         icon="view"
         message={m.view.notFound}
-        className="py-24"
+        fill
         action={
           <Link to="/views" className="text-link hover:underline">
             {m.view.backToViews}

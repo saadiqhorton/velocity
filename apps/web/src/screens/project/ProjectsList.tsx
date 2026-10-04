@@ -8,6 +8,7 @@ import { ProjectsDocument } from '@/gql/graphql';
 import { useTeamByKey } from '@/app/workspace';
 import { ViewHeader } from '@/components/shell/ViewHeader';
 import { ContentSkeleton } from '@/components/shell/ShellSkeleton';
+import { segmentClass } from '@/components/common/PresetTabs';
 import { ProjectIcon, TeamIcon } from '@/components/common/EntityIcons';
 import { NotFound } from '@/screens/workspace/NotFound';
 import { formatShortDate } from '@/lib/format';
@@ -153,11 +154,11 @@ export function ProjectsList() {
         create={false}
         actions={
           <>
-            <span className="hidden sm:flex">
+            <span className="hidden lg:flex">
               <Checkbox label={m.project.showArchived} checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
             </span>
-            <Button variant="primary" iconBefore={<Icon name="add" />} onClick={openCreate} className="ml-2" data-testid="new-project">
-              {m.project.newProject}
+            <Button variant="primary" iconBefore={<Icon name="add" />} onClick={openCreate} className="ml-2" data-testid="new-project" aria-label={m.project.newProject}>
+              <span className="hidden sm:inline">{m.project.newProject}</span>
             </Button>
           </>
         }
@@ -169,10 +170,7 @@ export function ProjectsList() {
               type="button"
               aria-pressed={filter === f}
               onClick={() => setFilter(f)}
-              className={clsx(
-                'h-7 rounded-sm px-2 text-base transition-colors duration-100',
-                filter === f ? 'bg-neutral font-medium text-fg' : 'text-fg-subtle hover:bg-hover hover:text-fg',
-              )}
+              className={segmentClass(filter === f)}
             >
               {m.project.filters[f]}
             </button>
@@ -184,11 +182,12 @@ export function ProjectsList() {
           <InlineMessage appearance="error" title={describeError(error).message} action={<Button size="sm" onClick={() => void refetch()}>{m.common.retry}</Button>} />
         </div>
       ) : loading && !data ? (
-        <ContentSkeleton />
+        <ContentSkeleton header={false} />
       ) : (
         <Table
           aria-label={m.project.title}
-          className="min-h-0 flex-1 px-1.5"
+          inset
+          className="min-h-0 flex-1"
           columns={columns}
           rows={rows}
           rowKey={(p) => p.id}

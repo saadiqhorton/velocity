@@ -61,8 +61,9 @@ export function Tabs({ items, value, defaultValue, onChange, className, ...rest 
               disabled={item.disabled}
               onClick={() => setCurrent(item.id)}
               className={clsx(
-                '-mb-px h-8 border-b-2 text-base transition-colors duration-100 disabled:cursor-not-allowed disabled:text-fg-disabled',
-                selected ? 'border-primary font-medium text-fg-selected' : 'border-transparent text-fg-subtle hover:text-fg',
+                // ADS tabs: medium weight in every state, so selecting a tab never shifts its neighbours.
+                '-mb-px h-8 border-b-2 text-base font-medium transition-colors duration-100 disabled:cursor-not-allowed disabled:text-fg-disabled',
+                selected ? 'border-primary text-fg-selected' : 'border-transparent text-fg-subtle hover:text-fg',
               )}
             >
               {item.label}

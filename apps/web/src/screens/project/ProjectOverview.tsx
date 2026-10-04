@@ -222,7 +222,7 @@ export function ProjectOverview({ project, milestones, save }: { project: Projec
   const shown = sorted.slice(0, 4);
   const p = project.progress;
   return (
-    <div className="mx-auto flex max-w-240 flex-col gap-8 p-5 md:flex-row" data-testid="project-overview">
+    <div className="mx-auto flex w-full max-w-240 flex-col gap-8 p-5 md:flex-row" data-testid="project-overview">
       <div className="flex min-w-0 flex-1 flex-col gap-4">
         <NameEditor project={project} save={save} />
         <DescriptionEditor project={project} save={save} />

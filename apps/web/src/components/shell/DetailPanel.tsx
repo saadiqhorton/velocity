@@ -1,4 +1,6 @@
 import { Suspense } from 'react';
+import type { ReactNode } from 'react';
+import { Icon, IconButton } from '@velocity/ui';
 import { ChunkBoundary, retryableLazy } from '@/components/common/ChunkBoundary';
 import { useClosePanel, usePanelIssueId } from '@/lib/navigation';
 import { m } from '@/i18n';
@@ -13,7 +15,23 @@ export function preloadIssueDetail(): void {
 }
 
 function PanelSkeleton() {
-  return <div className="h-full" aria-busy="true" />;
+  return (
+    <div className="flex h-full flex-col" aria-busy="true">
+      <div className="h-12 shrink-0 border-b border-border" />
+    </div>
+  );
+}
+
+/** A failed panel chunk keeps the panel's header (so it can still be closed) above the inline retry. */
+function PanelFrame({ children, onClose }: { children: ReactNode; onClose: () => void }) {
+  return (
+    <div className="flex h-full flex-col">
+      <div className="flex h-12 shrink-0 items-center justify-end border-b border-border px-4">
+        <IconButton label={m.issue.closePanel} size="sm" icon={<Icon name="close" />} onClick={onClose} />
+      </div>
+      <div className="p-4">{children}</div>
+    </div>
+  );
 }
 
 /**
@@ -31,7 +49,7 @@ export function DetailPanel() {
       aria-label={m.issue.title}
       className="absolute inset-y-0 right-0 z-10 flex h-full w-full shrink-0 flex-col border-l border-border bg-surface md:w-(--ds-layout-panel-compact) lg:static xl:w-(--ds-layout-panel)"
     >
-      <ChunkBoundary onRetry={issueDetail.reset}>
+      <ChunkBoundary onRetry={issueDetail.reset} frame={(message) => <PanelFrame onClose={() => close()}>{message}</PanelFrame>}>
         <Suspense fallback={<PanelSkeleton />}>
           <IssueDetail key={issueId} id={issueId} mode="panel" onClose={() => close()} />
         </Suspense>

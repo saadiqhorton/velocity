@@ -337,7 +337,7 @@ export function Inbox() {
             </InlineMessage>
           </div>
         ) : sections.length === 0 ? (
-          <EmptyState icon="inbox" message={m.inbox.emptyPreset[preset]} className="py-16" />
+          <EmptyState icon="inbox" message={m.inbox.emptyPreset[preset]} fill />
         ) : (
           <div ref={listRef} role="grid" aria-label={m.inbox.list} aria-rowcount={order.length}>
             {sections.map((s) => (

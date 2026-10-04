@@ -72,7 +72,7 @@ export function Insights() {
                   <Link
                     to={viewHref}
                     data-testid="insights-open-created"
-                    className="flex h-7 shrink-0 items-center gap-1 rounded-sm px-2 text-base text-link hover:bg-hover"
+                    className="-mr-2 flex h-7 shrink-0 items-center gap-1 rounded-sm px-2 text-sm text-link hover:bg-hover"
                   >
                     {m.insights.openView}
                     <Icon name="arrow-right" className="h-3 w-3" />
@@ -108,8 +108,9 @@ export function Insights() {
                               <h3 className="truncate text-base font-medium text-fg">{t.name}</h3>
                               <span className="identifier">{t.key}</span>
                             </div>
-                            <Link to={`/team/${t.key}/cycles`} className="shrink-0 rounded-sm px-1 text-sm text-link hover:bg-hover">
+                            <Link to={`/team/${t.key}/cycles`} className="-mr-2 flex h-7 shrink-0 items-center gap-1 rounded-sm px-2 text-sm text-link hover:bg-hover">
                               {m.insights.allCycles}
+                              <Icon name="arrow-right" className="h-3 w-3" />
                             </Link>
                           </div>
                           <VelocityBars teamKey={t.key} teamName={t.name} bars={t.cycles} />
@@ -119,7 +120,7 @@ export function Insights() {
                               {m.insights.completedPoints}
                             </li>
                             <li className="flex items-center gap-2">
-                              <span aria-hidden="true" className="inline-block h-2 w-2 rounded-sm bg-neutral" />
+                              <span aria-hidden="true" className="inline-block h-2 w-2 rounded-sm bg-neutral-hover" />
                               {m.insights.scopePoints}
                             </li>
                           </ul>

@@ -47,15 +47,18 @@ export function SettingsPage({ title, parents = [], description, actions, wide, 
         <Breadcrumbs items={crumbs} className="min-w-0" />
       </header>
       <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto">
-        <div className={clsx('mx-auto flex flex-col gap-8 px-8 pb-16 pt-8', wide ? 'max-w-5xl' : 'max-w-3xl')}>
-          <div className="flex items-start gap-4">
-            <div className="min-w-0 flex-1">
-              <h1 className="text-xl font-semibold text-fg">{title}</h1>
-              {description ? <p className="mt-1 text-base text-fg-subtle">{description}</p> : null}
+        {/* One left edge for every settings page; forms keep a readable measure inside the wide column. */}
+        <div className="mx-auto w-full max-w-5xl px-4 pb-16 pt-8 sm:px-8">
+          <div className={clsx('flex flex-col gap-8', !wide && 'max-w-3xl')}>
+            <div className="flex flex-wrap items-start gap-4">
+              <div className="min-w-0 flex-1">
+                <h1 className="text-xl font-semibold text-fg">{title}</h1>
+                {description ? <p className="mt-1 text-base text-fg-subtle">{description}</p> : null}
+              </div>
+              {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
             </div>
-            {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
+            {children}
           </div>
-          {children}
         </div>
       </div>
     </div>
@@ -85,7 +88,8 @@ export function SettingsSection({ title, description, actions, children, danger,
         </div>
         {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
       </div>
-      <div className={clsx('rounded-md border', danger ? 'border-danger' : 'border-border')}>{children}</div>
+      {/* Container query: rows stack label over control when the section is narrow (768, phones). */}
+      <div className={clsx('@container rounded-md border', danger ? 'border-danger' : 'border-border')}>{children}</div>
     </section>
   );
 }
@@ -103,7 +107,12 @@ export interface SettingsRowProps {
 /** One row inside a section: label + helper on the left, control on the right. Rows divide with a border. */
 export function SettingsRow({ label, description, children, htmlFor, className }: SettingsRowProps) {
   return (
-    <div className={clsx('flex min-h-14 items-center gap-6 border-t border-border px-4 py-3 first:border-t-0', className)}>
+    <div
+      className={clsx(
+        'flex min-h-14 flex-col items-stretch gap-3 border-t border-border px-4 py-3 first:border-t-0 @lg:flex-row @lg:items-center @lg:gap-6',
+        className,
+      )}
+    >
       <div className="min-w-0 flex-1">
         {htmlFor ? (
           <label htmlFor={htmlFor} className="block text-base font-medium text-fg">
@@ -114,7 +123,7 @@ export function SettingsRow({ label, description, children, htmlFor, className }
         )}
         {description ? <div className="mt-0.5 text-sm text-fg-subtle">{description}</div> : null}
       </div>
-      <div className="flex shrink-0 items-center gap-2">{children}</div>
+      <div className="flex shrink-0 flex-wrap items-center gap-2">{children}</div>
     </div>
   );
 }

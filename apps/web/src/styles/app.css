@@ -17,6 +17,10 @@
     overflow: hidden;
     font-feature-settings: 'cv11', 'ss01';
   }
+  /* Pages that scroll the document itself (component gallery). */
+  html.document-scroll body {
+    overflow: auto;
+  }
   button {
     cursor: default;
   }

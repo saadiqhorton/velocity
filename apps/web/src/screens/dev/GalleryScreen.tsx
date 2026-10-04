@@ -24,9 +24,15 @@ export function GalleryScreen() {
     const t = new URLSearchParams(window.location.search).get('theme');
     if (t === 'light' || t === 'dark') setPref(t);
   }, [setPref]);
+  // The app shell never scrolls the document; the gallery does, so a full-page screenshot
+  // (visual baselines) captures every section instead of one viewport of an inner scroller.
+  useEffect(() => {
+    document.documentElement.classList.add('document-scroll');
+    return () => document.documentElement.classList.remove('document-scroll');
+  }, []);
   if (!enabled) return null;
   return (
-    <div className="h-full overflow-y-auto bg-surface" data-theme-name={resolved}>
+    <div className="min-h-full bg-surface" data-theme-name={resolved}>
       <h1 className="sr-only">{m.dev.gallery}</h1>
       <ComponentGallery />
     </div>

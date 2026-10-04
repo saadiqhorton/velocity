@@ -37,8 +37,13 @@ function MessageBase({ appearance = 'info', title, children, action, onDismiss, 
         {title ? <p className="font-semibold">{title}</p> : null}
         {children ? <div>{children}</div> : null}
       </div>
-      {action}
-      {onDismiss ? <IconButton label="Dismiss" size="sm" icon={<Icon name="close" />} onClick={onDismiss} /> : null}
+      {/* Actions sit beside the text; the negative margin keeps a one-line message at 32px. */}
+      {action ? <div className="-my-1 flex shrink-0 items-center gap-2 self-center">{action}</div> : null}
+      {onDismiss ? (
+        <div className="-my-1 shrink-0 self-center">
+          <IconButton label="Dismiss" size="sm" icon={<Icon name="close" />} onClick={onDismiss} />
+        </div>
+      ) : null}
     </div>
   );
 }

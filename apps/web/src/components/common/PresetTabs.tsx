@@ -17,6 +17,17 @@ export interface PresetTabsProps<T extends string> {
   className?: string;
 }
 
+/**
+ * Shared look of a compact header segment (preset tabs, project status filter, cycle/closed switch):
+ * 28px, 12px text, the selected one on a neutral fill. One style for every view header.
+ */
+export function segmentClass(selected: boolean): string {
+  return clsx(
+    'inline-flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-sm px-2 text-sm transition-colors duration-100',
+    selected ? 'bg-neutral font-medium text-fg' : 'text-fg-subtle hover:bg-hover hover:text-fg',
+  );
+}
+
 /** Compact header tabs (role=tablist): arrow keys move and activate, selected tab is the only tab stop. */
 export function PresetTabs<T extends string>({ tabs, value, onChange, className, ...rest }: PresetTabsProps<T>) {
   const refs = useRef<Record<string, HTMLButtonElement | null>>({});
@@ -50,10 +61,7 @@ export function PresetTabs<T extends string>({ tabs, value, onChange, className,
             tabIndex={selected ? 0 : -1}
             onClick={() => onChange(t.id)}
             data-testid={`tab-${t.id}`}
-            className={clsx(
-              'inline-flex h-7 items-center gap-1.5 rounded-sm px-2 text-sm transition-colors duration-100',
-              selected ? 'bg-raised font-medium text-fg' : 'text-fg-subtle hover:bg-hover hover:text-fg',
-            )}
+            className={segmentClass(selected)}
           >
             {t.label}
             {t.count ? <span className="text-xs text-fg-subtlest">{t.count}</span> : null}

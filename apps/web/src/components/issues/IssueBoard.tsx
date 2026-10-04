@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { DragEvent, MouseEvent as ReactMouseEvent, ReactNode } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import clsx from 'clsx';
-import { Avatar, Icon, IconButton, PriorityIcon, StatusIcon } from '@velocity/ui';
+import { Avatar, Icon, IconButton, PriorityIcon, Spinner, StatusIcon } from '@velocity/ui';
 import type { IssueRowFieldsFragment, UpdateIssueInput } from '@/gql/graphql';
 import { useWorkspace } from '@/app/workspace';
 import { useCommands } from '@/keyboard/react';
@@ -181,7 +181,9 @@ function BoardColumn({ group, grouping, focusedId, selected, dropActive, context
           })}
         </div>
         {group.unloaded > 0 ? (
-          <div ref={moreRef} className="px-2 py-2 text-sm text-fg-subtlest">
+          // SPEC §4.9.11: a 16px spinner beside the text for a component fetch.
+          <div ref={moreRef} role="status" className="flex h-8 items-center justify-center gap-2 text-sm text-fg-subtle" data-testid="board-loading-more">
+            <Spinner size={16} label="" />
             {m.list.loadingMore}
           </div>
         ) : null}
@@ -339,7 +341,7 @@ export function IssueBoard({ listId, data, grouping, context, cycleNames, empty 
     if (patch && ids.length > 0) void update(ids, patch);
   };
 
-  if (data.initialLoading) return <ContentSkeleton rows={10} />;
+  if (data.initialLoading) return <ContentSkeleton rows={10} header={false} />;
   if (data.total === 0 && groups.every((g) => g.issues.length === 0)) return <div className="flex flex-1 items-center justify-center">{empty}</div>;
 
   return (

@@ -39,11 +39,11 @@ function Steps({ current }: { current: Step }) {
   };
   const idx = STEPS.indexOf(current);
   return (
-    <ol className="mb-6 flex items-center gap-2" aria-label={m.auth.stepOf(idx + 1, STEPS.length)}>
+    <ol className="mb-6 flex items-start gap-2" aria-label={m.auth.stepOf(idx + 1, STEPS.length)}>
       {STEPS.map((s, i) => (
-        <li key={s} className="flex flex-1 flex-col gap-1">
+        <li key={s} className="flex min-w-0 flex-1 flex-col gap-1">
           <span className={clsx('h-1 rounded-full', i <= idx ? 'bg-primary' : 'bg-neutral')} aria-hidden="true" />
-          <span className={clsx('text-xs', i === idx ? 'font-semibold text-fg' : 'text-fg-subtlest')} aria-current={i === idx ? 'step' : undefined}>
+          <span className={clsx('truncate text-xs', i === idx ? 'font-semibold text-fg' : 'text-fg-subtlest')} aria-current={i === idx ? 'step' : undefined}>
             {labels[s]}
           </span>
         </li>

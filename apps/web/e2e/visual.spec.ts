@@ -28,6 +28,21 @@ async function maskTimes(page: import('@playwright/test').Page): Promise<import(
   return page.locator('time, [title*="2026"]').all();
 }
 
+/**
+ * The E2E seed is random (titles, labels, counts, cycle progress) and earlier specs add teams,
+ * projects and notifications to the shared DB, so the shell baseline masks that data and keeps
+ * what §4.10.4 pins: region geometry (sidebar, header, list), shell chrome and the theme.
+ */
+function maskSeedData(page: import('@playwright/test').Page): import('@playwright/test').Locator[] {
+  return [
+    page.getByTestId('sidebar').getByRole('navigation', { name: 'Primary' }),
+    page.getByTestId('issue-list'),
+    page.getByTestId('view-count'),
+    page.getByTestId('cycle-picker'),
+    page.getByTestId('cycle-progress'),
+  ];
+}
+
 test.describe('visual snapshots', () => {
   test.skip(({ browserName }) => browserName !== 'chromium', 'Baselines are Chromium-only');
   // eslint-disable-next-line no-empty-pattern -- Playwright hooks must destructure their (empty) fixtures.
@@ -58,7 +73,7 @@ test.describe('visual snapshots', () => {
         await expect(page.getByTestId('issue-row').first()).toBeVisible();
         await expect(page).toHaveScreenshot(`shell-${theme}-${size.name}.png`, {
           fullPage: false,
-          mask: await maskTimes(page),
+          mask: [...(await maskTimes(page)), ...maskSeedData(page)],
         });
       });
     }

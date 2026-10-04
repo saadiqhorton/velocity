@@ -33,6 +33,12 @@ Rules, contracts and environment: `HANDOFF.md` §0–§5 (your rows: §1 "Web ap
     - DB `velocity_e2e_web_8`;
     - scratch in `/tmp/velocity-impl/`.
 
+- **Claude design pass (Opus 5.5, 2026-10-04, D1–D4).** Screenshots: `/tmp/vel-design/r1` (built-in flows), `r2` (every settings section, project tabs, views, backlog, my issues, 404, cycles off), `r3` (setup, invite, loading, chunk failure, board loading-more, menus, empties), `r4`/`r6` (768/390), `r5`/`r6` (after fixes); capture script for states `scripts/screenshots.mjs` cannot reach: `/tmp/vel-design/cap.mjs`. Note: the Read tool mis-renders full-size 1440 dark PNGs as light; review them resized (`magick f -resize 1200x`).
+  - Shared components: `Table` `inset` prop (full-bleed tables align with the 20px header gutter; Projects and Views use it), header cells nowrap, row focus ring inset; `Tabs` medium weight in every state (no sideways shift); `EmptyState` `fill` (page-level empties centred: search, inbox, cycles off, view not found); `InlineMessage` actions beside the text; `ContentSkeleton` `header={false}` under real headers and row anatomy aligned; issue-detail skeleton draws the 48px header.
+  - Screens: one segmented-control style (`segmentClass` in `PresetTabs`; My issues/Inbox selected tab was invisible in light); settings pages share one left edge (forms keep a 3xl measure inside the 5xl column) and `SettingsRow` stacks via container query when narrow; issue rows drop labels/project/cycle by row width (container queries) so titles survive the open panel at 1024; full issue page uses the panel's label-left properties plus a Team row, and shows properties inline below 1024 (they were missing at 768/390); title, sections and tabs share one inset; project tabs content full width; search rows 32px with id baseline fixed; insights links unified, scope bars/legend visible; setup stepper aligned ("Owner"); cycles-off button hover; projects health/lead nowrap, "Show archived" from lg, icon-only create buttons below sm.
+  - Gates (slot 7, 2026-10-04 ~16:00): web typecheck clean; whole-repo ESLint clean; check-hex/check-legal ok; scripts 8/8; web vitest 483/483; `packages/ui` typecheck + 32/32; build OK, initial JS 176.4 KB gzip; E2E Chromium **80 passed, 0 skipped** (visual now runs against approved baselines); WebKit Docker **72 passed, 8 skipped** (visual is Chromium-only). Dev servers stopped. Leftover: DB `velocity_e2e_web_7`, scratch `/tmp/vel-design/`.
+  - Open for the owner: (1) the shell baseline masks seeded content, because the E2E seed is random and specs share one DB; a deterministic seed (`seed-cli` `--seed`) would let it pin real rows. (2) `ChunkBoundary` reuses `m.shell.loadError` ("Could not load this page…") inside the editor/panel; a part-specific sentence needs a catalog key plus the `ChunkBoundary.test.tsx` text. (3) Settings secondary nav is hidden below 768 with no in-page replacement (sections reachable from the sidebar Settings index only).
+
 ## Coordination (Codex QA lanes + Claude design; see `HANDOFF.md` §0 and `CODEX_WEB_QA.md`)
 
 ### Active claims
@@ -73,12 +79,12 @@ Visual problems, plus minimal visual changes made during functional fixes. Claud
 
 | ID | Logged by | Screen | What / where | Status |
 |---|---|---|---|---|
-| D1 | lead | All WP2 screens | Light theme + 1024 not yet reviewed (dark 1440 done) | open |
-| D2 | lead | E2E visual baselines | Generate and approve `visual.spec.ts` baselines after the design pass | open |
-| D3 | Impl/F | Issue detail panel, markdown editor | New `ChunkBoundary` (inline `InlineMessage` + Retry, reusing `m.shell.loadError`) shows when the editor or panel chunk fails to load, e.g. offline. Unstyled beyond the stock components; review its placement and spacing | open |
-| D4 | Impl/F | Board columns | "Loading more issues" in a column now actually loads the next page when visible (F8); text unchanged. Consider a spinner or skeleton for that state | open |
+| D1 | lead | All WP2 screens | Light theme + 1024 not yet reviewed (dark 1440 done) | **done** (Claude design pass): every screen in both themes at 1440/1024, shell/list/settings at 768/390, auth, empty, loading and failure states. Fixes listed in the handover entry "Claude design pass" |
+| D2 | lead | E2E visual baselines | Generate and approve `visual.spec.ts` baselines after the design pass | **done** (Claude): 8 baselines in `e2e/visual.spec.ts-snapshots/` (gallery + shell × dark/light × 1440/1024), each reviewed. Two fixes were needed: the gallery scrolled an inner container, so full-page shots were one viewport plus blank (now `GalleryScreen` scrolls the document via `html.document-scroll`); the shell shot compared random seed data and state left by earlier specs, so it now masks the primary sidebar nav, issue list, count, cycle picker and progress (`data-testid="cycle-progress"`) and pins geometry, chrome and theme |
+| D3 | Impl/F | Issue detail panel, markdown editor | New `ChunkBoundary` (inline `InlineMessage` + Retry, reusing `m.shell.loadError`) shows when the editor or panel chunk fails to load, e.g. offline. Unstyled beyond the stock components; review its placement and spacing | **done**: the sentence is body text (not a bold title); the Retry action sits beside it, vertically centred (`InlineMessage` change, all inline messages); a failed panel chunk keeps a 48px panel header with a close button and pads the message (`ChunkBoundary` `frame` prop, `DetailPanel`) |
+| D4 | Impl/F | Board columns | "Loading more issues" in a column now actually loads the next page when visible (F8); text unchanged. Consider a spinner or skeleton for that state | **done**: 16px `Spinner` + text, centred 32px row, `role="status"` (SPEC §4.9.11) |
 
-## Current state (verified 2026-10-04 ~14:40 EDT by Impl / Lane F, slot 8)
+## Current state (verified 2026-10-04 ~14:40 EDT by Impl / Lane F, slot 8; design pass re-verified ~16:00 by Claude, slot 7: unit 483, Chromium 80/0 skipped, WebKit 72/8 visual-only skips)
 | Gate | Result |
 |---|---|
 | `apps/web` typecheck | clean |

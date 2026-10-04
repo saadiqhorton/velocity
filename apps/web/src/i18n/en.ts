@@ -112,7 +112,7 @@ export const en = {
     badCredentials: 'That username or password is incorrect. Check both and try again.',
     sessionExpired: 'Your session expired. Log in again to continue.',
     setupTitle: 'Set up your workspace',
-    setupStepOwner: 'Owner account',
+    setupStepOwner: 'Owner',
     setupStepWorkspace: 'Workspace',
     setupStepTeam: 'First team',
     setupStepGithub: 'GitHub',

@@ -335,7 +335,7 @@ export function IssueList({ listId, data, display, onToggleGroup, context, empty
     setDrag(null);
   };
 
-  if (data.initialLoading) return <ContentSkeleton rows={16} />;
+  if (data.initialLoading) return <ContentSkeleton rows={16} header={false} />;
   if (rows.length === 0 || (data.total === 0 && !data.hasMore && issues.length === 0)) {
     return <div className="flex flex-1 items-center justify-center">{empty}</div>;
   }

@@ -39,6 +39,11 @@ export interface TableProps<T> {
   emptyState?: ReactNode;
   stickyHeader?: boolean;
   maxHeight?: number | string;
+  /**
+   * Full-bleed table in a content region: the first and last columns pad to the view header's
+   * 20px gutter so the table lines up with the title above it.
+   */
+  inset?: boolean;
   className?: string;
 }
 
@@ -55,6 +60,7 @@ export function Table<T>({
   emptyState,
   stickyHeader = true,
   maxHeight,
+  inset = false,
   className,
   ...rest
 }: TableProps<T>) {
@@ -131,7 +137,7 @@ export function Table<T>({
       <table role="grid" aria-label={rest['aria-label']} className="w-full min-w-160 border-separate border-spacing-0 text-base">
         <thead>
           <tr>
-            {columns.map((col) => {
+            {columns.map((col, ci) => {
               const sorted = activeSort?.key === col.key ? activeSort.direction : null;
               return (
                 <th
@@ -140,7 +146,9 @@ export function Table<T>({
                   aria-sort={col.sortable ? (sorted === 'asc' ? 'ascending' : sorted === 'desc' ? 'descending' : 'none') : undefined}
                   style={{ width: col.width, zIndex: stickyHeader ? 'var(--ds-z-index-sticky)' : undefined }}
                   className={clsx(
-                    'h-8 bg-sunken px-3 text-xs font-semibold uppercase text-fg-subtle',
+                    'h-8 whitespace-nowrap bg-sunken px-3 text-xs font-semibold uppercase text-fg-subtle',
+                    inset && ci === 0 && 'pl-5',
+                    inset && ci === columns.length - 1 && 'pr-5',
                     col.align === 'right' ? 'text-right' : 'text-left',
                     stickyHeader && 'sticky top-0',
                   )}
@@ -185,7 +193,7 @@ export function Table<T>({
                   onClick={() => onRowClick?.(row)}
                   onKeyDown={(e) => onRowKeyDown(e, index, row)}
                   className={clsx(
-                    'group transition-colors duration-100',
+                    'group transition-colors duration-100 focus-visible:-outline-offset-2',
                     onRowClick && 'cursor-pointer',
                     selected ? 'bg-primary-subtle' : 'hover:bg-sunken',
                   )}
@@ -197,6 +205,8 @@ export function Table<T>({
                         'h-10 border-t border-border px-3',
                         col.align === 'right' && 'text-right',
                         ci === 0 && 'border-l-2',
+                        inset && ci === 0 && 'pl-4.5',
+                        inset && ci === columns.length - 1 && 'pr-5',
                         ci === 0 && (selected ? 'border-l-primary' : 'border-l-transparent'),
                       )}
                     >
