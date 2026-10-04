@@ -9,7 +9,29 @@ Rules, contracts and environment: `HANDOFF.md` §0–§5 (your rows: §1 "Web ap
 - **Codex / C checkpoint (2026-10-04):** Verified the 1,000-row CSV import from upload through mapping, dry run, live progress, completed 1,000/1,000 commit, and search visibility (`e2e/import.spec.ts`, Chromium, slot 3: setup + seed + import 3/3). Fixed missing mapping summary with a bounded metadata projection and historical closed-cycle import failures; `packages/services` core + importer DB tests 34/34, services/graphql typecheck and changed-file ESLint pass. `e2e/settings.spec.ts` is a draft: API key create/show-once/revoke passed in the first run; seven other cases are skipped pending verification. Settings click-through remains open, including profile/avatar, sessions, workspace deletion, members, teams/workflow/cycles, labels, webhooks, GitHub, MCP, export and audit. Rerun: `cd apps/web && E2E_SLOT=3 npx playwright test e2e/import.spec.ts --project=chromium`; `cd packages/services && pnpm exec vitest run test/db/core.test.ts test/db/importer.test.ts`. Re-enable each skipped settings case only as it is verified.
 - **Codex / A checkpoint (2026-10-04):** Lane A's four specs passed on Chromium slot 1 across the final runs: board 3/3, bulk 4/4, reorder 3/3, infinite scroll 2/2 (plus setup/seed per run). Verified X/Shift+X, toolbar status/assignee/priority/labels/project, archive+undo, delete+confirmation, B, board drag and M, Alt+Up/Down and row drag persistence, and all 400+ virtualized rows without duplicate identifiers or index gaps. Fixed board-card focus tracking, reorder neighbor direction and optimistic edge ordering, and Enter activation in the bulk toolbar. The 16 original spec ESLint errors are gone; changed-file ESLint, web typecheck and build pass. **Open:** E2E seed has no ENG cycle, so the bulk cycle picker opens and shows only “No cycle”; assigning a real cycle remains unverified. The combined four-spec suite was not rerun after the last additions; passing results are from board, bulk, reorder and infinite-scroll runs plus the targeted bulk rerun. Rerun: `pnpm --filter @velocity/web build`; `cd apps/web && E2E_SLOT=1 npx playwright test e2e/bulk.spec.ts e2e/board.spec.ts e2e/reorder.spec.ts e2e/infinite-scroll.spec.ts --project=chromium --workers=1`; `pnpm exec eslint apps/web/e2e/{bulk,board,reorder,infinite-scroll}.spec.ts apps/web/src/components/issues/{IssueBoard,IssueList}.tsx apps/web/src/components/overlays/SelectionBar.tsx`.
 - **Codex / B checkpoint (2026-10-04):** Initial Chromium slot-2 run passed offline 2/2 and realtime 2/2; panel 3/4 exposed an Esc bug in full-page issues. Fixed full-page Esc and verified its targeted regression. Added panel coverage for title, inline properties, subscription, activity, comment submit/edit/reaction/delete, sub-issues and relations; each new test passed separately under production CSP. Fixed reaction-chip accessible names. Web build and typecheck pass. The three-spec combined rerun after these changes remains open, as do cycle and milestone picker coverage, forced mutation rejection/rollback, and explicit offline reconnect refetch assertion. Rerun: `pnpm --filter @velocity/web build`; `cd apps/web && E2E_SLOT=2 npx playwright test e2e/panel.spec.ts e2e/realtime.spec.ts e2e/offline.spec.ts --project=chromium --workers=1`; `pnpm --filter @velocity/web typecheck`.
-- **Impl / Lane F (2026-10-04, in progress, slot 8; DIAGNOSIS §5):** T1 done (F1): guard freezes after the context fixture's `use`; pi's WebKit `trace` override reverted; board + a11y 15/15 on Chromium and WebKit; a body-time inline `<style>` still fails on both. T2 done: pi's nonce rewrites removed from `static.ts`; new `apps/server/test/static.test.ts`; server 13/13. T3 done (F2, F3): `runInBackground`, prefetch `.catch`, `ChunkBoundary`; WebKit bulk + offline ×3 clean (the WebKit navigation-cancel log is tolerated narrowly in the guard). T4 done: `scripts/e2e-webkit-docker.sh`. T6 done (A5, B3, F5, F6, F7): bulk cycle assignment, unconditional panel cycle, rollback test, reconnect-refetch test plus its app fix in `lib/apollo.ts`, `visual.spec.ts` generation fix (normal run 8 skipped; an explicit update run writes baselines, proven into /tmp only); bulk + panel + offline 17/17 on Chromium and WebKit. Gates so far: web vitest 481/481, `pnpm typecheck` 13/13, `pnpm test` (Turbo) 13/13 tasks.
+- **opencode (DeepSeek V4.1 Flash, 2026-10-04 09:47–11:16), Lanes C/D/E/F:** finished C (`settings.spec.ts` 9/9: team-delete `Select` ids, webhook strict-mode/test-delivery assertions, invite button label "Create account"), D (`planning.spec.ts` 4, `workspace.spec.ts` 4, `V` move menu, "added after start" marker) and E (`auditLog(after, before)` with server-side date presets, `removeAvatar` + Profile "Remove"). It wrote `visual.spec.ts` and ran the full Chromium suite. Reconstructed from DIAGNOSIS §2.1/§3.2; it left no entry of its own.
+- **pi (DeepSeek V4.1 Flash, 11:18–12:17), Lane F:** got full Chromium green (70 passed, 8 skipped), fixed `check-hex` for slot output dirs (F4), and started the WebKit pass in Docker. It was paused during a wrong-path CSP hunt; its speculative `static.ts` nonce edits and WebKit `trace` override were reverted in T1/T2 below (DIAGNOSIS §2.1, R2).
+- **Impl / Lane F (2026-10-04 12:45–14:50, slot 8; DIAGNOSIS §5 T1–T10): done.**
+  - T1 (F1): the guard freezes after the context fixture's `use`. pi's WebKit `trace` override is reverted. A temporary probe proved a body-time inline `<style>` still fails on both browsers.
+  - T2: pi's nonce rewrites were removed from `apps/server/src/http/static.ts`; the meta tag keeps `property`/`nonce` (documented in HANDOFF §5). New `apps/server/test/static.test.ts`.
+  - T3 (F2, F3): `runInBackground` (`lib/errors.ts`), `.catch` on prefetches, `ChunkBoundary` + `retryableLazy` (inline retry for the editor and panel). The guard tolerates only WebKit's navigation-cancel log.
+  - T4: `scripts/e2e-webkit-docker.sh <slot> [spec…]`; set `PW_PROJECT=` (empty) for the CI-shaped run.
+  - T5: final full Chromium 72 passed / 8 skipped, WebKit 72 / 8, CI-shaped 142 / 16. The first CI-shaped attempt (138 passed / 4 failed) found F8 (board stops loading past 500 issues, an app bug, fixed), F9 (theme/favorite state leaks between browser projects, fixed in specs) and F10 (flaky focus read).
+  - T6 (A5, B3, F5, F6, F7): bulk cycle assignment, unconditional panel cycle, rollback test, reconnect-refetch test plus its app fix (F5, `lib/apollo.ts`), and the `visual.spec.ts` generation fix. An update run, proven into /tmp, generates; a normal run skips and writes nothing.
+  - T7: production-mode pass, 0 CSP/console/page errors on Chromium and WebKit (see Current state).
+  - T8: HANDOFF §9 row 6 decided (CI keeps the fresh bundle). The Codex profiler servers (PIDs 3674456 on :3017, 4034497 on :3019) are still running, awaiting the owner's OK.
+  - T9: every gate is green (see Current state); WP6 docker build + compose verified.
+  - T10: docs updated (this file, `HANDOFF.md` §1/§5/§6/§9, `HANDOFF.CODEX.md` §5–§6, `CODEX_WEB_QA.md`).
+  - **Rerun:**
+    - `pnpm --filter @velocity/web build`
+    - `cd apps/web && E2E_SLOT=8 npx playwright test --project=chromium`
+    - `apps/web/scripts/e2e-webkit-docker.sh 8`
+    - `PW_PROJECT= apps/web/scripts/e2e-webkit-docker.sh 8`
+  - **Open:** Claude's design pass (D1, D2, D3 below). Owner decisions are listed in the Lane F report.
+  - **Leftovers in this environment:**
+    - image `velocity:impl-wp6`;
+    - DB `velocity_e2e_web_8`;
+    - scratch in `/tmp/velocity-impl/`.
 
 ## Coordination (Codex QA lanes + Claude design; see `HANDOFF.md` §0 and `CODEX_WEB_QA.md`)
 
@@ -18,7 +40,6 @@ Add a row before editing a file under `apps/web/src`; remove it when done. Never
 
 | Owner / lane | Files | Task | Since |
 |---|---|---|---|
-| Impl / Lane F (slot 8) | `e2e/support/fixtures.ts`, `playwright.config.ts`, `src/components/editor/LazyEditor.tsx`, `src/components/common/ChunkBoundary.tsx` (new), `src/components/shell/DetailPanel.tsx`, `src/lib/{apollo,realtime,mutation,errors}.ts(x)`, `src/components/issues/useIssueList.ts`, `e2e/{bulk,panel,offline,visual}.spec.ts`, `scripts/e2e-webkit-docker.sh`; `apps/server/src/http/static.ts` + `apps/server/test/` | DIAGNOSIS §5 T1–T10 | 2026-10-04 |
 
 ### QA findings
 | ID | Lane | Screen / flow | Severity | Finding | Status / fix (+ test) |
@@ -43,6 +64,9 @@ Add a row before editing a file under `apps/web/src`; remove it when done. Never
 | F5 | F | Reconnect refetch | major | If the socket survived an outage (a short blip, or WebKit offline mode), events delivered while offline triggered refetches that failed, and nothing refetched on reconnect: the list stayed stale. | fixed in `lib/apollo.ts`: an offline→online transition refetches active queries (`apollo.test.ts`); new `offline.spec.ts` "reconnecting refetches what changed while offline" |
 | F6 | F | Rollback coverage | minor | No test forced a server rejection. | added `panel.spec.ts` "a rejected edit applies optimistically, rolls back, and explains why in a flag" (GraphQL VALIDATION via `page.route`) |
 | F7 | F | `visual.spec.ts` | minor | It skipped whenever baselines were missing, so `--update-snapshots` could never create the first ones. | fixed: skips only when baselines are missing and no update was requested (`--update-snapshots` or `VISUAL_UPDATE=1`); a normal run still skips and writes nothing |
+| F8 | F | Board with more than 500 issues | major | The board loads issues eagerly up to 500 and then stopped. Columns later in the server order (Done with `done=all`) showed a count and a permanent "Loading more issues" with no cards. Found by the CI-shaped run: after the 1,000-row import, `board.spec.ts` "move card to Done" failed on WebKit. | fixed: a column's "loading more" placeholder loads the next page while it is on screen (`useLoadWhenVisible`, `IssueBoard.tsx`; `useLoadWhenVisible.test.tsx`); CI-shaped run |
+| F9 | F | E2E state leaks across browser projects | minor | In the CI-shaped run both browsers share one DB. `theme.spec.ts` left the owner's profile theme pinned to `dark` (WebKit `layout … light` then failed), and the favorites test toggled an already-favorited project off. | fixed in the specs: `theme.spec.ts` resets the profile theme to `system` after each test (`graphqlAs` helper in `fixtures.ts`); the favorites test starts from "not a favorite" |
+| F10 | F | keyboard-loop (WebKit) | minor | `expect(await focusedLabel(page))` read focus once, a frame before WebKit moved it; flaky. | fixed: `expect.poll` in `keyboard-loop.spec.ts` |
 
 ### Design review queue (Claude)
 Visual problems, plus minimal visual changes made during functional fixes. Claude reviews and fixes these at the source (`packages/ui`, tokens) during the design pass.
@@ -51,22 +75,25 @@ Visual problems, plus minimal visual changes made during functional fixes. Claud
 |---|---|---|---|---|
 | D1 | lead | All WP2 screens | Light theme + 1024 not yet reviewed (dark 1440 done) | open |
 | D2 | lead | E2E visual baselines | Generate and approve `visual.spec.ts` baselines after the design pass | open |
+| D3 | Impl/F | Issue detail panel, markdown editor | New `ChunkBoundary` (inline `InlineMessage` + Retry, reusing `m.shell.loadError`) shows when the editor or panel chunk fails to load, e.g. offline. Unstyled beyond the stock components; review its placement and spacing | open |
+| D4 | Impl/F | Board columns | "Loading more issues" in a column now actually loads the next page when visible (F8); text unchanged. Consider a spinner or skeleton for that state | open |
 
-## Current state (verified 02:30, 2026-10-04)
+## Current state (verified 2026-10-04 ~14:40 EDT by Impl / Lane F, slot 8)
 | Gate | Result |
 |---|---|
-| `apps/web` typecheck | clean on 2026-10-04 after Lane B's panel spec fix |
-| `pnpm exec eslint apps/web packages/ui packages/tokens` | clean |
-| `node scripts/check-hex.mjs` / `check-legal.mjs` | ok / ok (lines naming the importer source are tagged `check-legal-ignore`, SPEC §6.7) |
-| Web unit tests `cd apps/web && npx vitest run` | **476/476**, ~4s |
-| `packages/ui` vitest · typecheck | 32/32 · clean |
-| Build `pnpm --filter @velocity/web build` | OK. **Initial JS 175.5 KB gzip** (`node scripts/bundle-size.mjs`, budget 350). Every route is its own chunk; the markdown editor is lazy (~144 KB gz) |
-| `packages/graphql` web-parity (`npx vitest run test/web-parity.test.ts`) | 5/5 pass, including all new WP2 `.graphql` operations |
-| E2E chromium, verified green | wizard (setup) + seed, keyboard-loop 4, palette 5, views 2, theme 2, layout 4 (1440/1024 × dark/light), a11y 10 screens with zero critical: **31 tests** |
-| E2E written, not yet verified | `bulk`, `board`, `reorder`, `infinite-scroll`, `panel`, `realtime`, `offline` (the agents writing them hit the session limit) |
-| E2E import verified | `import.spec.ts` 1,000-row CSV: upload, mapping, dry run, live commit, search visibility (Chromium slot 3: 3/3 including setup + seed) |
-| E2E not yet written | visual snapshots (gallery + shell, both themes, 1440 + 1024), cycle rotate, GitHub installation link mock (configured-state mock is drafted/skipped in `settings.spec.ts`) |
-| WebKit | not run yet |
+| `apps/web` typecheck | clean |
+| `pnpm exec eslint . --max-warnings=0` (whole repo) | clean |
+| `node scripts/check-hex.mjs` / `check-legal.mjs` / `node --test scripts/*.test.mjs` | ok / ok / 8/8 |
+| Web unit tests `cd apps/web && npx vitest run` | **483/483** |
+| Build `pnpm --filter @velocity/web build` | OK. **Initial JS 176.3 KB gzip** (`node scripts/bundle-size.mjs`, budget 350) |
+| `pnpm typecheck` (Turbo) | 13/13 tasks |
+| `apps/server` vitest | 13/13 (new `test/static.test.ts` pins the CSP/nonce contract) |
+| `pnpm test` (Turbo, first full run) | 13/13 tasks: services 963, graphql 509 (DSL + API + web-parity), web 480 at the time (now 483), server 13, importers 76, tokens 42, mcp-tools 41, ui 32 |
+| E2E Chromium, full (`E2E_SLOT=8 npx playwright test --project=chromium`) | **72 passed, 8 skipped** (4.6 min). The 8 skips are `visual.spec.ts` (no approved baselines yet, by design) |
+| E2E WebKit, full (`scripts/e2e-webkit-docker.sh 8`) | **72 passed, 8 skipped** (7.0 min) |
+| E2E CI-shaped (both browsers, one DB: `PW_PROJECT= scripts/e2e-webkit-docker.sh 8`) | **142 passed, 16 skipped** (13.2 min): setup + seed + 70 per browser; the 16 skips are `visual.spec.ts`. The first attempt found F8–F10 |
+| Docker / compose (WP6) | `docker build .` OK (607 MB). Isolated compose stack: UI wizard → first issue through Caddy, 0 CSP/console errors; `scripts/deploy/smoke.mjs` passes |
+| Manual production-mode pass | API serving `dist` from the fresh server bundle with `NODE_ENV=production`, slot 8: 32 scripted steps (login, list + keyboard, board, panel edit, markdown editor, full-page issue, palette, inbox/my-issues/insights/search/views/projects/cycles, all 14 settings sections, import upload → mapping → dry run, light theme). Chromium: 0 CSP violations, 0 console errors, 0 page errors. WebKit: 0 CSP violations, 0 console errors; one WebKit navigation-cancel log (F3), not an app error |
 
 The unit tests cover the keyboard engine (63), chips↔DSL↔URL view state (72), the optimistic wrapper with rollback/flag/pulse plus error mapping (36), client grouping and ordering against the server SQL (279, property-based with a seeded PRNG), selection (13) and fuzzy matching (13).
 Bugs they found, all fixed:
@@ -74,7 +101,7 @@ Bugs they found, all fixed:
 - uuid tie-breaks used a numeric collator, but Postgres compares bytes.
 - Title ordering used natural-number collation.
 
-## Pickup checklist (do in order)
+## Pickup checklist (historical; do not follow)
 
 > **Superseded on 2026-10-04.** Items 1–5, 7 and 8 are now split into Codex lanes A–F in `CODEX_WEB_QA.md`. Item 6 (design pass) stays with Claude. Kept below for reference.
 

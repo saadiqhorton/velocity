@@ -58,9 +58,16 @@ test.describe('workspace', () => {
 
     const fav = page.getByTestId('favorite-button');
     await expect(fav).toBeVisible();
-    await fav.click();
-
     const sidebar = page.getByTestId('sidebar');
-    await expect(sidebar.getByRole('group', { name: 'Favorites' }).getByRole('link', { name })).toBeVisible({ timeout: 10_000 });
+    const sidebarLink = sidebar.getByRole('group', { name: 'Favorites' }).getByRole('link', { name });
+    // The DB is shared across browser projects: start from "not a favorite".
+    if ((await fav.getAttribute('aria-pressed')) === 'true') {
+      await fav.click();
+      await expect(fav).toHaveAttribute('aria-pressed', 'false');
+      await expect(sidebarLink).toHaveCount(0);
+    }
+    await fav.click();
+    await expect(fav).toHaveAttribute('aria-pressed', 'true');
+    await expect(sidebarLink).toBeVisible({ timeout: 10_000 });
   });
 });

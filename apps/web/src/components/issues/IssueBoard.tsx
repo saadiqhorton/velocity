@@ -18,11 +18,13 @@ import { groupInfo } from './GroupHeader';
 import { LabelChips } from './LabelChips';
 import { PRIORITY_KEYS } from './IssueRow';
 import { useUpdateIssues } from './actions';
+import { useLoadWhenVisible } from './useLoadWhenVisible';
 import type { IssueListResult } from './useIssueList';
 import { m } from '@/i18n';
 
 const CARD_HEIGHT = 96;
 const CARD_GAP = 8;
+const BOARD_PAGE = 400;
 
 /** Field update that moves an issue into the column `key` of `grouping`. */
 export function columnPatch(grouping: GroupBy, key: string | null): UpdateIssueInput | null {
@@ -112,13 +114,21 @@ interface ColumnProps {
   onDragStart: (e: DragEvent, issue: IssueRowFieldsFragment) => void;
   onDragEnter: (key: string | null) => void;
   onDrop: (key: string | null) => void;
+  /** Loads the next page; called while this column's "loading more" placeholder is on screen. */
+  onNeedMore: () => void;
+  /** Issues loaded so far (all columns); re-arms `onNeedMore` after each page. */
+  loadedCount: number;
 }
 
-function BoardColumn({ group, grouping, focusedId, selected, dropActive, context, cycleNames, onCardClick, onCardFocus, onDragStart, onDragEnter, onDrop }: ColumnProps) {
+function BoardColumn({ group, grouping, focusedId, selected, dropActive, context, cycleNames, onCardClick, onCardFocus, onDragStart, onDragEnter, onDrop, onNeedMore, loadedCount }: ColumnProps) {
   const ws = useWorkspace();
   const openCreate = useUi((s) => s.openCreate);
   const info = groupInfo(grouping, group.key, ws, cycleNames);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  // The board loads issues eagerly up to a cap; a column whose issues come later in the server
+  // order keeps loading pages while its placeholder is visible (large teams, done=all).
+  const moreRef = useRef<HTMLDivElement | null>(null);
+  useLoadWhenVisible(moreRef, group.unloaded > 0, onNeedMore, loadedCount);
   // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Virtual is used as documented.
   const virtualizer = useVirtualizer({
     count: group.issues.length,
@@ -170,7 +180,11 @@ function BoardColumn({ group, grouping, focusedId, selected, dropActive, context
             );
           })}
         </div>
-        {group.unloaded > 0 ? <div className="px-2 py-2 text-sm text-fg-subtlest">{m.list.loadingMore}</div> : null}
+        {group.unloaded > 0 ? (
+          <div ref={moreRef} className="px-2 py-2 text-sm text-fg-subtlest">
+            {m.list.loadingMore}
+          </div>
+        ) : null}
       </div>
     </section>
   );
@@ -188,6 +202,9 @@ export interface IssueBoardProps {
 /** Board layout (SPEC §4.11.1): columns per group, drag and drop, keyboard ←/→/↑/↓ and M. */
 export function IssueBoard({ listId, data, grouping, context, cycleNames, empty }: IssueBoardProps) {
   const groups = data.groups;
+  const { ensureLoaded, loadedCount } = data;
+  // Ask for a generous page: the columns that wait are the ones furthest down the server order.
+  const loadMore = useCallback(() => ensureLoaded(loadedCount + BOARD_PAGE), [ensureLoaded, loadedCount]);
   const update = useUpdateIssues();
   const openIssue = useOpenIssue();
   const panelIssueId = usePanelIssueId();
@@ -349,6 +366,8 @@ export function IssueBoard({ listId, data, grouping, context, cycleNames, empty 
             if (drag && drag.over !== key) setDrag({ ...drag, over: key });
           }}
           onDrop={onDrop}
+          onNeedMore={loadMore}
+          loadedCount={loadedCount}
         />
       ))}
     </div>

@@ -11,7 +11,7 @@
 !.env.example
 /data
 uploads
-apps/web/test-results
+apps/web/test-results*
 apps/web/playwright-report
 apps/web/e2e/.auth
 docs

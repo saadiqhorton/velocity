@@ -1,4 +1,4 @@
-import { expect, test } from './support/fixtures';
+import { expect, graphqlAs, test } from './support/fixtures';
 
 async function switchThemeFromPalette(page: import('@playwright/test').Page): Promise<void> {
   await page.keyboard.press('Control+k');
@@ -11,6 +11,12 @@ async function switchThemeFromPalette(page: import('@playwright/test').Page): Pr
 }
 
 test.describe('theme', () => {
+  // Switching the theme saves an explicit preference on the shared owner's profile, which then
+  // overrides the browser's color scheme for every later spec (and the other browser project).
+  test.afterEach(async ({ page }) => {
+    await graphqlAs(page, 'mutation { updateProfile(input: { theme: system }) { id } }');
+  });
+
   test('account theme switch persists after reload', async ({ page }) => {
     await page.goto('/team/ENG/active');
     const html = page.locator('html');

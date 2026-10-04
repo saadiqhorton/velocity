@@ -123,6 +123,15 @@ export const test = base.extend<Fixtures>({
 
 export { expect };
 
+/** Calls the API as the page's signed-in user (session cookie + CSRF header), for test setup/cleanup. */
+export async function graphqlAs(page: Page, query: string, variables: Record<string, unknown> = {}): Promise<Record<string, unknown>> {
+  const csrf = (await page.context().cookies()).find((c) => c.name === 'vel_csrf')?.value ?? '';
+  const res = await page.request.post('/graphql', { data: { query, variables }, headers: { 'x-csrf-token': csrf } });
+  const body = (await res.json()) as { data?: Record<string, unknown>; errors?: { message: string }[] };
+  expect(body.errors, `GraphQL errors for ${query}`).toBeUndefined();
+  return body.data ?? {};
+}
+
 /** Unique, human-readable title so specs never collide with each other's issues. */
 export function uniqueTitle(prefix: string): string {
   return `${prefix} ${Date.now().toString(36)}${Math.floor(Math.random() * 1296).toString(36)}`;
