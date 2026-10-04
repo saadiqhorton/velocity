@@ -1,0 +1,28 @@
+{
+  "action": "added",
+  "installation": {
+    "id": 5150,
+    "node_id": "MDIzOkludGVncmF0aW9uSW5zdGFsbGF0aW9uNDI0Mg==",
+    "account": {
+      "login": "globex",
+      "id": 9200,
+      "type": "Organization"
+    },
+    "repository_selection": "selected"
+  },
+  "repository_selection": "selected",
+  "repositories_added": [
+    {
+      "id": 3,
+      "name": "docs",
+      "full_name": "globex/docs",
+      "private": false
+    }
+  ],
+  "repositories_removed": [],
+  "sender": {
+    "login": "globex-admin",
+    "id": 9201,
+    "type": "User"
+  }
+}

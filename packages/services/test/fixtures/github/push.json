@@ -1,0 +1,62 @@
+{
+  "ref": "refs/heads/main",
+  "before": "a10867b14bb761a232cd80139fbd4c0d33264240",
+  "after": "9f3c1d0e7b6a5d4c3b2a19087f6e5d4c3b2a1908",
+  "created": false,
+  "deleted": false,
+  "forced": false,
+  "commits": [
+    {
+      "id": "9f3c1d0e7b6a5d4c3b2a19087f6e5d4c3b2a1908",
+      "tree_id": "b1",
+      "distinct": true,
+      "message": "Fixes ENG-1: guard redirect with a visited set\n\nSigned-off-by: Octo Dev",
+      "timestamp": "2026-09-30T08:00:00Z",
+      "url": "https://github.com/acme/web/commit/9f3c1d0e7b6a5d4c3b2a19087f6e5d4c3b2a1908",
+      "author": {
+        "name": "Octo Dev",
+        "email": "octo@example.com",
+        "username": "octo-dev"
+      }
+    },
+    {
+      "id": "2b4d6f8a0c1e3a5b7d9f10213243546576879809",
+      "tree_id": "b2",
+      "distinct": true,
+      "message": "refactor: tidy imports",
+      "timestamp": "2026-09-30T08:05:00Z",
+      "url": "https://github.com/acme/web/commit/2b4d6f8a0c1e3a5b7d9f10213243546576879809",
+      "author": {
+        "name": "Octo Dev",
+        "email": "octo@example.com",
+        "username": "octo-dev"
+      }
+    }
+  ],
+  "repository": {
+    "id": 584120311,
+    "node_id": "R_kgDOIsGq9w",
+    "name": "web",
+    "full_name": "acme/web",
+    "private": true,
+    "owner": {
+      "login": "acme",
+      "id": 9100,
+      "type": "Organization"
+    },
+    "html_url": "https://github.com/acme/web",
+    "default_branch": "main"
+  },
+  "pusher": {
+    "name": "octo-dev"
+  },
+  "sender": {
+    "login": "octo-dev",
+    "id": 4412,
+    "type": "User"
+  },
+  "installation": {
+    "id": 4242,
+    "node_id": "MDIzOkludGVncmF0aW9uSW5zdGFsbGF0aW9uNDI0Mg=="
+  }
+}

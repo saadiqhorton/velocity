@@ -1,0 +1,33 @@
+{
+  "action": "created",
+  "installation": {
+    "id": 5150,
+    "node_id": "MDIzOkludGVncmF0aW9uSW5zdGFsbGF0aW9uNDI0Mg==",
+    "account": {
+      "login": "globex",
+      "id": 9200,
+      "type": "Organization"
+    },
+    "repository_selection": "selected",
+    "app_slug": "velocity-test"
+  },
+  "repositories": [
+    {
+      "id": 1,
+      "name": "api",
+      "full_name": "globex/api",
+      "private": true
+    },
+    {
+      "id": 2,
+      "name": "web",
+      "full_name": "globex/web",
+      "private": false
+    }
+  ],
+  "sender": {
+    "login": "globex-admin",
+    "id": 9201,
+    "type": "User"
+  }
+}

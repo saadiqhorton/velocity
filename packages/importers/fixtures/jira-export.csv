@@ -1,0 +1,23 @@
+Summary,Issue key,Issue id,Issue Type,Status,Project key,Project name,Priority,Assignee,Reporter,Creator,Created,Updated,Resolved,Description,Labels,Labels,Sprint,Sprint,Custom field (Story Points),Comment,Comment,Parent,Inward issue link (Blocks),Outward issue link (Blocks),Outward issue link (Relates),Outward issue link (Duplicate),Watchers,Watchers
+Set up project skeleton,WEB-1,10001,Epic,Done,WEB,Website,High,Ann Lee,Bo Kim,Bo Kim,01/Mar/24 9:00 AM,10/Mar/24 5:00 PM,10/Mar/24 5:00 PM,"h2. Goal
+Create the *skeleton*.",infra,setup,Sprint 1,,8,12/Mar/24 3:45 PM;ann.lee;Looks good; shipping it.,13/Mar/24 10:00 AM;bo.kim;Thanks,,,,,,ann,bo
+Build login form,WEB-2,10002,Story,In Progress,WEB,Website,Highest,Bo Kim,Ann Lee,,02/Mar/24 10:00 AM,12/Mar/24 1:00 PM,,"Form with ""validation"", commas, and
+newlines.",frontend,,Sprint 1,Sprint 2,5.4,,,10001,WEB-3,,WEB-4,,,
+Set up auth backend,WEB-3,10003,Task,To Do,WEB,Website,Medium,Ann Lee,Ann Lee,,03/Mar/24 11:00 AM,03/Mar/24 11:00 AM,,,backend,security,Sprint 2,,3,,,WEB-1,,WEB-2,,,,
+Fix 500 on signup,WEB-4,10004,Bug,Resolved,WEB,Website,Low,Bo Kim,Ann Lee,,04/Mar/24 2:15 PM,08/Mar/24 4:00 PM,08/Mar/24 4:00 PM,,backend,,Sprint 1,,2,,,,,,WEB-2,WEB-5,,
+Signup error (dup),WEB-5,10005,Bug,Closed,WEB,Website,Lowest,,Ann Lee,,05/Mar/24 8:00 AM,06/Mar/24 8:00 AM,06/Mar/24 8:00 AM,,,,,,,,,,,,,,,
+Landing page copy,WEB-6,10006,Story,Backlog,WEB,Website,,,Bo Kim,,06/Mar/24 8:00 AM,06/Mar/24 8:00 AM,,,,,,,99,,,,,,,,,
+Subtask: wire up button,WEB-7,10007,Sub-task,In Review,WEB,Website,Medium,Ann Lee,Bo Kim,,07/Mar/24 8:00 AM,09/Mar/24 8:00 AM,,,frontend,,,,,,,10002,,,,,,
+Odd workflow state,WEB-8,10008,Task,Awaiting vendor,WEB,Website,Major,,Bo Kim,,07/Mar/24 9:00 AM,09/Mar/24 9:00 AM,,,,,,,,,,,,,,,,
+API task 9,API-1,20009,Task,To Do,API,Public API,High,Cy Park,Cy Park,,09/Mar/24 9:30 AM,10/Mar/24 9:30 AM,,,api,,API Sprint A,,1,,,,,,,,,
+API task 10,API-2,200010,Bug,In Progress,API,Public API,Medium,Cy Park,Cy Park,,10/Mar/24 9:30 AM,11/Mar/24 9:30 AM,,,api,,API Sprint A,,2,,,,,,,,,
+API task 11,API-3,200011,Task,Done,API,Public API,Low,Cy Park,Cy Park,,11/Mar/24 9:30 AM,12/Mar/24 9:30 AM,12/Mar/24 9:30 AM,,api,,API Sprint A,,3,,,,,,,,,
+API task 12,API-4,200012,Bug,Won't Do,API,Public API,Highest,Cy Park,Cy Park,,12/Mar/24 9:30 AM,13/Mar/24 9:30 AM,13/Mar/24 9:30 AM,,api,,API Sprint B,,4,,,,,,,,,
+API task 13,API-5,200013,Task,Selected for Development,API,Public API,Lowest,Cy Park,Cy Park,,13/Mar/24 9:30 AM,14/Mar/24 9:30 AM,,,api,,API Sprint B,,5,,,,,,,,,
+Webhook delivery,API-6,20014,Story,In Progress,API,Public API,High,Cy Park,,,15/Mar/24 9:30 AM,16/Mar/24 9:30 AM,,,,,,,,2024-03-16T10:00:00Z;cy.park;ISO dated comment,no date here just text,API-1,,,,,,
+Docs refresh,DOC-1,30001,Task,To Do,DOC,Docs,Medium,,Ann Lee,,16/Mar/24 9:30 AM,16/Mar/24 9:30 AM,,,,,,,,,,99999,,,,,,
+Docs review,DOC-2,30002,Task,In Progress,DOC,Docs,Medium,,Ann Lee,,16/Mar/24 10:30 AM,17/Mar/24 9:30 AM,,,,,,,,,,,,,,,,
+Docs publish,DOC-3,30003,Task,Done,DOC,Docs,Medium,,Ann Lee,,16/Mar/24 11:30 AM,17/Mar/24 9:30 AM,17/Mar/24 9:30 AM,,,,,,,,,,,,DOC-1,,,
+,DOC-4,,,To Do,,,,,,,,,,,,,,,,,,,,,,,,
+No key row,,,,To Do,,,,,,,,,,,,,,,,,,,,,,,,
+Last row with unlinked ref,DOC-5,30005,Task,To Do,DOC,Docs,Medium,,,,18/Mar/24 9:30 AM,18/Mar/24 9:30 AM,,,,,,,,,,,,NOPE-1,,,,

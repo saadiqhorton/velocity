@@ -1,0 +1,21 @@
+{
+  "name": "@velocity/tokens",
+  "version": "1.0.0",
+  "private": true,
+  "license": "AGPL-3.0-or-later",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./tokens.css": "./dist/tokens.css"
+  },
+  "scripts": {
+    "generate": "tsx scripts/generate-ads.ts",
+    "build": "tsx scripts/build-css.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@atlaskit/tokens": "20.2.0",
+    "tsx": "^4.23.15"
+  }
+}

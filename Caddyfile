@@ -1,0 +1,34 @@
+# Velocity reverse proxy.
+#
+# CADDY_DOMAIN unset      -> plain HTTP on :80 (http://localhost), no TLS.
+# CADDY_DOMAIN=velocity.example.com -> Caddy obtains and renews a Let's Encrypt
+#                           certificate automatically (ports 80 and 443 must be
+#                           reachable from the internet; DNS must point here).
+{$CADDY_DOMAIN::80} {
+	encode zstd gzip
+
+	# 25 MB default upload limit (MAX_UPLOAD_MB) plus multipart overhead.
+	# Raise this together with MAX_UPLOAD_MB.
+	request_body {
+		max_size 26MB
+	}
+
+	header {
+		# Only sent by Caddy over TLS-enabled sites; browsers ignore it on HTTP.
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		X-Frame-Options "DENY"
+		-Server
+		# No Content-Security-Policy here: the app sets a per-response,
+		# nonce-based CSP itself.
+	}
+
+	# WebSocket upgrades (graphql-ws on /graphql) pass through reverse_proxy
+	# automatically. flush_interval -1 disables buffering for subscriptions/SSE.
+	reverse_proxy app:3000 {
+		flush_interval -1
+		health_uri /healthz
+		health_interval 15s
+	}
+}

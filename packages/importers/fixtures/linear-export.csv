@@ -1,0 +1,35 @@
+ID,Team,Title,Description,Status,Estimate,Priority,Project ID,Project,Creator,Assignee,Labels,Cycle Number,Cycle Name,Cycle Start,Cycle End,Created,Updated,Started,Triaged,Completed,Canceled,Archived,Due Date,Parent issue,Project Milestone ID,Project Milestone,Related to,Blocked by,Duplicate of,Extra Column
+ENG-1,Engineering,Set up CI pipeline,"Use GitHub Actions.
+
+Steps:
+1. lint
+2. test",Done,3,High,p-1,Platform,Alice Chen,Bob Martin,"Feature, Performance",1,Sprint Alpha,Mon Mar 04 2024 00:00:00 GMT+0000 (Coordinated Universal Time),Mon Mar 18 2024 00:00:00 GMT+0000 (Coordinated Universal Time),2024-03-01T10:00:00.000Z,2024-03-05T10:00:00.000Z,,,2024-03-05T10:00:00.000Z,,,,,m-1,Beta,,,,
+ENG-2,Engineering,"Login page ""flicker"" bug","Flickers, then redirects.",In Progress,2,Urgent,p-1,Platform,Bob Martin,Alice Chen,Bug,1,Sprint Alpha,Mon Mar 04 2024 00:00:00 GMT+0000 (Coordinated Universal Time),Mon Mar 18 2024 00:00:00 GMT+0000 (Coordinated Universal Time),2024-03-02T10:00:00.000Z,2024-03-06T10:00:00.000Z,2024-03-03T10:00:00.000Z,,,,,,,m-1,Beta,ENG-3,ENG-1,,
+ENG-3,Engineering,Rate limit API,,Todo,5,Medium,p-1,Platform,Alice Chen,,"Security, Feature",,,,,2024-03-02T10:00:00.000Z,2024-03-02T10:00:00.000Z,,,,,,,,,,ENG-2,,,
+ENG-4,Engineering,Sub-task: write rate limit tests,Cover burst traffic,Backlog,,Low,,,Alice Chen,carol@example.com,Improvement,,,,,2024-03-03T10:00:00.000Z,2024-03-03T10:00:00.000Z,,,,,,,ENG-3,,,,,,
+ENG-5,Engineering,Sub-sub-task: burst test,,Backlog,,No priority,,,Alice Chen,,,,,,,2024-03-03T10:00:00.000Z,2024-03-03T10:00:00.000Z,,,,,,,ENG-4,,,,,,
+ENG-6,Engineering,Duplicate of login bug,,Canceled,,Urgent,,,Bob Martin,,Bug,,,,,2024-03-04T10:00:00.000Z,2024-03-05T10:00:00.000Z,,,,2024-03-05T10:00:00.000Z,,,,,,,,ENG-2,
+ENG-7,Engineering,Cache invalidation,"Edge: comma, ""quotes"", and
+CRLF newline",In Review,100,High,,,Bob Martin,Bob Martin,Performance,2,,2024-03-18T00:00:00.000Z,2024-04-01T00:00:00.000Z,2024-03-06T10:00:00.000Z,2024-03-07T10:00:00.000Z,,,,,,,,,,,,,ignored
+ENG-8,Engineering,Archived chore,,Done,,Low,,,Alice Chen,,,,,,,2024-03-01T10:00:00.000Z,2024-03-02T10:00:00.000Z,,,2024-03-02T10:00:00.000Z,,2024-03-09T10:00:00.000Z,,,,,,,,
+ENG-9,Engineering,Weird status,,Waiting on legal,,Medium,,,Alice Chen,,,,,,,2024-03-07T10:00:00.000Z,2024-03-07T10:00:00.000Z,,,,,,,,,,,,,
+ENG-10,Engineering,Unknown priority,,Todo,,Super,,,Alice Chen,,,,,,,2024-03-07T10:00:00.000Z,2024-03-07T10:00:00.000Z,,,,,,,ENG-999,,,,ENG-998,,
+DES-1,Design,New logo,Explore **3** options,Done,8,Medium,p-2,Brand,Dana Lee,Dana Lee,Design,,,,,2024-03-01T10:00:00.000Z,2024-03-08T10:00:00.000Z,,,2024-03-08T10:00:00.000Z,,,,,,,,,,
+DES-2,Design,Landing page mockups,,In Progress,5,High,p-2,Brand,Dana Lee,Alice Chen,"Design, Feature",1,Design Sprint 1,Mon Mar 04 2024 00:00:00 GMT+0000 (Coordinated Universal Time),Mon Mar 18 2024 00:00:00 GMT+0000 (Coordinated Universal Time),2024-03-03T10:00:00.000Z,2024-03-09T10:00:00.000Z,2024-03-04T10:00:00.000Z,,,,,,,,,,DES-1,,
+DES-3,Design,Icon set,,Todo,,Low,p-2,Brand,Dana Lee,,Design,,,,,2024-03-03T10:00:00.000Z,2024-03-03T10:00:00.000Z,,,,,,,DES-2,,,,,,
+DES-4,Design,Typography audit,,Backlog,,No priority,,,Dana Lee,,,,,,,2024-03-03T10:00:00.000Z,2024-03-03T10:00:00.000Z,,,,,,,,,,,,,
+DES-5,Design,Dark mode palette,,In Review,3,Medium,,,Dana Lee,Bob Martin,"Design, Improvement",,,,,2024-03-05T10:00:00.000Z,2024-03-09T10:00:00.000Z,,,,,,,,,,,,,
+OPS-1,Operations,Rotate API keys,,Todo,1,Urgent,,,Erin Wu,Erin Wu,Security,,,,,2024-03-02T10:00:00.000Z,2024-03-02T10:00:00.000Z,,,,,,2024-04-01,,,,,,,
+OPS-2,Operations,Backup restore drill,,Backlog,5,Medium,,,Erin Wu,,Improvement,,,,,2024-03-02T10:00:00.000Z,2024-03-02T10:00:00.000Z,,,,,,,,,,"OPS-1, ENG-3",,,
+OPS-3,Operations,Upgrade Postgres,"Plan:
+
+- dump
+- upgrade
+- verify",In Progress,13,High,p-3,Infra,Erin Wu,Bob Martin,"Performance, Security, Improvement",1,Ops Cycle,Mon Mar 04 2024 00:00:00 GMT+0000 (Coordinated Universal Time),Mon Mar 18 2024 00:00:00 GMT+0000 (Coordinated Universal Time),2024-03-03T10:00:00.000Z,2024-03-09T10:00:00.000Z,2024-03-06T10:00:00.000Z,,,,,,,m-3,Q2 upgrade,,,,
+OPS-4,Operations,Pre-upgrade snapshot,,Done,1,Medium,p-3,Infra,Erin Wu,Erin Wu,,,,,,2024-03-03T10:00:00.000Z,2024-03-05T10:00:00.000Z,,,2024-03-05T10:00:00.000Z,,,,OPS-3,,,,,,
+OPS-5,Operations,Post-upgrade verification,,Todo,,Medium,p-3,Infra,Erin Wu,,,,,,,2024-03-03T10:00:00.000Z,2024-03-03T10:00:00.000Z,,,,,,,OPS-3,,,,OPS-3,,
+OPS-6,Operations,Unicode: café ☕ 日本語,,Todo,,Low,,,Erin Wu,,,,,,,2024-03-08T10:00:00.000Z,2024-03-08T10:00:00.000Z,,,,,,,,,,,,,
+,Operations,Row with missing ID,,Todo,,,,,,,,,,,,,,,,,,,,,,,,,,
+OPS-8,,Row with missing team,,Todo,,,,,,,,,,,,,,,,,,,,,,,,,,
+OPS-9,Operations,,,Todo,,,,,,,,,,,,,,,,,,,,,,,,,,
+ENG-1,Engineering,Duplicate row id,,Todo,,,,,,,,,,,,,,,,,,,,,,,,,,

@@ -1,0 +1,57 @@
+Velocity
+Copyright (C) 2026 The Velocity Authors
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU Affero General Public License as published by the Free
+Software Foundation, either version 3 of the License, or (at your option) any
+later version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License along
+with this program (see the LICENSE file). If not, see
+<https://www.gnu.org/licenses/>.
+
+Network use: if you modify Velocity and let users interact with it over a
+network, section 13 of the AGPL requires you to offer those users the
+corresponding source of your modified version.
+
+------------------------------------------------------------------------------
+Third-party attributions
+------------------------------------------------------------------------------
+
+Atlassian Design System tokens
+  Design token names and values are derived from @atlaskit/tokens
+  (https://atlassian.design/), (C) Atlassian Pty Ltd, licensed under the
+  Apache License, Version 2.0 (https://www.apache.org/licenses/LICENSE-2.0).
+  Velocity uses the openly published tokens only; it is not affiliated with or
+  endorsed by Atlassian, and does not use Atlassian logos or trademarks.
+
+Font Awesome Free
+  Icons are from Font Awesome Free (https://fontawesome.com/), (C) Fonticons,
+  Inc. Icon artwork is licensed under CC BY 4.0
+  (https://creativecommons.org/licenses/by/4.0/); any Font Awesome code is
+  licensed under the MIT License.
+
+Inter
+  The Inter typeface (https://rsms.me/inter/), Copyright (c) The Inter Project
+  Authors, is licensed under the SIL Open Font License, Version 1.1
+  (https://openfontlicense.org/).
+
+Other dependencies
+  Velocity depends on many open-source npm packages, each under its own
+  license. Run `pnpm licenses list` for the complete inventory.
+
+------------------------------------------------------------------------------
+Clean-room statement
+------------------------------------------------------------------------------
+
+Velocity contains no code and no assets from Linear (Linear Orbit, Inc.). It
+was written clean-room from publicly documented behavior and general knowledge
+of issue trackers. It uses no Linear logo, wordmark, copy, illustration or
+screenshot, and loads nothing from Linear-owned hosts. References to Linear in
+documentation and in the importer are nominative fair use ("a Linear
+alternative", "import from Linear"). "Linear" is a trademark of its owner;
+Velocity is not affiliated with or endorsed by it.

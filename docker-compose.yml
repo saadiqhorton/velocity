@@ -1,0 +1,121 @@
+# Velocity - docker compose stack.
+#   Default:   caddy + app + postgres            docker compose up -d
+#   Workers:   + worker (profile "scale")        docker compose --profile scale up -d
+#   Antivirus: + clamav (profile "clamav")       docker compose --profile clamav up -d
+#              and set CLAMAV_HOST=clamav in .env (see docs/self-hosting.md)
+# Copy .env.example to .env first.
+
+x-app-common: &app-common
+  build:
+    context: .
+    args:
+      VERSION: ${VELOCITY_VERSION:-dev}
+  image: ${VELOCITY_IMAGE:-ghcr.io/velocity-app/velocity:latest}
+  env_file: .env
+  user: "10001:10001"
+  read_only: true
+  tmpfs:
+    - /tmp
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+  restart: unless-stopped
+  volumes:
+    - app_data:/data
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      CADDY_DOMAIN: ${CADDY_DOMAIN:-:80}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      app:
+        condition: service_healthy
+
+  app:
+    <<: *app-common
+    environment:
+      # DATABASE_URL is derived from POSTGRES_PASSWORD so a copied .env just works.
+      # Set DATABASE_URL in .env to point at an external Postgres instead.
+      DATABASE_URL: ${DATABASE_URL:-postgres://velocity:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/velocity}
+      VELOCITY_ROLE: ${VELOCITY_ROLE:-all}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: velocity
+      POSTGRES_DB: velocity
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U velocity -d velocity"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # --- Optional: profile "scale" -------------------------------------------
+  # Extra background-job worker (same image, no HTTP port). pg-boss supports
+  # multiple pollers safely. Run alongside `app`.
+  worker:
+    <<: *app-common
+    profiles: ["scale"]
+    # Same image as `app`; do not build twice.
+    build: !reset null
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgres://velocity:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/velocity}
+      VELOCITY_ROLE: worker
+      # The worker must not run migrations ahead of `app`; it starts after app is healthy.
+    depends_on:
+      app:
+        condition: service_healthy
+    healthcheck:
+      disable: true
+
+  # --- Optional: profile "clamav" ------------------------------------------
+  # Upload virus scanning. Also set CLAMAV_HOST=clamav (and optionally
+  # CLAMAV_PORT=3310) in .env, then restart `app`.
+  clamav:
+    image: clamav/clamav:stable
+    profiles: ["clamav"]
+    restart: unless-stopped
+    volumes:
+      - clamav_db:/var/lib/clamav
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/clamdcheck.sh"]
+      interval: 60s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+
+volumes:
+  app_data:
+  pg_data:
+  caddy_data:
+  caddy_config:
+  clamav_db:

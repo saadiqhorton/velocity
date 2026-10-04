@@ -1,0 +1,30 @@
+{
+  "name": "@velocity/schema",
+  "version": "1.0.0",
+  "private": true,
+  "license": "AGPL-3.0-or-later",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./filter-ast": "./src/filter-ast.ts",
+    "./import-bundle": "./src/import-bundle.ts",
+    "./migrate": "./src/migrate.ts",
+    "./migrations/*": "./migrations/*",
+    "./enums": "./src/enums.ts"
+  },
+  "scripts": {
+    "db:generate": "drizzle-kit generate",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.45.3",
+    "zod": "^4.6.5",
+    "uuid": "^14.0.2",
+    "pg": "^8.23.1"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.31.11",
+    "@types/pg": "^8.23.1"
+  }
+}

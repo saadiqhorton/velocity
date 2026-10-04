@@ -1,0 +1,446 @@
+{
+  "teams": {
+    "data": {
+      "teams": {
+        "nodes": [
+          {
+            "id": "t-eng",
+            "key": "ENG",
+            "name": "Engineering",
+            "states": {
+              "nodes": [
+                {
+                  "name": "Backlog",
+                  "type": "backlog"
+                },
+                {
+                  "name": "Todo",
+                  "type": "unstarted"
+                },
+                {
+                  "name": "In Progress",
+                  "type": "started"
+                },
+                {
+                  "name": "Done",
+                  "type": "completed"
+                },
+                {
+                  "name": "Canceled",
+                  "type": "canceled"
+                },
+                {
+                  "name": "Triage",
+                  "type": "triage"
+                }
+              ]
+            }
+          },
+          {
+            "id": "t-des",
+            "key": "DES",
+            "name": "Design",
+            "states": {
+              "nodes": [
+                {
+                  "name": "Todo",
+                  "type": "unstarted"
+                },
+                {
+                  "name": "Done",
+                  "type": "completed"
+                }
+              ]
+            }
+          }
+        ],
+        "pageInfo": {
+          "hasNextPage": false,
+          "endCursor": null
+        }
+      }
+    }
+  },
+  "users": {
+    "data": {
+      "users": {
+        "nodes": [
+          {
+            "id": "u1",
+            "name": "Alice Chen",
+            "email": "alice@example.com",
+            "displayName": "alice"
+          },
+          {
+            "id": "u2",
+            "name": "Bob Martin",
+            "email": "bob@example.com",
+            "displayName": "bob"
+          }
+        ],
+        "pageInfo": {
+          "hasNextPage": false,
+          "endCursor": null
+        }
+      }
+    }
+  },
+  "issueLabels": {
+    "data": {
+      "issueLabels": {
+        "nodes": [
+          {
+            "name": "Bug",
+            "parent": null
+          },
+          {
+            "name": "Frontend",
+            "parent": {
+              "name": "Area"
+            }
+          }
+        ],
+        "pageInfo": {
+          "hasNextPage": false,
+          "endCursor": null
+        }
+      }
+    }
+  },
+  "projects": {
+    "data": {
+      "projects": {
+        "nodes": [
+          {
+            "id": "p1",
+            "name": "Platform",
+            "description": "Core platform",
+            "state": "started",
+            "targetDate": "2024-06-01",
+            "lead": {
+              "id": "u1"
+            },
+            "projectMilestones": {
+              "nodes": [
+                {
+                  "id": "m1",
+                  "name": "Beta",
+                  "targetDate": "2024-05-01"
+                }
+              ]
+            }
+          }
+        ],
+        "pageInfo": {
+          "hasNextPage": false,
+          "endCursor": null
+        }
+      }
+    }
+  },
+  "cycles": {
+    "data": {
+      "cycles": {
+        "nodes": [
+          {
+            "id": "c1",
+            "number": 1,
+            "name": "Sprint 1",
+            "startsAt": "2024-03-04T00:00:00.000Z",
+            "endsAt": "2024-03-18T00:00:00.000Z",
+            "team": {
+              "id": "t-eng"
+            }
+          }
+        ],
+        "pageInfo": {
+          "hasNextPage": false,
+          "endCursor": null
+        }
+      }
+    }
+  },
+  "issues-page1": {
+    "data": {
+      "issues": {
+        "nodes": [
+          {
+            "id": "i1",
+            "identifier": "ENG-1",
+            "title": "Title ENG-1",
+            "description": "Desc ENG-1",
+            "priority": 1,
+            "estimate": 3,
+            "state": {
+              "name": "In Progress",
+              "type": "started"
+            },
+            "team": {
+              "id": "t-eng"
+            },
+            "assignee": {
+              "id": "u2"
+            },
+            "creator": {
+              "id": "u1"
+            },
+            "labels": {
+              "nodes": [
+                {
+                  "name": "Bug"
+                }
+              ]
+            },
+            "project": {
+              "id": "p1"
+            },
+            "projectMilestone": {
+              "id": "m1"
+            },
+            "cycle": {
+              "id": "c1"
+            },
+            "parent": null,
+            "relations": {
+              "nodes": [
+                {
+                  "type": "blocks",
+                  "relatedIssue": {
+                    "identifier": "ENG-2"
+                  }
+                },
+                {
+                  "type": "related",
+                  "relatedIssue": {
+                    "identifier": "DES-1"
+                  }
+                }
+              ]
+            },
+            "comments": {
+              "nodes": [
+                {
+                  "body": "Looking",
+                  "createdAt": "2024-03-03T10:00:00.000Z",
+                  "user": {
+                    "id": "u2",
+                    "name": "Bob Martin"
+                  }
+                }
+              ]
+            },
+            "attachments": {
+              "nodes": [
+                {
+                  "title": "Spec",
+                  "url": "https://example.com/spec"
+                }
+              ]
+            },
+            "createdAt": "2024-03-01T10:00:00.000Z",
+            "updatedAt": "2024-03-02T10:00:00.000Z",
+            "completedAt": null,
+            "canceledAt": null,
+            "archivedAt": null
+          },
+          {
+            "id": "i2",
+            "identifier": "ENG-2",
+            "title": "Title ENG-2",
+            "description": "Desc ENG-2",
+            "priority": 0,
+            "estimate": null,
+            "state": {
+              "name": "Todo",
+              "type": "unstarted"
+            },
+            "team": {
+              "id": "t-eng"
+            },
+            "assignee": null,
+            "creator": {
+              "id": "u1"
+            },
+            "labels": {
+              "nodes": []
+            },
+            "project": null,
+            "projectMilestone": null,
+            "cycle": null,
+            "parent": {
+              "identifier": "ENG-1"
+            },
+            "relations": {
+              "nodes": [
+                {
+                  "type": "duplicate",
+                  "relatedIssue": {
+                    "identifier": "ENG-3"
+                  }
+                }
+              ]
+            },
+            "comments": {
+              "nodes": []
+            },
+            "attachments": {
+              "nodes": []
+            },
+            "createdAt": "2024-03-01T10:00:00.000Z",
+            "updatedAt": "2024-03-02T10:00:00.000Z",
+            "completedAt": null,
+            "canceledAt": null,
+            "archivedAt": null
+          }
+        ],
+        "pageInfo": {
+          "hasNextPage": true,
+          "endCursor": "cursor-1"
+        }
+      }
+    }
+  },
+  "issues-page2": {
+    "data": {
+      "issues": {
+        "nodes": [
+          {
+            "id": "i3",
+            "identifier": "ENG-3",
+            "title": "Title ENG-3",
+            "description": "Desc ENG-3",
+            "priority": 2,
+            "estimate": 100,
+            "state": {
+              "name": "Done",
+              "type": "completed"
+            },
+            "team": {
+              "id": "t-eng"
+            },
+            "assignee": null,
+            "creator": {
+              "id": "u1"
+            },
+            "labels": {
+              "nodes": [
+                {
+                  "name": "Frontend"
+                }
+              ]
+            },
+            "project": null,
+            "projectMilestone": null,
+            "cycle": null,
+            "parent": null,
+            "relations": {
+              "nodes": []
+            },
+            "comments": {
+              "nodes": []
+            },
+            "attachments": {
+              "nodes": []
+            },
+            "createdAt": "2024-03-01T10:00:00.000Z",
+            "updatedAt": "2024-03-02T10:00:00.000Z",
+            "completedAt": "2024-03-05T10:00:00.000Z",
+            "canceledAt": null,
+            "archivedAt": null
+          },
+          {
+            "id": "i4",
+            "identifier": "DES-1",
+            "title": "Title DES-1",
+            "description": "Desc DES-1",
+            "priority": 3,
+            "estimate": null,
+            "state": {
+              "name": "Todo",
+              "type": "unstarted"
+            },
+            "team": {
+              "id": "t-des"
+            },
+            "assignee": null,
+            "creator": {
+              "id": "u1"
+            },
+            "labels": {
+              "nodes": []
+            },
+            "project": null,
+            "projectMilestone": null,
+            "cycle": null,
+            "parent": null,
+            "relations": {
+              "nodes": [
+                {
+                  "type": "related",
+                  "relatedIssue": {
+                    "identifier": "ENG-1"
+                  }
+                }
+              ]
+            },
+            "comments": {
+              "nodes": []
+            },
+            "attachments": {
+              "nodes": []
+            },
+            "createdAt": "2024-03-01T10:00:00.000Z",
+            "updatedAt": "2024-03-02T10:00:00.000Z",
+            "completedAt": null,
+            "canceledAt": null,
+            "archivedAt": "2024-03-09T00:00:00.000Z"
+          },
+          {
+            "id": "i5",
+            "identifier": "DES-2",
+            "title": "Title DES-2",
+            "description": "Desc DES-2",
+            "priority": 4,
+            "estimate": null,
+            "state": {
+              "name": "Done",
+              "type": "completed"
+            },
+            "team": {
+              "id": "t-des"
+            },
+            "assignee": null,
+            "creator": {
+              "id": "u1"
+            },
+            "labels": {
+              "nodes": []
+            },
+            "project": null,
+            "projectMilestone": null,
+            "cycle": null,
+            "parent": null,
+            "relations": {
+              "nodes": []
+            },
+            "comments": {
+              "nodes": []
+            },
+            "attachments": {
+              "nodes": []
+            },
+            "createdAt": "2024-03-01T10:00:00.000Z",
+            "updatedAt": "2024-03-02T10:00:00.000Z",
+            "completedAt": null,
+            "canceledAt": null,
+            "archivedAt": null
+          }
+        ],
+        "pageInfo": {
+          "hasNextPage": false,
+          "endCursor": null
+        }
+      }
+    }
+  }
+}

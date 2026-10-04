@@ -1,0 +1,124 @@
+/*
+ * Tailwind v4 theme → ADS tokens (SPEC §4.2). Components use ONLY these utilities
+ * (or var(--ds-*) in inline styles). Tailwind's default palette, radii and shadows are
+ * reset so raw colors are impossible to reach by accident.
+ *
+ * Usage in an app stylesheet:
+ *   @import "tailwindcss";
+ *   @import "@velocity/tokens/tokens.css";
+ *   @import "@velocity/ui/theme.css";
+ *   @source "../../../packages/ui/src";
+ */
+@theme inline {
+  --color-*: initial;
+  --color-transparent: transparent;
+  --color-current: currentColor;
+
+  --color-primary: var(--ds-color-primary);
+  --color-primary-hover: var(--ds-color-primary-hover);
+  --color-primary-subtle: var(--ds-color-primary-subtle);
+  --color-primary-subtle-hover: var(--ds-color-primary-subtle-hover);
+
+  --color-fg: var(--ds-color-text);
+  --color-fg-subtle: var(--ds-color-text-subtle);
+  --color-fg-subtlest: var(--ds-color-text-subtlest);
+  --color-fg-disabled: var(--ds-color-text-disabled);
+  --color-fg-inverse: var(--ds-color-text-inverse);
+  --color-fg-selected: var(--ds-color-text-selected);
+  --color-link: var(--ds-color-link);
+
+  --color-surface: var(--ds-color-surface);
+  --color-sunken: var(--ds-color-surface-sunken);
+  --color-raised: var(--ds-color-surface-raised);
+  --color-overlay: var(--ds-color-surface-overlay);
+  --color-hover: var(--ds-color-surface-hover);
+  --color-pressed: var(--ds-color-surface-pressed);
+
+  --color-border: var(--ds-color-border);
+  --color-border-input: var(--ds-color-border-input);
+  --color-border-selected: var(--ds-color-border-selected);
+  --color-focus: var(--ds-color-focus);
+
+  --color-danger: var(--ds-color-danger);
+  --color-danger-fg: var(--ds-color-danger-text);
+  --color-danger-subtle: var(--ds-color-danger-subtle);
+  --color-warning: var(--ds-color-warning);
+  --color-warning-fg: var(--ds-color-warning-text);
+  --color-warning-subtle: var(--ds-color-warning-subtle);
+  --color-success: var(--ds-color-success);
+  --color-success-fg: var(--ds-color-success-text);
+  --color-success-subtle: var(--ds-color-success-subtle);
+  --color-discovery: var(--ds-color-discovery);
+  --color-discovery-fg: var(--ds-color-discovery-text);
+  --color-discovery-subtle: var(--ds-color-discovery-subtle);
+  --color-information-subtle: var(--ds-color-information-subtle);
+
+  --color-blanket: var(--ds-color-blanket);
+  --color-input: var(--ds-color-input-bg);
+  --color-neutral: var(--ds-color-neutral);
+  --color-neutral-hover: var(--ds-color-neutral-hover);
+  --color-icon: var(--ds-color-icon);
+  --color-icon-subtle: var(--ds-color-icon-subtle);
+
+  /* 4px grid: p-1 = 4px, p-2 = 8px, h-8 = 32px, w-55 = 220px */
+  --spacing: 4px;
+
+  --font-sans: var(--ds-font-body);
+  --font-mono: var(--ds-font-code);
+
+  --text-*: initial;
+  --text-xs: var(--ds-font-size-100);
+  --text-xs--line-height: 16px;
+  --text-sm: var(--ds-font-size-200);
+  --text-sm--line-height: 16px;
+  --text-base: var(--ds-font-size-300);
+  --text-base--line-height: 20px;
+  --text-md: var(--ds-font-size-400);
+  --text-md--line-height: 24px;
+  --text-lg: var(--ds-font-size-500);
+  --text-lg--line-height: 24px;
+  --text-xl: var(--ds-font-size-600);
+  --text-xl--line-height: 28px;
+  --text-2xl: var(--ds-font-size-700);
+  --text-2xl--line-height: 32px;
+
+  --radius-*: initial;
+  --radius-sm: var(--ds-radius-4);
+  --radius-md: var(--ds-radius-8);
+  --radius-lg: var(--ds-radius-12);
+  --radius-full: var(--ds-radius-full);
+
+  --shadow-*: initial;
+  --shadow-card: var(--ds-shadow-card);
+  --shadow-overlay: var(--ds-shadow-overlay);
+
+  --blur-*: initial;
+  --drop-shadow-*: initial;
+}
+
+@layer base {
+  html {
+    font-family: var(--ds-font-body);
+    font-size: var(--ds-font-size-300);
+    line-height: 1.5;
+    color: var(--ds-color-text);
+    background: var(--ds-color-surface);
+    -webkit-font-smoothing: antialiased;
+  }
+  /* Focus ring: 2px focus color, 2px offset (SPEC §4.2.2). Never suppressed (SPEC §4.15). */
+  :focus-visible {
+    outline: 2px solid var(--ds-color-focus);
+    outline-offset: 2px;
+  }
+  ::selection {
+    background: var(--ds-color-primary-subtle-hover);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0ms !important;
+      transition-duration: 0ms !important;
+    }
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "name": "@velocity/graphql",
+  "version": "1.0.0",
+  "private": true,
+  "license": "AGPL-3.0-or-later",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./dsl": "./src/dsl/index.ts",
+    "./schema.graphql": "./schema.graphql"
+  },
+  "scripts": {
+    "print-schema": "tsx scripts/print-schema.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@velocity/schema": "workspace:*",
+    "@velocity/services": "workspace:*",
+    "@velocity/events": "workspace:*",
+    "@pothos/core": "^4.15.1",
+    "graphql": "^16.14.2",
+    "dataloader": "^2.2.3",
+    "zod": "^4.6.5",
+    "drizzle-orm": "^0.45.3",
+    "@graphql-yoga/subscription": "^5.1.1",
+    "pino": "^10.4.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.23.15",
+    "pg": "^8.23.1"
+  }
+}

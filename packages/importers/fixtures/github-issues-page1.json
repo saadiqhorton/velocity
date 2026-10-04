@@ -1,0 +1,112 @@
+[
+  {
+    "number": 1,
+    "title": "Issue 1",
+    "body": "Body 1",
+    "state": "open",
+    "state_reason": null,
+    "user": {
+      "login": "alice",
+      "id": 1
+    },
+    "assignee": {
+      "login": "bob",
+      "id": 1
+    },
+    "assignees": [
+      {
+        "login": "bob",
+        "id": 1
+      }
+    ],
+    "labels": [
+      {
+        "name": "bug",
+        "color": "ff0000"
+      }
+    ],
+    "milestone": {
+      "number": 1,
+      "title": "v1.0",
+      "due_on": "2024-04-01T00:00:00Z"
+    },
+    "comments": 2,
+    "created_at": "2024-03-01T10:00:00Z",
+    "updated_at": "2024-03-11T10:00:00Z",
+    "closed_at": null
+  },
+  {
+    "number": 2,
+    "title": "Issue 2",
+    "body": "Body 2",
+    "state": "closed",
+    "state_reason": "completed",
+    "user": {
+      "login": "alice",
+      "id": 1
+    },
+    "assignee": null,
+    "assignees": [],
+    "labels": [
+      {
+        "name": "feature",
+        "color": "ff0000"
+      }
+    ],
+    "milestone": null,
+    "comments": 0,
+    "created_at": "2024-03-02T10:00:00Z",
+    "updated_at": "2024-03-12T10:00:00Z",
+    "closed_at": "2024-03-22T10:00:00Z"
+  },
+  {
+    "number": 3,
+    "title": "Issue 3",
+    "body": "Body 3",
+    "state": "open",
+    "state_reason": null,
+    "user": {
+      "login": "alice",
+      "id": 1
+    },
+    "assignee": null,
+    "assignees": [],
+    "labels": [],
+    "milestone": null,
+    "comments": 0,
+    "created_at": "2024-03-03T10:00:00Z",
+    "updated_at": "2024-03-13T10:00:00Z",
+    "closed_at": null,
+    "pull_request": {
+      "url": "x"
+    }
+  },
+  {
+    "number": 4,
+    "title": "Issue 4",
+    "body": "Body 4",
+    "state": "closed",
+    "state_reason": "not_planned",
+    "user": {
+      "login": "alice",
+      "id": 1
+    },
+    "assignee": null,
+    "assignees": [],
+    "labels": [
+      {
+        "name": "wontfix",
+        "color": "ff0000"
+      },
+      {
+        "name": "bug",
+        "color": "ff0000"
+      }
+    ],
+    "milestone": null,
+    "comments": 0,
+    "created_at": "2024-03-04T10:00:00Z",
+    "updated_at": "2024-03-14T10:00:00Z",
+    "closed_at": "2024-03-24T10:00:00Z"
+  }
+]

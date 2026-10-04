@@ -1,0 +1,28 @@
+{
+  "name": "@velocity/mcp",
+  "version": "1.0.0",
+  "license": "AGPL-3.0-or-later",
+  "type": "module",
+  "description": "Velocity MCP server (stdio) — connect AI agents to your Velocity issue tracker",
+  "bin": {
+    "velocity-mcp": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "node build.mjs",
+    "dev": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@velocity/mcp-tools": "workspace:*",
+    "esbuild": "^0.28.2",
+    "tsx": "^4.23.15"
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "action": "opened",
+  "issue": {
+    "url": "https://api.github.com/repos/acme/web/issues/77",
+    "id": 2000077,
+    "number": 77,
+    "title": "Dark mode flickers on load",
+    "user": {
+      "login": "octo-dev",
+      "id": 4412,
+      "type": "User"
+    },
+    "labels": [
+      {
+        "id": 1,
+        "name": "bug",
+        "color": "d73a4a"
+      },
+      {
+        "id": 2,
+        "name": "Velocity",
+        "color": "0052cc"
+      }
+    ],
+    "state": "open",
+    "body": "Seen on **Safari** 18.\n\nRepro: reload twice.",
+    "html_url": "https://github.com/acme/web/issues/77",
+    "created_at": "2026-09-30T10:00:00Z",
+    "updated_at": "2026-09-30T10:00:00Z"
+  },
+  "repository": {
+    "id": 584120311,
+    "node_id": "R_kgDOIsGq9w",
+    "name": "web",
+    "full_name": "acme/web",
+    "private": true,
+    "owner": {
+      "login": "acme",
+      "id": 9100,
+      "type": "Organization"
+    },
+    "html_url": "https://github.com/acme/web",
+    "default_branch": "main"
+  },
+  "sender": {
+    "login": "octo-dev",
+    "id": 4412,
+    "type": "User"
+  },
+  "installation": {
+    "id": 4242,
+    "node_id": "MDIzOkludGVncmF0aW9uSW5zdGFsbGF0aW9uNDI0Mg=="
+  }
+}
