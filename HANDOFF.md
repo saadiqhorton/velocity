@@ -92,7 +92,8 @@ Gates (run before handing back):
 pnpm typecheck && pnpm test                     # Turbo, 13/13 tasks (Postgres must be up)
 pnpm exec eslint . && node scripts/check-hex.mjs && node scripts/check-legal.mjs && node --test scripts/*.test.mjs
 pnpm --filter @velocity/web build && node apps/web/scripts/bundle-size.mjs      # budget 350 KB gzip
-cd apps/web && E2E_SLOT=<n> npx playwright test --project=chromium             # 80 tests
+cd apps/web && E2E_SLOT=<n> npx playwright test --project=chromium --grep-invert @visual   # host: all but the visual spec
+apps/web/scripts/visual-docker.sh <n>                                           # visual spec in the Playwright image (see §5)
 apps/web/scripts/e2e-webkit-docker.sh <n>                                       # WebKit via Docker (see §5)
 docker build .                                                                  # full image incl. web
 ```
@@ -149,6 +150,7 @@ docker build .                                                                  
   - "Fetch API cannot load … access control checks" within 3 s of a navigation.
   - Every other CSP violation or page error fails the test.
 - **Visual baselines** (`e2e/0-visual.spec.ts`) are Chromium-only and unmasked except for times and dates. The `0-` prefix is load-bearing: the file must run first (name order, one worker) so the shell sees only the deterministic seed. Later specs add randomly named issues and teams. Only the design owner regenerates baselines (`docs/architecture.md`, "Design boundary and visual baselines").
+- **Visual baselines render only in the Playwright image.** Host fonts differ (e.g. Arch's monospace fallback shifts the identifier column), so regenerate and check baselines **only** with `apps/web/scripts/visual-docker.sh <slot> [--update]` (Chromium, `0-visual.spec.ts`, `mcr.microsoft.com/playwright:v1.63.0-noble`). CI's `visual` job runs the same image; the `e2e` job and host Chromium runs exclude the spec with `--grep-invert @visual`. Never use `--update-snapshots` on the host.
 - **Services:** `systemActor('import'|'github'|'system', userId?)` runs background work; imports suppress per-issue notifications and webhooks.
 
 ---

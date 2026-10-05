@@ -99,3 +99,23 @@ test('phone settings: the section menu replaces the hidden section list', async 
   await expect(page.getByTestId('settings-nav')).toBeVisible();
   await expect(page.getByTestId('settings-section-menu')).toBeHidden();
 });
+
+test('phone issue page: a failed detail chunk shows the inline retry, not the route error (G1)', async ({ newSession }) => {
+  const { page } = await newSession({ viewport: { width: 390, height: 844 } });
+  const chunk = '**/assets/IssueDetail-*.js';
+  await page.route(chunk, (route) => route.abort('internetdisconnected'));
+  await page.goto('/team/ENG/active');
+  const row = page.getByTestId('issue-row').first();
+  await expect(row).toBeVisible();
+  await row.click();
+  await expect(page).toHaveURL(/\/issue\/[^/]+$/);
+
+  await expect(page.getByText('Could not load the issue. Check your connection and try again.')).toBeVisible();
+  await expect(page.getByText('Could not load this page.', { exact: false })).toHaveCount(0);
+
+  // A retry that fails again stays inline. (Chromium caches a failed module fetch for the page's
+  // lifetime, so recovery after the network returns is covered by IssuePage.test.tsx, not here.)
+  await page.getByRole('button', { name: 'Try again' }).click();
+  await expect(page.getByText('Could not load the issue. Check your connection and try again.')).toBeVisible();
+  await expect(page.getByText('Could not load this page.', { exact: false })).toHaveCount(0);
+});

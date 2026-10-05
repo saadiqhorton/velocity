@@ -115,11 +115,13 @@ packages/ui components + apps/web/src/styles/app.css (@import tailwindcss, token
 - `apps/web/e2e/0-visual.spec.ts` snapshots the component gallery and the shell (`/team/ENG/active`) in both themes at 1440×900 and 1024×768, on Chromium only. The baselines are in `e2e/0-visual.spec.ts-snapshots/` and the tolerance is `maxDiffPixelRatio` 0.002.
 - The shell shots compare real content: the E2E seed runs `seed-cli --deterministic`, and the spec's `0-` prefix makes it the first file to run, before any spec adds randomly named data. Only relative times and absolute dates are masked, because they follow the run date.
 - Without approved baselines the spec skips. A normal run never writes baselines.
+- Font rasterization differs between hosts, so the baselines are captured and checked only inside the official Playwright image (`mcr.microsoft.com/playwright:v1.63.0-noble`, matching `@playwright/test`). CI's `visual` job runs the spec in that image; the `e2e` job runs everything else on ubuntu-latest with `--grep-invert @visual` (the spec is tagged `@visual`). Locally, `apps/web/scripts/visual-docker.sh <slot>` runs the spec in the same image; host runs use `--grep-invert @visual`.
 - To update after an intended visual change:
   1. Rebuild (`pnpm --filter @velocity/web build`).
-  2. Run `cd apps/web && E2E_SLOT=<n> npx playwright test visual --project=chromium --update-snapshots`.
+  2. Run `apps/web/scripts/visual-docker.sh <n> --update`. Never regenerate with a host Playwright run.
   3. Have the design owner look at every changed PNG before accepting it.
-  4. Confirm that a normal full Chromium run passes against the new baselines.
+  4. Run `apps/web/scripts/visual-docker.sh <n>` (no `--update`) and confirm it passes against the new baselines.
+  5. When Playwright is upgraded, bump the image tag in `apps/web/scripts/e2e-webkit-docker.sh` (which `visual-docker.sh` wraps), in `.github/workflows/ci.yml` (`visual` job) and here, then regenerate.
 
 ### Keyboard map
 

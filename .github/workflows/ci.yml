@@ -102,11 +102,58 @@ jobs:
       - run: pnpm turbo run build --filter=@velocity/server --filter=@velocity/web
       - name: Install Playwright browsers
         run: pnpm --filter @velocity/web exec playwright install --with-deps chromium webkit
-      - run: pnpm test:e2e
+      # The visual baselines run in the `visual` job (Playwright image); everything else runs here.
+      - run: pnpm --filter @velocity/web exec playwright test --grep-invert @visual
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: playwright-report
+          path: |
+            apps/web/playwright-report
+            apps/web/test-results
+          retention-days: 7
+
+  # Visual baselines (apps/web/e2e/0-visual.spec.ts, Chromium). They are captured locally with
+  # apps/web/scripts/visual-docker.sh in this same image, so fonts render identically here.
+  # Keep the tag in step with @playwright/test in apps/web/package.json.
+  visual:
+    runs-on: ubuntu-latest
+    needs: [lint, typecheck]
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: velocity
+          POSTGRES_PASSWORD: velocity
+          POSTGRES_DB: velocity
+        options: >-
+          --health-cmd "pg_isready -U velocity -d velocity"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # Inside a job container the service is reached by its label, not localhost.
+      DATABASE_URL: postgres://velocity:velocity@postgres:5432/velocity
+      TEST_DATABASE_URL: postgres://velocity:velocity@postgres:5432/velocity
+      APP_SECRET: ci-only-secret-ci-only-secret-ci-only-secret
+      APP_URL: http://localhost:3000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm turbo run build --filter=@velocity/server --filter=@velocity/web
+      # The image already contains the matching browsers; no `playwright install`.
+      - run: pnpm --filter @velocity/web exec playwright test e2e/0-visual.spec.ts --project=chromium
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-visual-report
           path: |
             apps/web/playwright-report
             apps/web/test-results

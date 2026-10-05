@@ -39,7 +39,7 @@ Tests that need a database read `TEST_DATABASE_URL`, for example
 | `pnpm lint` | ESLint + `check-hex` + `check-legal` |
 | `pnpm typecheck` | `tsc --noEmit` in every package |
 | `pnpm test` | unit and service tests (vitest) |
-| `pnpm test:e2e` | Playwright end-to-end tests |
+| `pnpm test:e2e` | Playwright end-to-end tests (add `--grep-invert @visual` on your host; the visual baselines run in Docker via `apps/web/scripts/visual-docker.sh <slot>`) |
 | `pnpm codegen` | GraphQL schema print + client codegen |
 | `pnpm db:generate` | new Drizzle migration after editing `packages/schema` |
 | `pnpm tokens` | regenerate ADS token CSS |

@@ -8,12 +8,14 @@
  *   cd apps/web
  *   npx playwright test --project=chromium     # setup (wizard) + seed + all specs
  *   npx playwright test --project=webkit
- *   npx playwright test visual --project=chromium --update-snapshots   # regenerate baselines
+ *   npx playwright test --project=chromium --grep-invert @visual       # host run; visual baselines need the Docker image:
+ *   scripts/visual-docker.sh <slot> [--update]                         # visual spec in the Playwright image (= CI `visual` job)
  *   npx playwright test keyboard-loop --project=chromium --headed      # debug one spec
  *   E2E_SLOT=3 npx playwright test bulk --project=chromium            # isolated parallel run (port 3230, db velocity_e2e_web_3)
  *
- * CI (`.github/workflows/ci.yml` job `e2e`): set CI=1 with DATABASE_URL, APP_URL
- * (http://localhost:3000) and APP_SECRET; the Postgres service database must be empty.
+ * CI (`.github/workflows/ci.yml` jobs `e2e` and `visual`): set CI=1 with DATABASE_URL, APP_URL
+ * (http://localhost:3000) and APP_SECRET; the Postgres service database must be empty. `e2e` runs
+ * everything but `@visual` on ubuntu-latest; `visual` runs 0-visual.spec.ts in the Playwright image.
  *
  * Project flow: `setup` (first-run wizard through the UI, saves e2e/.auth/owner.json)
  * -> `seed` (apps/server seed-cli, 400 issues, teams WEB/OPS, members, projects)

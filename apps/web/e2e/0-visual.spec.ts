@@ -1,7 +1,10 @@
 // Visual snapshots (WP9). Chromium only; the design owner generates and approves the baselines
 // (HANDOFF §0). Until baselines exist this spec skips, so it never fails CI (and a normal run never
-// writes unapproved baselines). Generate them explicitly with
-//   npx playwright test visual --project=chromium --update-snapshots      (or VISUAL_UPDATE=1)
+// writes unapproved baselines). Font rendering differs between hosts, so the baselines are captured
+// and checked only inside the Playwright image (CI job `visual`, tag `@visual`):
+//   apps/web/scripts/visual-docker.sh <slot> --update      # regenerate (design owner)
+//   apps/web/scripts/visual-docker.sh <slot>               # compare
+// Host runs skip this spec with `--grep-invert @visual`.
 //
 // The `0-` prefix is load-bearing: Playwright runs files in name order (one worker), so this spec
 // runs straight after setup + seed and the shell baseline sees only the deterministic seed. Every
@@ -41,7 +44,7 @@ async function maskTimes(page: import('@playwright/test').Page): Promise<import(
 // timestamps anchored to the run date) and this spec runs before any other (see the file name).
 // Only what still drifts is masked: relative times and dates.
 
-test.describe('visual snapshots', () => {
+test.describe('visual snapshots', { tag: '@visual' }, () => {
   test.skip(({ browserName }) => browserName !== 'chromium', 'Baselines are Chromium-only');
   // eslint-disable-next-line no-empty-pattern -- Playwright hooks must destructure their (empty) fixtures.
   test.beforeEach(({}, testInfo) => {
