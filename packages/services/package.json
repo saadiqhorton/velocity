@@ -13,23 +13,23 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@velocity/schema": "workspace:*",
+    "@date-fns/tz": "^1.4.1",
+    "@node-rs/argon2": "^2.2.1",
+    "@octokit/app": "^16.1.4",
+    "@octokit/rest": "^22.0.0",
+    "@octokit/webhooks": "^14.2.0",
     "@velocity/events": "workspace:*",
     "@velocity/importers": "workspace:*",
-    "drizzle-orm": "^0.45.3",
-    "pg": "^8.23.1",
-    "@node-rs/argon2": "^2.2.1",
-    "zod": "^4.6.5",
-    "uuid": "^14.0.2",
+    "@velocity/schema": "workspace:*",
     "date-fns": "^4.1.0",
-    "@date-fns/tz": "^1.4.1",
-    "pg-boss": "^12.36.0",
+    "drizzle-orm": "^0.45.3",
     "marked": "^18.0.14",
-    "@octokit/app": "^16.1.4",
-    "@octokit/webhooks": "^14.2.0",
-    "@octokit/rest": "^22.0.0",
-    "sharp": "^0.34.0",
-    "pino": "^10.4.0"
+    "pg": "^8.23.1",
+    "pg-boss": "^12.36.0",
+    "pino": "^10.4.0",
+    "sharp": "^0.35.5",
+    "uuid": "^14.0.2",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@types/pg": "^8.23.1"

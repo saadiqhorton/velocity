@@ -1,6 +1,7 @@
 export const WEB_DIR: string;
 export const REPO_DIR: string;
 export const SERVER_DIR: string;
+export const E2E_GITHUB_WEBHOOK_SECRET: string;
 export interface E2eEnv {
   inCi: boolean;
   appUrl: string;

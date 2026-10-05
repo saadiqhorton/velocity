@@ -7,7 +7,7 @@ import { SERVER_DIR, resolveEnv, serverEnv } from './support/env.mjs';
 seed('seed demo data', async () => {
   seed.setTimeout(180_000);
   const cfg = resolveEnv();
-  const res = spawnSync(process.execPath, ['--import', 'tsx', join(SERVER_DIR, 'src', 'seed-cli.ts'), '--issues', '400'], {
+  const res = spawnSync(process.execPath, ['--import', 'tsx', join(SERVER_DIR, 'src', 'seed-cli.ts'), '--issues', '400', '--deterministic'], {
     cwd: SERVER_DIR,
     env: serverEnv(cfg),
     encoding: 'utf8',

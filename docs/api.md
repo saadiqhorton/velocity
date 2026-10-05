@@ -22,7 +22,7 @@ For browser sessions, the server sets an `httpOnly` `vel_session` cookie and a r
 
 ## Query example
 
-The `issues` query accepts a filter DSL string and returns an offset-cursor connection. An issue can be looked up by UUID or canonical identifier such as `ENG-123`.
+The `issues` query accepts a filter DSL string, `teamId` or `teamKey`, grouping and ordering options, and `first`/`after` pagination. It returns a cursor connection. `totalCount` is calculated when selected, so omit it when a page alone is sufficient. An issue can be looked up by UUID or canonical identifier such as `ENG-123`.
 
 ```sh
 curl https://velocity.example/graphql \
@@ -43,7 +43,7 @@ The DSL parser is also available to JavaScript/TypeScript consumers from `@veloc
 
 Use the schema for available queries, mutations, and subscriptions. Errors include an `extensions.code` such as `NOT_FOUND`, `FORBIDDEN`, `VALIDATION`, `CONFLICT`, `RATE_LIMITED`, or `UNAUTHENTICATED`. Mutations require a write-scoped API key or an authenticated session with permission for the operation.
 
-Subscriptions use GraphQL over WebSocket at `/graphql` with the `graphql-ws` protocol. For API-key connections, pass the key in `connectionParams`, for example `{ "authorization": "vel_…" }`. Cookie-authenticated sockets must use an origin matching `APP_URL`.
+Subscriptions use GraphQL over WebSocket at `/graphql` with the `graphql-ws` protocol. Available streams include `workspaceEvents`, `issueUpdated`, `issueCreated`, `notificationCreated`, and `importProgress`. For API-key connections, pass the key in `connectionParams`, for example `{ "authorization": "vel_…" }`. Cookie-authenticated sockets must use an origin matching `APP_URL`.
 
 ## Rate limits
 

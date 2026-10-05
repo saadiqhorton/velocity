@@ -55,7 +55,7 @@ On start the server registers an MCP session with Velocity (`startMcpSession`), 
 
 ## Streamable HTTP (remote agents, opt-in)
 
-The Velocity server can expose the same tools at `<server>/mcp`. It is off by default; enable it by setting `MCP_HTTP_TOKEN` on the server. Clients send two headers:
+The Velocity server can expose the same tools at `<server>/mcp`. It is off by default; enable it by setting `MCP_HTTP_ENABLED=1` and `MCP_HTTP_TOKEN` (at least 24 characters) on the server. Clients send two headers:
 
 ```
 Authorization: Bearer <MCP_HTTP_TOKEN>

@@ -151,6 +151,8 @@ export const en = {
     deletionScheduled: (when: string) => `This workspace is scheduled for deletion on ${when}.`,
     cancelDeletion: 'Cancel deletion',
     loadError: 'Could not load this page. Check your connection and try again.',
+    editorLoadError: 'Could not load the editor. Check your connection and try again.',
+    panelLoadError: 'Could not load the issue. Check your connection and try again.',
     notFound: 'This page does not exist.',
     goHome: 'Go to My issues',
   },

@@ -1,6 +1,6 @@
 import type { Server } from 'node:http';
 // Match Pothos/Yoga's CJS GraphQL instance under both tsx and Vitest.
-import { GraphQLError, Kind, getOperationAST, parse, visit } from 'graphql/index.js';
+import { GraphQLError, Kind, getOperationAST, parse, specifiedRules, visit } from 'graphql/index.js';
 import type { DocumentNode, ExecutionArgs, OperationDefinitionNode } from 'graphql';
 import { createYoga } from 'graphql-yoga';
 import type { Plugin, YogaInitialContext } from 'graphql-yoga';
@@ -313,7 +313,11 @@ export function createGraphQLServer(opts: { services: Services; pubsub: Velocity
             const auth = (ctx.extra as unknown as { auth: Authenticated }).auth;
             const { schema: s, execute, subscribe, parse, validate } = yoga.getEnveloped({});
             const document: DocumentNode = parse(payload.query);
-            const errors = validate(s, document);
+            const operation = getOperationAST(document, payload.operationName);
+            if (operation?.operation !== 'subscription') {
+              return [new GraphQLError('WebSocket connections only support subscriptions.', { extensions: { code: 'FORBIDDEN' } })];
+            }
+            const errors = validate(s, document, [...specifiedRules, depthLimitRule(10), complexityLimitRule(50_000)]);
             if (errors.length) return errors;
             const contextValue: GqlContext = {
               services,

@@ -1,6 +1,7 @@
 /**
  * Demo / performance seed (SPEC §8.1 M2 exit: "10k-issue seed passes perf budgets").
  *   DATABASE_URL=… APP_SECRET=… pnpm --filter @velocity/server seed -- --issues 10000
+ *   --deterministic [--seed-date YYYY-MM-DD] fixes issue content and timestamps for E2E.
  * Creates a demo owner (if the workspace is empty), three teams, labels, projects with
  * milestones, closed + active cycles, and N issues with realistic distributions.
  * Bulk-inserts through SQL for speed; numbering counters stay consistent.
@@ -21,10 +22,25 @@ const { values } = parseArgs({
     issues: { type: 'string', default: '600' },
     username: { type: 'string', default: 'demo' },
     password: { type: 'string', default: 'correct-horse-battery-staple' },
+    deterministic: { type: 'boolean', default: false },
+    'seed-date': { type: 'string' },
   },
 });
 const total = Number(values.issues);
 if (!Number.isSafeInteger(total) || total < 0) throw new Error('--issues must be a non-negative integer.');
+// A day-level clock keeps the seeded current cycle current during E2E while making
+// two fresh runs on the same day byte-for-byte stable in their visible data.
+const seedDate = values['seed-date'] ?? new Date().toISOString().slice(0, 10);
+if (values.deterministic && !/^\d{4}-\d{2}-\d{2}$/.test(seedDate)) throw new Error('--seed-date must be YYYY-MM-DD.');
+const seedNow = values.deterministic ? Date.parse(`${seedDate}T12:00:00.000Z`) : Date.now();
+if (!Number.isFinite(seedNow)) throw new Error('Invalid --seed-date.');
+let rngState = 0x5eed2026;
+const random = values.deterministic
+  ? () => {
+      rngState = (Math.imul(rngState, 1664525) + 1013904223) >>> 0;
+      return rngState / 0x1_0000_0000;
+    }
+  : Math.random;
 const config = loadConfig();
 const pool = new pg.Pool({ connectionString: config.databaseUrl, max: 5 });
 await runMigrations(pool);
@@ -37,7 +53,7 @@ const services = createServices({
   logger: pino({ level: 'warn' }),
 });
 
-const rand = (n: number) => Math.floor(Math.random() * n);
+const rand = (n: number) => Math.floor(random() * n);
 const pick = <T>(xs: readonly T[]): T => xs[rand(xs.length)]!;
 
 let owner: ServiceActor;
@@ -80,7 +96,7 @@ const labels = (await services.labels.list()).filter((l) => !l.isGroup);
 const projects = [];
 for (const name of ['Public launch', 'Billing v2', 'Mobile polish']) {
   const existing = (await services.projects.list(owner)).find((p) => p.name === name);
-  const p = existing ?? (await services.projects.create(owner, { name, status: pick(['planned', 'in_progress'] as const), health: pick(['on_track', 'at_risk'] as const), teamIds: [teams[0]!.id], targetDate: new Date(Date.now() + rand(90) * 86_400_000).toISOString().slice(0, 10) }));
+  const p = existing ?? (await services.projects.create(owner, { name, status: pick(['planned', 'in_progress'] as const), health: pick(['on_track', 'at_risk'] as const), teamIds: [teams[0]!.id], targetDate: new Date(seedNow + rand(90) * 86_400_000).toISOString().slice(0, 10) }));
   projects.push(p);
   if (!existing) for (const m of ['Alpha', 'Beta', 'GA']) await services.projects.createMilestone(owner, p.id, { name: m });
 }
@@ -90,12 +106,12 @@ const eng = teams[0]!;
 const existingCycles = await services.cycles.list(eng.id);
 if (existingCycles.length === 0) {
   const week = 7 * 86_400_000;
-  const start = Date.now() - 6 * 2 * week - rand(week);
+  const start = seedNow - 6 * 2 * week - rand(week);
   for (let n = 1; n <= 6; n++) {
     const s = new Date(start + (n - 1) * 2 * week);
     const e = new Date(s.getTime() + 2 * week);
     const scope = 18 + rand(12);
-    const done = Math.round(scope * (0.6 + Math.random() * 0.35));
+    const done = Math.round(scope * (0.6 + random() * 0.35));
     await pool.query(
       `insert into cycles (id, team_id, number, starts_at, ends_at, closed_at, stats) values ($1,$2,$3,$4,$5,$5,$6)`,
       [uuidv7(), eng.id, n, s, e, { scopeCount: Math.round(scope / 2), scopePoints: scope, completedCount: Math.round(done / 2), completedPoints: done, canceledCount: rand(2), addedAfterStartCount: rand(4), removedCount: rand(2), carriedOverCount: rand(4) }],
@@ -122,7 +138,7 @@ for (const team of teams) {
     const first = counter.rows[0]!.next;
     const rows: unknown[][] = [];
     for (let i = 0; i < n; i++) {
-      const r = Math.random();
+      const r = random();
       let acc = 0;
       let cat: keyof typeof weights = 'backlog';
       for (const [k, w] of Object.entries(weights) as [keyof typeof weights, number][]) {
@@ -133,13 +149,13 @@ for (const team of teams) {
         }
       }
       const st = sts.find((s) => s.category === cat)!;
-      const createdAt = new Date(Date.now() - rand(120) * 86_400_000 - rand(86_400_000));
-      const completedAt = cat === 'done' ? new Date(Math.min(Date.now(), createdAt.getTime() + rand(30) * 86_400_000)) : null;
+      const createdAt = new Date(seedNow - rand(120) * 86_400_000 - rand(86_400_000));
+      const completedAt = cat === 'done' ? new Date(Math.min(seedNow, createdAt.getTime() + rand(30) * 86_400_000)) : null;
       rows.push([
-        uuidv7(), team.id, first + i, `${pick(verbs)} ${pick(words)} ${pick(words)}`, '', st.id, Math.random() < 0.6 ? pick(members) : null,
-        rand(5), Math.random() < 0.7 ? pick([1, 2, 3, 5, 8]) : null, (first + i) * 1000,
-        Math.random() < 0.3 ? pick(projects).id : null,
-        team === eng && activeCycleId && Math.random() < 0.3 ? activeCycleId : null,
+        uuidv7(), team.id, first + i, `${pick(verbs)} ${pick(words)} ${pick(words)}`, '', st.id, random() < 0.6 ? pick(members) : null,
+        rand(5), random() < 0.7 ? pick([1, 2, 3, 5, 8]) : null, (first + i) * 1000,
+        random() < 0.3 ? pick(projects).id : null,
+        team === eng && activeCycleId && random() < 0.3 ? activeCycleId : null,
         owner.userId, createdAt, completedAt ?? createdAt, completedAt, cat === 'canceled' ? createdAt : null,
       ]);
     }
@@ -151,7 +167,7 @@ for (const team of teams) {
        values ${tuples} returning id`,
       params,
     );
-    const labelRows = inserted.rows.filter(() => Math.random() < 0.5).map((r) => [r.id, pick(labels).id]);
+    const labelRows = inserted.rows.filter(() => random() < 0.5).map((r) => [r.id, pick(labels).id]);
     if (labelRows.length) {
       await pool.query(
         `insert into issue_labels (issue_id, label_id) values ${labelRows.map((_, i) => `($${i * 2 + 1}, $${i * 2 + 2})`).join(',')} on conflict do nothing`,

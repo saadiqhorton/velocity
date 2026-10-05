@@ -6,7 +6,7 @@ Velocity imports Linear exports, Jira CSV files, Linear API data, and GitHub Iss
 
 The pipeline parses or fetches source data, proposes mappings for teams and workflow statuses, runs a dry-run report, and then commits in resumable 500-row chunks. Review warnings and unmapped values before committing. A commit can be followed through the import run status and `importProgress` subscription.
 
-Imports do not overwrite an existing workspace wholesale. Review the suggested mappings and dry-run counts before confirming. Keep a database backup before a large import.
+Imports do not overwrite an existing workspace wholesale. Review the suggested mappings and dry-run counts before confirming. Keep a database backup before a large import. The import service suppresses per-issue notifications and webhooks while processing batches, so an imported archive does not send a notification for every row.
 
 ## CLI setup
 

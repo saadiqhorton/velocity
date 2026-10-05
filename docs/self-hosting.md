@@ -76,19 +76,40 @@ behind a proxy you trust.
 
 ## Upgrades
 
+Set `VELOCITY_BACKUP_BEFORE_MIGRATE=1` in `.env` before upgrading. Keep a copy of the
+resulting dump outside the host, and back up `app_data` as well for attachments. Upgrade
+one release at a time and check `docker compose ps` and `/readyz` after each step.
+
+For the checkout-based Compose installation above:
+
 ```sh
 git pull
 docker compose up -d --build
+docker compose ps
 ```
 
-The Compose file builds from the checkout. No public release image has been verified yet.
-Migrations run automatically on boot under a Postgres advisory lock, so they are safe with several replicas.
-Releases keep N-1 compatibility: upgrade one release at a time. Take a backup first (below).
+The Compose file builds from the checkout. When using a published image, set
+`VELOCITY_IMAGE` to the next release tag and use `docker compose pull app && docker compose up -d`
+instead. No public release image has been verified yet. Migrations run automatically on
+boot under a Postgres advisory lock. A failed backup prevents the app from starting;
+inspect `docker compose logs app` before retrying.
 
-## Partial server image check
+The repository's `scripts/deploy/upgrade-smoke.sh` checks the upgrade from `b622999`
+to the current checkout using a disposable Compose project. It creates an issue on the
+old image, checks that the new image migrates and preserves it, validates the automatic
+pre-migration dump in `/data/backups`, restores that dump into another database, and
+boots the current image against the restored database. It requires Docker, Compose,
+`git`, `node`, `pnpm`, `curl` and `openssl`; it builds the baseline API with the current
+`server-runtime` Docker target because that checkpoint predates the web UI, and repairs
+the baseline's deployment manifest in a temporary checkout. Run it from
+the repository with `scripts/deploy/upgrade-smoke.sh`. The script uses an isolated
+Compose project and removes its volumes when it finishes. Set `UPGRADE_PORT` if its
+chosen loopback port is in use.
+
+## API-only server image
 
 The `server-runtime` Docker target builds the API runtime without building or copying the web UI.
-Use it for a partial server and backup-path check while frontend work is incomplete:
+Use it for API and backup-path diagnostics without building the web bundle:
 
 ```sh
 docker build --target server-runtime -t velocity-server-runtime:check .
@@ -108,13 +129,31 @@ startup, before checking or applying migrations, the app runs `pg_dump` into `BA
 default `/data/backups`, inside `app_data`). This can create a dump even when no migration is pending;
 copy the files off the host and manage old dumps to control disk use.
 
-Manual database backup and restore:
+Manual database backup:
 
 ```sh
 docker compose exec -T postgres pg_dump -U velocity -Fc velocity > velocity-$(date +%F).dump
-# restore into an empty database:
-docker compose exec -T postgres pg_restore -U velocity -d velocity --clean --if-exists < velocity-2026-01-01.dump
 ```
+
+To copy an automatic dump out of `app_data`, find its name with
+`docker compose exec app ls -lh /data/backups`, then use
+`docker compose cp app:/data/backups/<filename>.dump ./<filename>.dump`.
+Before restoring, save the current database and attachment volume separately. A
+database dump does not contain uploaded files. Stop the app and any `scale` worker so
+there are no writers, then restore into a new, empty database:
+
+```sh
+docker compose stop app              # also stop worker if the scale profile is in use
+docker compose exec -T postgres dropdb -U velocity --if-exists velocity
+docker compose exec -T postgres createdb -U velocity velocity
+docker compose exec -T postgres pg_restore -U velocity -d velocity --no-owner --exit-on-error < velocity-2026-10-05.dump
+docker compose up -d app
+docker compose ps                     # wait for app to become healthy
+```
+
+Use your actual dump filename. Restoring a pre-upgrade dump with the newer app causes
+pending migrations to run again on startup. Check the restored issue and attachment
+files before reopening access to users.
 
 Attachments:
 

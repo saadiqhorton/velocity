@@ -49,7 +49,7 @@ export function DetailPanel() {
       aria-label={m.issue.title}
       className="absolute inset-y-0 right-0 z-10 flex h-full w-full shrink-0 flex-col border-l border-border bg-surface md:w-(--ds-layout-panel-compact) lg:static xl:w-(--ds-layout-panel)"
     >
-      <ChunkBoundary onRetry={issueDetail.reset} frame={(message) => <PanelFrame onClose={() => close()}>{message}</PanelFrame>}>
+      <ChunkBoundary onRetry={issueDetail.reset} message={m.shell.panelLoadError} frame={(message) => <PanelFrame onClose={() => close()}>{message}</PanelFrame>}>
         <Suspense fallback={<PanelSkeleton />}>
           <IssueDetail key={issueId} id={issueId} mode="panel" onClose={() => close()} />
         </Suspense>

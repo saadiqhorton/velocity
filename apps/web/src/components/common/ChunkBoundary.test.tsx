@@ -27,13 +27,13 @@ describe('ChunkBoundary + retryableLazy', () => {
     const lazyHello = retryableLazy(load);
     const Hello2 = lazyHello.Component;
     render(
-      <ChunkBoundary onRetry={lazyHello.reset}>
+      <ChunkBoundary onRetry={lazyHello.reset} message={m.shell.editorLoadError}>
         <Suspense fallback={<p>loading</p>}>
           <Hello2 />
         </Suspense>
       </ChunkBoundary>,
     );
-    expect(await screen.findByText(m.shell.loadError)).toBeTruthy();
+    expect(await screen.findByText(m.shell.editorLoadError)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: m.common.retry }));
     expect(await screen.findByText('editor loaded')).toBeTruthy();
     expect(load).toHaveBeenCalledTimes(2);

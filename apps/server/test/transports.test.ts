@@ -62,6 +62,27 @@ it('delivers an HTTP issue mutation to an authenticated subscription', async () 
   socket.close();
 });
 
+it('rejects mutations and queries sent through the WebSocket subscription transport', async () => {
+  running = await boot();
+  const owner = await setupOwner(running.h);
+  const team = await running.app.services.teams.create(owner, { key: 'SEC', name: 'Security' });
+  const issue = await running.app.services.issues.create(owner, { teamId: team.id, title: 'Unchanged' });
+  const session = await running.app.services.auth.login({ login: 'owner', password: PASSWORD }, {});
+  const socket = await connect(running.base, { cookie: `vel_session=${session.token}`, origin: running.h.config.appUrl });
+  if (typeof socket === 'number') throw new Error(`WebSocket rejected: ${socket}`);
+  try {
+    for (const query of [
+      `mutation { updateIssue(id: "${issue.id}", input: { title: "Bypassed" }) { id } }`,
+      `query { issue(id: "${issue.id}") { id } }`,
+    ]) {
+      const message = new Promise<{ type: string; payload: { message: string }[] }>((resolve) => socket.once('message', raw => resolve(JSON.parse(raw.toString()))));
+      socket.send(JSON.stringify({ id: `operation-${query[0]}`, type: 'subscribe', payload: { query } }));
+      expect(await message).toMatchObject({ type: 'error', payload: [{ message: 'WebSocket connections only support subscriptions.' }] });
+    }
+    expect((await running.app.services.issues.get(issue.id))?.title).toBe('Unchanged');
+  } finally { socket.close(); }
+});
+
 it('requires both MCP credentials, binds sessions to keys, and executes tools over HTTP', async () => {
   const app = testConfig({ mcp: { httpEnabled: true, httpToken: 'transport-token' } });
   running = await boot({ app });

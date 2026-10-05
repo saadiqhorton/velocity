@@ -8,6 +8,17 @@ Velocity exposes its issue tracker to agents through an MCP server (stdio via `n
 2. Read before you write: `get_issue`, `search_issues` or `list_issues` before `update_issue`, `set_status` or `add_comment`.
 3. Cite identifiers (`ENG-123`) everywhere you can.
 
+## Client verification checklist
+
+The repository smoke test (`vitest run apps/server/test/mcp-real-client.test.ts`) exercises the real stdio process and streamable HTTP transport against an isolated local server. Each transport creates an issue, adds a comment, sets a Done status and reads the result back. To check a deployed instance with actual clients:
+
+- [ ] Create a write-scoped API key in Settings > API keys. Configure Claude Desktop or Cursor with the stdio command and `VELOCITY_URL` / `VELOCITY_API_KEY` shown in [the MCP setup guide](../apps/mcp/README.md). Restart the client and confirm it lists the `velocity` tools.
+- [ ] In that client, call `list_teams`, then `create_issue`, `add_comment`, `set_status` to a Done status and `get_issue`. Confirm the identifier, comment and Done status in the Velocity UI.
+- [ ] For a remote MCP client, set `MCP_HTTP_ENABLED=1` and a unique `MCP_HTTP_TOKEN` of at least 24 characters on the Velocity server. Connect to `<server>/mcp` with both `Authorization: Bearer <MCP_HTTP_TOKEN>` and `X-Api-Key: <write-scoped API key>`. Repeat the create, comment, close and read sequence.
+- [ ] Check Settings > Audit log for the MCP session and mutations. Revoke any key created solely for verification.
+
+GitHub App installation and a live PR merge require the instance owner's app credentials and repository installation. The signed-webhook E2E spec covers PR linking and merge auto-close with local payloads; after installation, use a real PR containing `Fixes ENG-123` to verify the repository mapping and UI link.
+
 ## Tools
 
 | Tool | Inputs | What it does |

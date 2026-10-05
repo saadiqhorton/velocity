@@ -1,7 +1,7 @@
 # Velocity — Engineering Handoff
 
 **Read this, then `SPEC.md`. `SPEC.md` is the source of truth; this file is the current state and how to continue.**
-Last updated: 2026-10-04 (evening), after the design pass. Everything below is committed on `master`:
+Last committed checkpoint: 2026-10-04 (evening), after the design pass. The commits below are on `master`:
 
 | Commit | What |
 |---|---|
@@ -12,7 +12,9 @@ Last updated: 2026-10-04 (evening), after the design pass. Everything below is c
 
 **Where things stand:** v1.0 feature work is done and verified. Every screen and the backend pass all gates on Chromium and WebKit, and `docker compose up` gets through the setup wizard to a first issue.
 
-**What's left** is release hardening, listed in §6: security audit, upgrade path, load test, release pipeline, real-world integrations, and a few small items.
+**Working tree continuation (2026-10-05, uncommitted):** Codex completed the local security, upgrade/restore, load, deterministic-seed, integration-test, release dry-run and documentation work in §6. The remaining owner/design steps are called out on each item below. Do not commit unless the repo owner asks.
+
+**Final working-tree gates:** Turbo typecheck 13/13; Turbo tests 13/13; whole-repo ESLint, color/legal checks, script tests, web build/bundle budget and diff check pass. Full E2E on isolated slot 4: Chromium 82 passed; WebKit Docker 74 passed with eight expected Chromium-only visual skips. The multi-architecture OCI build and standalone `pnpm deploy --prod --legacy` passed.
 
 Deeper context:
 - `apps/web/WEB_PROGRESS.md`: web architecture map, QA findings F1–F10, the design queue.
@@ -146,7 +148,7 @@ docker build .                                                                  
   - the pre-close screenshot's injected `<style>` (the guard freezes at context teardown);
   - "Fetch API cannot load … access control checks" within 3 s of a navigation.
   - Every other CSP violation or page error fails the test.
-- **Visual baselines** (`visual.spec.ts`) are Chromium-only. The shell baseline masks seed-dependent content until a deterministic seed exists (R4).
+- **Visual baselines** (`visual.spec.ts`) are Chromium-only. A deterministic seed now exists; the design owner still owns removing the shell content masks and approving new baselines (R4).
 - **Services:** `systemActor('import'|'github'|'system', userId?)` runs background work; imports suppress per-issue notifications and webhooks.
 
 ---
@@ -162,6 +164,8 @@ Each item has an owner, its paths, and how to verify it. Log progress in `apps/w
 - Write findings to `docs/security-review.md` (severity, fix, test). Fix highs and criticals with tests.
 - **Verify:** audit clean or justified, scan clean, findings doc committed by the owner, all gates green.
 
+**Status 2026-10-05:** Security review and high-severity fixes are in `docs/security-review.md`. Full-history gitleaks is clean. `pnpm audit --audit-level high` passes with one exact GHSA exception for unpatched, development-only `braces`; production audit has no high/critical findings. Full typecheck, tests and lint pass. Commit remains for the owner.
+
 ### R2 — Upgrade path and backups · Codex · SPEC §5.9, §8.2 ("N-1 compatibility")
 - Build an image from `b622999` (or `a0325f7`) and run it with compose. Create data, then switch to the current image (`docker compose pull && up -d` semantics). Migrations must apply cleanly and the data must survive.
 - Verify `VELOCITY_BACKUP_BEFORE_MIGRATE=1` writes a dump to `/data/backups`, and document and test a restore.
@@ -169,39 +173,55 @@ Each item has an owner, its paths, and how to verify it. Log progress in `apps/w
 - Update `docs/self-hosting.md`.
 - **Verify:** a scripted upgrade test (e.g. `scripts/deploy/upgrade-smoke.sh`) passes, and a restore is demonstrated.
 
+**Status 2026-10-05:** `scripts/deploy/upgrade-smoke.sh` passed from `b622999`: an issue survived migration 3→4, the automatic dump was validated, and restore into a fresh DB survived startup migration. Standalone `pnpm deploy --prod --legacy` passed after fixing missing runtime dependency declarations. `docs/self-hosting.md` has the upgrade and restore steps.
+
 ### R3 — Load test re-run · Codex · SPEC §4.16, §7.3
 - Re-run `scripts/perf/mutation-storm.js` (k6) against a 10k-issue DB (`velocity_perf_codex` has one; login `demo` / `correct-horse-battery-staple`) after the perf fixes, plus `issues-list.js` with 25 VUs.
 - Interleave runs; laptop clock state skews results (see `HANDOFF.CODEX.md` §1).
 - **Verify:** budgets met or regressions fixed; numbers recorded in `scripts/perf/README.md`.
+
+**Status 2026-10-05:** Both 25-VU, three-minute k6 workloads passed their thresholds against 10,000 issues. The uncontended list rerun was p95 143.17 ms; mutation storm made 15,834 updates with zero errors. A list run during concurrent image builds was p95 188.16 ms. All values and conditions are recorded in `scripts/perf/README.md`.
 
 ### R4 — Deterministic seed for the visual baseline · Codex, then Claude
 - Add `--deterministic` (fixed RNG seed, fixed timestamps) to `apps/server/src/seed-cli.ts`, and have the E2E seed project use it.
 - Then **Claude** removes the content masks from the shell baseline in `visual.spec.ts` and re-takes the baselines.
 - **Verify:** two fresh E2E runs produce identical shell screenshots with no masks.
 
+**Status 2026-10-05:** `--deterministic` is wired into the E2E seed. Two fresh isolated wizard+seed runs produced byte-identical unmasked 1440×900 shell screenshots; normalized 400-issue data from two fresh databases also matched. Claude's removal and approval of the visual baseline masks is still pending.
+
 ### R5 — Small UX gaps · Claude (design) + small behavior
 - **Phones:** below 768 the settings section list is hidden; add a compact section menu.
 - **Error copy:** editor/panel chunk-load failure gets its own message key, e.g. "Couldn't load the editor." Update `ChunkBoundary.test.tsx`.
 - **Verify:** screenshots at 390/768, unit tests, Chromium E2E.
+
+**Status 2026-10-05:** The editor and panel now show specific chunk-load error messages; the boundary unit test and web typecheck pass. The compact phone settings menu and viewport review remain with Claude.
 
 ### R6 — Missing E2E specs · Codex
 - Cycle rotation: a manual rotate via the API, then the UI shows the new cycle with carry-over.
 - GitHub link with mocked webhooks: a signed PR-opened payload links the issue; merge auto-closes it.
 - **Verify:** both specs green on Chromium and WebKit.
 
+**Status 2026-10-05:** `integrations.spec.ts` covers carry-over after manual cycle close and signed PR-open/merge webhooks. A cycle scheduling bug found by the spec was fixed. Focused Chromium and Docker WebKit runs passed.
+
 ### R7 — Real-world integrations · **repo owner** + Codex
 - **GitHub App:** the owner creates the app (permissions per SPEC §6.5.3) and sets the `GITHUB_*` env. Then install it, run backfill, and check the §6.5.2 matrix against a real repo.
 - **MCP:** connect Claude Desktop and Cursor via `npx @velocity/mcp` (`apps/mcp/README.md`). Run create, comment and close through a real client, and the HTTP transport too.
 - **Verify:** a short checklist in `docs/agents.md`, plus any fixes found.
+
+**Status 2026-10-05:** The real stdio process and Streamable HTTP transport passed a local create→comment→Done→readback test; `docs/agents.md` has the live-client checklist. Claude Desktop, Cursor and a real GitHub App/repository check need the owner's clients and credentials.
 
 ### R8 — Release pipeline · Codex + owner credentials · SPEC §7.1.5
 - Dry-run `.github/workflows/release.yml`: multi-arch buildx, syft SBOM, cosign signing, and the `@velocity/mcp` npm publish (check that it's `--dry-run`-able).
 - `act` or a fork works for the first test. The owner provides the registry and npm credentials when publishing for real.
 - **Verify:** a dry-run produces images, an SBOM and signatures.
 
+**Status 2026-10-05:** A local buildx run produced an amd64/arm64 OCI archive; Syft produced an SPDX SBOM for each; Cosign signed and verified the archive and both SBOMs with an ephemeral local key; npm publish dry-run passed. The release workflow now waits for image success before npm publish and attaches the SBOM after signing. `docs/release.md` records evidence and the remote credentials/OIDC check still needed for an actual tag.
+
 ### R9 — Docs final pass · Codex (UI section: Claude)
 - Bring `README.md`, `docs/api.md`, `docs/import.md`, `docs/architecture.md` and `docs/self-hosting.md` up to date with this snapshot and the §7 deviations.
 - Claude adds the UI section to `docs/architecture.md`: design-system usage and the keyboard map.
+
+**Status 2026-10-05:** The Codex-owned README, API, import, architecture and self-hosting content was updated to the current snapshot. Claude's design-system usage and keyboard-map section remains.
 
 ### R10 — Owner decisions (§8)
 Team-key rename behavior, PR-open status transitions, and the product name. "Velocity" is a working title; `BRANDING.md` lists every occurrence, so a rename is mechanical.
@@ -247,4 +267,4 @@ Append rows; the owner of the target path marks them done.
 | 4 | Claude → Codex | `auditLog(after, before)` date-range args | **done** |
 | 5 | Claude → Codex | `removeAvatar` mutation + Profile "Remove" | **done** |
 | 6 | Claude → Codex | CI: run E2E against source or bundle? | **decided:** CI builds and uses a fresh bundle; local runs use source |
-| 7 | Claude → Codex | Deterministic seed option for visual baselines (R4) | open |
+| 7 | Claude → Codex | Deterministic seed option for visual baselines (R4) | **done** (Codex, `--deterministic`); mask removal + baselines with Claude |

@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import { assertPublicUrl, isPrivateAddress, SsrfError } from '../../src/lib/ssrf';
+import { createServer } from 'node:http';
+import { assertPublicUrl, isPrivateAddress, resolvePublicUrl, SsrfError } from '../../src/lib/ssrf';
+import { postPinnedWebhook } from '../../src/webhooks';
 
 describe('isPrivateAddress IPv4', () => {
   it.each([
@@ -91,4 +93,25 @@ describe('assertPublicUrl', () => {
     await expect(assertPublicUrl('http://localhost:3000', strict)).rejects.toMatchObject({ code: 'PRIVATE_ADDRESS' });
     await expect(assertPublicUrl('http://127.0.0.1:3000', strict)).rejects.toMatchObject({ code: 'PRIVATE_ADDRESS' });
   });
+});
+
+it('pins a webhook connection to the address returned by validation', async () => {
+  const receiver = createServer(async (req, res) => {
+    expect(req.headers.host).toMatch(/^rebind\.example:/);
+    let body = '';
+    for await (const chunk of req) body += chunk.toString();
+    expect(body).toBe('{"ok":true}');
+    res.writeHead(204);
+    res.end();
+  });
+  await new Promise<void>(resolve => receiver.listen(0, '127.0.0.1', resolve));
+  const address = receiver.address();
+  if (!address || typeof address === 'string') throw new Error('Receiver address missing');
+  try {
+    const target = `http://rebind.example:${address.port}/hook`;
+    expect(await resolvePublicUrl(target, { allowPrivate: false, lookup: async () => ['8.8.8.8'] })).toBe('8.8.8.8');
+    expect(await postPinnedWebhook(target, '127.0.0.1', { 'content-type': 'application/json' }, '{"ok":true}')).toBe(204);
+  } finally {
+    await new Promise<void>(resolve => receiver.close(() => resolve()));
+  }
 });

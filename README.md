@@ -26,6 +26,7 @@ Open `http://localhost` and complete first-run setup. For a public domain, point
 - [Import guide](docs/import.md): CSV and API import options
 - [Architecture](docs/architecture.md): runtime, packages, and implementation deviations
 - [Self-hosting](docs/self-hosting.md): deployment and operations
+- [Release verification](docs/release.md): image, SBOM, signing, and npm dry run
 - [Agent guide](docs/agents.md): MCP tools and agent usage
 - [Specification](SPEC.md): product and engineering requirements
 
@@ -42,7 +43,7 @@ export UPLOAD_DIR=./data/uploads EXPORT_DIR=./data/exports
 pnpm --filter @velocity/server dev
 ```
 
-The server runs migrations on startup. To seed a fresh development database, run `pnpm --filter @velocity/server seed -- --issues 10000`; the demo owner is `demo` with password `correct-horse-battery-staple`. Use this only for local development and disposable benchmark databases. The web interface is developed separately; its current completeness and browser verification are tracked in [HANDOFF.md](HANDOFF.md). When running the Vite client, set `APP_URL=http://localhost:5173` so cookie-authenticated WebSockets accept the dev-server origin.
+The server runs migrations on startup. To seed a fresh development database, run `pnpm --filter @velocity/server seed -- --issues 10000`; the demo owner is `demo` with password `correct-horse-battery-staple`. Use this only for local development and disposable benchmark databases. Build the web interface with `pnpm --filter @velocity/web build`; the production server serves that build. When running the Vite client, set `APP_URL=http://localhost:5173` so cookie-authenticated WebSockets accept the dev-server origin.
 
 Useful commands:
 
@@ -57,4 +58,4 @@ Database-backed tests require PostgreSQL; details and current verification statu
 
 ## Project status
 
-Velocity is under active development. Backend packages and the API are implemented, and the server integration suite currently has 12 passing tests. The web interface and its browser-level verification are still in progress. See [HANDOFF.md](HANDOFF.md) for the current work status and known gaps.
+The v1 feature set is implemented. Browser E2E runs cover Chromium and WebKit, and the Compose setup flow has been verified through first issue creation. Release hardening and checks that require owner credentials remain open; see [HANDOFF.md](HANDOFF.md) for the live checklist and test results.

@@ -7,6 +7,7 @@ const here = fileURLToPath(new URL('.', import.meta.url));
 export const WEB_DIR = resolve(here, '..', '..');
 export const REPO_DIR = resolve(WEB_DIR, '..', '..');
 export const SERVER_DIR = join(REPO_DIR, 'apps', 'server');
+export const E2E_GITHUB_WEBHOOK_SECRET = 'velocity-e2e-github-webhook-secret';
 
 /**
  * CI provides DATABASE_URL + APP_URL; locally we use a dedicated database and port 3200.
@@ -44,6 +45,7 @@ export function serverEnv(cfg = resolveEnv()) {
     DATABASE_URL: cfg.databaseUrl,
     APP_URL: cfg.appUrl,
     APP_SECRET: cfg.appSecret,
+    GITHUB_WEBHOOK_SECRET: E2E_GITHUB_WEBHOOK_SECRET,
     PORT: String(cfg.port),
     WEB_DIST_DIR: join(WEB_DIR, 'dist'),
     UPLOAD_DIR: join(cfg.dataDir, 'uploads'),

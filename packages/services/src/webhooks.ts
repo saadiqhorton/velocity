@@ -1,4 +1,7 @@
 import { and, desc, eq, inArray, sql } from 'drizzle-orm';
+import { request as httpRequest } from 'node:http';
+import { request as httpsRequest } from 'node:https';
+import { isIP } from 'node:net';
 import { webhookDeliveries, webhooks } from '@velocity/schema';
 import type { WebhookEventType } from '@velocity/schema';
 import { WEBHOOK_EVENT_TYPES } from '@velocity/schema';
@@ -9,7 +12,7 @@ import type { DbOrTx } from './db';
 import { notFound, validation } from './errors';
 import { createCipherBox, hmacSha256Hex, randomToken } from './lib/crypto';
 import type { CipherBox } from './lib/crypto';
-import { assertPublicUrl, SsrfError } from './lib/ssrf';
+import { assertPublicUrl, resolvePublicUrl, SsrfError } from './lib/ssrf';
 import { assertCan } from './lib/permissions';
 
 export type WebhookRow = typeof webhooks.$inferSelect;
@@ -20,6 +23,27 @@ const TIMEOUT_MS = 10_000;
 /** Retry schedule (seconds) after attempts 1..5: exponential, capped at one hour (SPEC §6.4). */
 const BACKOFF = [60, 300, 900, 1800, 3600];
 export const MAX_ATTEMPTS = BACKOFF.length + 1;
+
+/** Connect to the address checked by the SSRF guard while retaining the URL host for Host/SNI. */
+export function postPinnedWebhook(url: string, address: string, headers: Record<string, string>, body: string): Promise<number> {
+  const transport = new URL(url).protocol === 'https:' ? httpsRequest : httpRequest;
+  return new Promise((resolve, reject) => {
+    const req = transport(url, {
+      method: 'POST', headers, signal: AbortSignal.timeout(TIMEOUT_MS),
+      lookup(_host, options, callback) {
+        const family = isIP(address);
+        if (options.all) callback(null, [{ address, family }]);
+        else callback(null, address, family);
+      },
+    }, (res) => {
+      const status = res.statusCode ?? 0;
+      res.destroy(); // Response content is never used and must not consume unbounded memory.
+      resolve(status);
+    });
+    req.on('error', reject);
+    req.end(body);
+  });
+}
 
 export interface WebhookPayload {
   id: string;
@@ -33,7 +57,7 @@ export class WebhookService extends ServiceBase {
   private audit!: AuditService;
   private cipher!: CipherBox;
   /** Overridable for tests. */
-  fetchImpl: typeof fetch = (...args) => fetch(...args);
+  fetchImpl: typeof fetch = fetch;
 
   bind(audit: AuditService): void {
     this.audit = audit;
@@ -191,24 +215,27 @@ export class WebhookService extends ServiceBase {
     let statusCode: number | null = null;
     let error: string | null = null;
     try {
-      await assertPublicUrl(hook.url, { allowPrivate: this.config.allowPrivateWebhookTargets });
+      const address = await resolvePublicUrl(hook.url, { allowPrivate: this.config.allowPrivateWebhookTargets });
       const secret = this.cipher.decrypt(hook.secretEncrypted);
-      const res = await this.fetchImpl(hook.url, {
-        method: 'POST',
-        headers: {
+      const headers = {
           'content-type': 'application/json',
           'user-agent': 'Velocity-Webhooks/1.0',
           'x-velocity-event': d.eventType,
           'x-velocity-delivery-id': d.id,
           'x-velocity-signature': `sha256=${hmacSha256Hex(secret, body)}`,
-        },
-        body,
-        redirect: 'manual',
-        signal: AbortSignal.timeout(TIMEOUT_MS),
-      });
-      statusCode = res.status;
-      if (res.status < 200 || res.status >= 300) error = `HTTP ${res.status}`;
-      await res.body?.cancel().catch(() => {});
+      };
+      if (this.fetchImpl !== fetch) {
+        const res = await this.fetchImpl(hook.url, { method: 'POST', headers, body, redirect: 'manual', signal: AbortSignal.timeout(TIMEOUT_MS) });
+        statusCode = res.status;
+        await res.body?.cancel().catch(() => {});
+      } else if (address) {
+        statusCode = await postPinnedWebhook(hook.url, address, headers, body);
+      } else {
+        const res = await this.fetchImpl(hook.url, { method: 'POST', headers, body, redirect: 'manual', signal: AbortSignal.timeout(TIMEOUT_MS) });
+        statusCode = res.status;
+        await res.body?.cancel().catch(() => {});
+      }
+      if (statusCode < 200 || statusCode >= 300) error = `HTTP ${statusCode}`;
     } catch (err) {
       error = err instanceof Error ? err.message.slice(0, 500) : 'Delivery failed';
     }

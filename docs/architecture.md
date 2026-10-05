@@ -54,7 +54,7 @@ The dependency direction is `schema ← events ← services ← graphql ← apps
 
 ## Web interface status
 
-The design system is implemented in `packages/tokens` and `packages/ui`. The application UI in `apps/web` is separately owned and is still in progress; browser rendering and browser E2E verification have not been completed according to the current [handoff status](../HANDOFF.md). The UI owner will add the design-system usage and keyboard map here when that work lands.
+The design system is implemented in `packages/tokens` and `packages/ui`. The application UI in `apps/web` covers the screens in the v1 specification and has Chromium and WebKit E2E coverage. The design owner maintains the design-system usage and keyboard map; current browser verification is recorded in [HANDOFF.md](../HANDOFF.md).
 
 ## Recorded deviations from the specification
 

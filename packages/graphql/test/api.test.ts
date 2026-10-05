@@ -277,7 +277,7 @@ describe('API permission truth table', () => {
 
   it('removes an avatar and clears avatarUrl, guarded for writers only', async () => {
     const png = Buffer.from(
-      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+      'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVQI12P8//8/AwMDEwMDAwMDAwAkBgMBvR7jugAAAABJRU5ErkJggg==',
       'base64',
     );
     await h.services.users.uploadAvatar(owner, png);

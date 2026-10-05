@@ -60,3 +60,15 @@ RATE_LIMIT_PER_MINUTE=100000 RATE_LIMIT_BURST_PER_SECOND=10000 PORT=3001 \
 This intentionally removes the normal rate-limit constraint for the benchmark. For a rate-limit benchmark, use the defaults and interpret shared-session `429`s accordingly. The issue-list script validates at setup that the database has at least 10,000 total issues and 50 ENG issues; each measured request must return a full page of 50 matching issues. Its query exercises common status filtering and priority ordering.
 
 The demo seed is intended for a fresh database. Running it again adds issues; create a new `velocity_perf` database for each clean run rather than reusing or truncating another database.
+
+## 2026-10-05 rerun
+
+The dedicated `velocity_perf_codex` database had 10,000 issues. The source API ran on port 3251 with `RATE_LIMIT_PER_MINUTE=100000` and `RATE_LIMIT_BURST_PER_SECOND=10000`; k6 1.6.0 used one demo session, 25 VUs and the default three-minute duration. No benchmark rows were created or deleted.
+
+| Workload | Result | Notes |
+|---|---|---|
+| Issue list, first pass | p95 188.16 ms; 46,429 iterations; 100% checks; 0% HTTP failures | **Over** the 150 ms budget while concurrent upgrade image builds loaded the host. |
+| Mutation storm | 15,834 updates; 100% checks; 0 GraphQL errors; 0% HTTP failures; p95 378.66 ms | All defined thresholds passed. Each VU updated its own issue. |
+| Issue list, repeat | **p95 143.17 ms**; 46,223 iterations; 100% checks; 0% HTTP failures | Passed the 150 ms budget without competing image builds. |
+
+The two list runs bracket the mutation run. The first list latency shows how much host contention can affect this laptop; use the uncontended repeat for the release budget, and keep load off the host when comparing future changes.

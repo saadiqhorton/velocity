@@ -1,0 +1,8 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Documented nonsecret API key placeholder in the curl example"
+condition = "AND"
+paths = ['^docs/api\.md$']
+regexes = ['vel_your_api_key']

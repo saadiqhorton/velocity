@@ -129,9 +129,9 @@ async function defaultLookup(host: string): Promise<string[]> {
 /**
  * Throws `SsrfError` unless `url` is an http(s) URL without credentials whose host
  * (literal or resolved) is public. `allowPrivate` skips only the address checks.
- * Note: callers that connect afterwards should pin to a validated address to avoid DNS rebinding.
+ * Callers that connect afterwards must pin to the returned address to avoid DNS rebinding.
  */
-export async function assertPublicUrl(url: string, opts: AssertPublicUrlOptions): Promise<void> {
+export async function resolvePublicUrl(url: string, opts: AssertPublicUrlOptions): Promise<string | null> {
   let u: URL;
   try {
     u = new URL(url);
@@ -142,10 +142,10 @@ export async function assertPublicUrl(url: string, opts: AssertPublicUrlOptions)
   if (u.username !== '' || u.password !== '') throw new SsrfError('CREDENTIALS_IN_URL', 'URLs must not contain credentials.');
   const host = u.hostname.replace(/^\[|\]$/g, '').replace(/\.$/, '');
   if (host === '') throw new SsrfError('INVALID_URL', 'The URL has no host.');
-  if (opts.allowPrivate) return;
+  if (opts.allowPrivate) return null;
   if (isIP(host) !== 0) {
     if (isPrivateAddress(host)) throw new SsrfError('PRIVATE_ADDRESS', 'The URL points to a private address.');
-    return;
+    return host;
   }
   const lower = host.toLowerCase();
   if (lower === 'localhost' || lower.endsWith('.localhost')) throw new SsrfError('PRIVATE_ADDRESS', 'The URL points to a private address.');
@@ -157,4 +157,9 @@ export async function assertPublicUrl(url: string, opts: AssertPublicUrlOptions)
   }
   if (addrs.length === 0) throw new SsrfError('DNS_FAILURE', `Could not resolve ${host}.`);
   if (addrs.some(isPrivateAddress)) throw new SsrfError('PRIVATE_ADDRESS', 'The URL resolves to a private address.');
+  return addrs[0] as string;
+}
+
+export async function assertPublicUrl(url: string, opts: AssertPublicUrlOptions): Promise<void> {
+  await resolvePublicUrl(url, opts);
 }

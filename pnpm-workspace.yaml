@@ -4,6 +4,10 @@ packages:
 allowBuilds:
   esbuild: true
   sharp: false
+# No fixed release exists for this dev-only codegen glob dependency (docs/security-review.md).
+audit:
+  ignore:
+    - GHSA-vfj7-8cjw-p6xm
 minimumReleaseAgeExclude:
   - '@atlaskit/tokens@20.2.0'
   - '@modelcontextprotocol/sdk@1.32.0'

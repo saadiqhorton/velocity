@@ -173,10 +173,27 @@ export class CycleService extends ServiceBase {
 
       if (opts.manualCloseCycleId) {
         // Manual early close: shorten the window to now so the next cycle starts immediately.
+        const [closing] = await tx
+          .select()
+          .from(cycles)
+          .where(and(eq(cycles.id, opts.manualCloseCycleId), eq(cycles.teamId, teamId), isNull(cycles.closedAt)));
         await tx
           .update(cycles)
           .set({ endsAt: now })
           .where(and(eq(cycles.id, opts.manualCloseCycleId), eq(cycles.teamId, teamId), isNull(cycles.closedAt)));
+        if (closing) {
+          // Rotation normally pre-creates the next window. Move its start forward while keeping
+          // its scheduled end, so there is no gap and any issues already scoped to it stay put.
+          const [next] = await tx
+            .select()
+            .from(cycles)
+            .where(and(eq(cycles.teamId, teamId), isNull(cycles.closedAt), gt(cycles.startsAt, closing.startsAt)))
+            .orderBy(asc(cycles.startsAt))
+            .limit(1);
+          if (next && next.startsAt > now) {
+            await tx.update(cycles).set({ startsAt: now }).where(eq(cycles.id, next.id));
+          }
+        }
       }
 
       const existing = await tx.select().from(cycles).where(eq(cycles.teamId, teamId)).orderBy(asc(cycles.number));
