@@ -185,6 +185,8 @@ export interface MenuItemProps {
   disabled?: boolean;
   /** Keep the menu open after selecting. */
   keepOpen?: boolean;
+  /** Navigation menus: marks the item for the current page (`aria-current="page"` and a trailing check). */
+  current?: boolean;
 }
 
 const itemClass = (danger: boolean | undefined, disabled: boolean | undefined) =>
@@ -193,7 +195,7 @@ const itemClass = (danger: boolean | undefined, disabled: boolean | undefined) =
     disabled ? 'cursor-not-allowed text-fg-disabled' : danger ? 'text-danger-fg hover:bg-danger-subtle focus:bg-danger-subtle' : 'text-fg hover:bg-hover focus:bg-hover',
   );
 
-export function MenuItem({ children, onSelect, icon, shortcut, danger, disabled, keepOpen }: MenuItemProps) {
+export function MenuItem({ children, onSelect, icon, shortcut, danger, disabled, keepOpen, current }: MenuItemProps) {
   const ctx = useContext(MenuContext);
   return (
     <button
@@ -201,6 +203,7 @@ export function MenuItem({ children, onSelect, icon, shortcut, danger, disabled,
       role="menuitem"
       tabIndex={-1}
       aria-disabled={disabled || undefined}
+      aria-current={current ? 'page' : undefined}
       onMouseEnter={() => ctx.setActiveSub(null)}
       onClick={() => {
         if (disabled) return;
@@ -212,6 +215,7 @@ export function MenuItem({ children, onSelect, icon, shortcut, danger, disabled,
       {icon ? <span className="inline-flex w-5 shrink-0 justify-center">{icon}</span> : null}
       <span className="min-w-0 flex-1 truncate">{children}</span>
       {shortcut ? <span className="text-sm text-fg-subtle">{shortcut}</span> : null}
+      {current ? <Icon name="check" className="shrink-0 text-fg-selected" /> : null}
     </button>
   );
 }

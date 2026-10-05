@@ -2,11 +2,11 @@ import { Suspense, lazy } from 'react';
 import type { ComponentType } from 'react';
 import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { Icon, SideNav, SideNavItem } from '@velocity/ui';
-import type { IconName } from '@velocity/ui';
 import { useWorkspace } from '@/app/workspace';
 import { ContentSkeleton } from '@/components/shell/ShellSkeleton';
 import { NotFound } from '@/screens/workspace/NotFound';
 import { m } from '@/i18n';
+import { isSettingsSectionActive, settingsNavGroups } from './nav';
 
 /** Each section is its own chunk; the import wizard and webhooks stay out of the settings entry. */
 function section<M extends Record<string, unknown>>(load: () => Promise<M>, name: keyof M) {
@@ -29,69 +29,11 @@ const ImportSettings = section(() => import('./data/ImportSettings'), 'ImportSet
 const ExportSettings = section(() => import('./data/ExportSettings'), 'ExportSettings');
 const AuditSettings = section(() => import('./data/AuditSettings'), 'AuditSettings');
 
-interface NavEntry {
-  path: string;
-  label: string;
-  icon: IconName;
-  ownerOnly?: boolean;
-}
-
-interface NavGroup {
-  id: string;
-  title: string;
-  items: NavEntry[];
-}
-
-function navGroups(): NavGroup[] {
-  const s = m.settings.sections;
-  return [
-    {
-      id: 'account',
-      title: s.account,
-      items: [
-        { path: 'profile', label: s.profile, icon: 'user' },
-        { path: 'sessions', label: s.sessions, icon: 'key' },
-        { path: 'api-keys', label: s.apiKeys, icon: 'key' },
-      ],
-    },
-    {
-      id: 'workspace',
-      title: s.workspace,
-      items: [
-        { path: 'general', label: s.general, icon: 'settings', ownerOnly: true },
-        { path: 'members', label: s.members, icon: 'users' },
-        { path: 'teams', label: s.teams, icon: 'team' },
-        { path: 'labels', label: s.labels, icon: 'label' },
-      ],
-    },
-    {
-      id: 'integrations',
-      title: s.integrations,
-      items: [
-        { path: 'github', label: s.github, icon: 'github', ownerOnly: true },
-        { path: 'mcp', label: s.mcp, icon: 'sparkle' },
-        { path: 'webhooks', label: s.webhooks, icon: 'webhook', ownerOnly: true },
-      ],
-    },
-    {
-      id: 'data',
-      title: s.data,
-      items: [
-        { path: 'import', label: s.import, icon: 'import', ownerOnly: true },
-        { path: 'export', label: s.export, icon: 'download', ownerOnly: true },
-        { path: 'audit', label: s.audit, icon: 'list', ownerOnly: true },
-      ],
-    },
-  ];
-}
-
 /** Secondary settings navigation inside the content region (SPEC §4.11.9). */
 function SettingsNav() {
   const { viewer } = useWorkspace();
   const { pathname } = useLocation();
-  const groups = navGroups()
-    .map((g) => ({ ...g, items: g.items.filter((i) => viewer.isOwner || !i.ownerOnly) }))
-    .filter((g) => g.items.length > 0);
+  const groups = settingsNavGroups(viewer.isOwner);
   return (
     <SideNav
       aria-label={m.settings.title}
@@ -103,14 +45,17 @@ function SettingsNav() {
           <div id={`settings-nav-${g.id}`} className="flex h-7 items-center px-2 text-sm font-medium text-fg-subtlest">
             {g.title}
           </div>
-          {g.items.map((item) => {
-              const to = `/settings/${item.path}`;
-              return (
-                <SideNavItem key={item.path} as={Link} to={to} icon={<Icon name={item.icon} />} selected={pathname === to || pathname.startsWith(`${to}/`)}>
-                  {item.label}
-                </SideNavItem>
-              );
-          })}
+          {g.items.map((item) => (
+            <SideNavItem
+              key={item.path}
+              as={Link}
+              to={`/settings/${item.path}`}
+              icon={<Icon name={item.icon} />}
+              selected={isSettingsSectionActive(pathname, item.path)}
+            >
+              {item.label}
+            </SideNavItem>
+          ))}
         </div>
       ))}
     </SideNav>

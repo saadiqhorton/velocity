@@ -28,7 +28,7 @@ Deeper context:
 
 | Owner | Owns (may edit) | Responsibilities |
 |---|---|---|
-| **Claude (Opus 5.5): design** | `packages/ui/**`, `packages/tokens/**`, and the **visual layer** of `apps/web` (styling, spacing, typography, color and density, layout geometry, empty states, visual hierarchy), plus the visual baselines `apps/web/e2e/visual.spec.ts-snapshots/` | Design review, UI library changes, approving and re-taking visual baselines, the design review queue in `apps/web/WEB_PROGRESS.md` |
+| **Claude (Opus 5.5): design** | `packages/ui/**`, `packages/tokens/**`, and the **visual layer** of `apps/web` (styling, spacing, typography, color and density, layout geometry, empty states, visual hierarchy), plus the visual baselines `apps/web/e2e/0-visual.spec.ts-snapshots/` | Design review, UI library changes, approving and re-taking visual baselines, the design review queue in `apps/web/WEB_PROGRESS.md` |
 | **Codex / other agents: everything else** | All backend paths, deploy/CI/scripts/docs, and `apps/web/**` for **behavior** (logic, data, keyboard, state, routing, unit and E2E tests) | The work packages in §6 marked Codex, functional fixes, §9 backend requests |
 
 **The design boundary inside `apps/web`.** Non-design agents fix behavior and do not restyle:
@@ -148,7 +148,7 @@ docker build .                                                                  
   - the pre-close screenshot's injected `<style>` (the guard freezes at context teardown);
   - "Fetch API cannot load … access control checks" within 3 s of a navigation.
   - Every other CSP violation or page error fails the test.
-- **Visual baselines** (`visual.spec.ts`) are Chromium-only. A deterministic seed now exists; the design owner still owns removing the shell content masks and approving new baselines (R4).
+- **Visual baselines** (`e2e/0-visual.spec.ts`) are Chromium-only and unmasked except for times and dates. The `0-` prefix is load-bearing: the file must run first (name order, one worker) so the shell sees only the deterministic seed. Later specs add randomly named issues and teams. Only the design owner regenerates baselines (`docs/architecture.md`, "Design boundary and visual baselines").
 - **Services:** `systemActor('import'|'github'|'system', userId?)` runs background work; imports suppress per-issue notifications and webhooks.
 
 ---
@@ -189,12 +189,16 @@ Each item has an owner, its paths, and how to verify it. Log progress in `apps/w
 
 **Status 2026-10-05:** `--deterministic` is wired into the E2E seed. Two fresh isolated wizard+seed runs produced byte-identical unmasked 1440×900 shell screenshots; normalized 400-issue data from two fresh databases also matched. Claude's removal and approval of the visual baseline masks is still pending.
 
+**Status 2026-10-05 (Claude): done.** The masks are removed except for relative times and dates. The spec is renamed `e2e/0-visual.spec.ts` so it runs before the specs that add random data; the first unmasked full run showed their issues and teams in the shot. Two fresh full runs gave identical light shells (AE 0) and dark shells within 7 and 18 antialiasing pixels. All 8 baselines were re-taken and reviewed. Normal full Chromium runs on two fresh databases passed 83/83 both times.
+
 ### R5 — Small UX gaps · Claude (design) + small behavior
 - **Phones:** below 768 the settings section list is hidden; add a compact section menu.
 - **Error copy:** editor/panel chunk-load failure gets its own message key, e.g. "Couldn't load the editor." Update `ChunkBoundary.test.tsx`.
 - **Verify:** screenshots at 390/768, unit tests, Chromium E2E.
 
 **Status 2026-10-05:** The editor and panel now show specific chunk-load error messages; the boundary unit test and web typecheck pass. The compact phone settings menu and viewport review remain with Claude.
+
+**Status 2026-10-05 (Claude): done.** Below 768px the settings header has a "Sections" menu (`screens/settings/nav.tsx`, ADS `DropdownMenu`) that is keyboard and screen-reader accessible, marks the current section with `aria-current`, and hides owner-only sections from members. Screenshots at 390 and 768 in both themes were reviewed. Tests: `nav.test.tsx` 4, ui `menu.test.tsx` +1, E2E `layout.spec.ts` "phone settings". The chunk-load messages render well in the panel and editor. One behavior gap is logged as QA G1: the phone full-page issue route lacks `ChunkBoundary`.
 
 ### R6 — Missing E2E specs · Codex
 - Cycle rotation: a manual rotate via the API, then the UI shows the new cycle with carry-over.
@@ -222,6 +226,8 @@ Each item has an owner, its paths, and how to verify it. Log progress in `apps/w
 - Claude adds the UI section to `docs/architecture.md`: design-system usage and the keyboard map.
 
 **Status 2026-10-05:** The Codex-owned README, API, import, architecture and self-hosting content was updated to the current snapshot. Claude's design-system usage and keyboard-map section remains.
+
+**Status 2026-10-05 (Claude): done.** `docs/architecture.md` now has a "Web UI and design system" section covering token flow, the component inventory, §4.10 geometry, theming, the design boundary and baseline workflow, and a keyboard map checked against the `useCommands` registry, including where it differs from SPEC §4.12.
 
 ### R10 — Owner decisions (§8)
 Team-key rename behavior, PR-open status transitions, and the product name. "Velocity" is a working title; `BRANDING.md` lists every occurrence, so a rename is mechanical.

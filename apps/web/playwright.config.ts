@@ -19,7 +19,8 @@
  * -> `seed` (apps/server seed-cli, 400 issues, teams WEB/OPS, members, projects)
  * -> `chromium` / `webkit` specs, all signed in through the saved storage state
  * (the auth endpoints are rate limited to 10 logins a minute, so specs never log in).
- * Visual baselines live in e2e/visual.spec.ts-snapshots/ (Chromium only).
+ * Visual baselines live in e2e/0-visual.spec.ts-snapshots/ (Chromium only). The spec's `0-` prefix
+ * makes it the first file to run, so the shell baseline sees only the deterministic seed.
  */
 import { defineConfig, devices } from '@playwright/test';
 import { resolveEnv } from './e2e/support/env.mjs';

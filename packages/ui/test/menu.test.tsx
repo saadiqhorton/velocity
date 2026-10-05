@@ -73,4 +73,16 @@ describe('Menu', () => {
     expect(screen.getAllByRole('menu')).toHaveLength(1);
     expect(document.activeElement).toBe(sub);
   });
+
+  it('marks the current item of a navigation menu with aria-current', () => {
+    render(
+      <DropdownMenu trigger={<button>Sections</button>}>
+        <MenuItem current>Profile</MenuItem>
+        <MenuItem>Sessions</MenuItem>
+      </DropdownMenu>,
+    );
+    fireEvent.click(screen.getByText('Sections'));
+    expect(screen.getByRole('menuitem', { name: 'Profile' }).getAttribute('aria-current')).toBe('page');
+    expect(screen.getByRole('menuitem', { name: 'Sessions' }).hasAttribute('aria-current')).toBe(false);
+  });
 });

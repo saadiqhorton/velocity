@@ -764,6 +764,8 @@ export const en = {
     },
     ownerOnly: 'Only the workspace owner can change these settings.',
     saved: 'Settings saved',
+    sectionMenu: 'Settings sections',
+    sectionMenuTrigger: 'Sections',
   },
   settingsAccount: {
     profile: {

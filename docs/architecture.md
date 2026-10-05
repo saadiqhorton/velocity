@@ -52,9 +52,107 @@ The dependency direction is `schema ← events ← services ← graphql ← apps
 - The Docker Compose configuration sets `TRUST_PROXY=1` behind Caddy, and Caddy blocks `/metrics` from public requests. Direct deployments should set proxy trust only when the app is behind a trusted reverse proxy.
 - Security and deployment configuration are documented in [.env.example](../.env.example) and [self-hosting.md](self-hosting.md).
 
-## Web interface status
+## Web UI and design system
 
-The design system is implemented in `packages/tokens` and `packages/ui`. The application UI in `apps/web` covers the screens in the v1 specification and has Chromium and WebKit E2E coverage. The design owner maintains the design-system usage and keyboard map; current browser verification is recorded in [HANDOFF.md](../HANDOFF.md).
+The interface uses the published Atlassian Design System (ADS) look on a layout with Linear's geometry (SPEC §4.2–§4.10). Two packages own it, and `apps/web` consumes them:
+
+### How tokens flow
+
+```text
+@atlaskit/tokens (atlassian-dark)    SPEC §4.2 light values
+      │ pnpm --filter @velocity/tokens generate      │ src/light.ts
+      ▼                                              ▼
+packages/tokens/src/generated/ads-dark.ts  ──►  src/css.ts
+      │ pnpm --filter @velocity/tokens build
+      ▼
+packages/tokens/dist/tokens.css      --ds-* custom properties under [data-theme='dark'|'light']
+      ▼
+packages/ui/src/styles/theme.css     Tailwind v4 @theme: --ds-* → utilities (bg-surface, text-fg-subtle,
+      │                              border-border, h-8 …); default palette, radii and shadows reset
+      ▼
+packages/ui components + apps/web/src/styles/app.css (@import tailwindcss, tokens.css, theme.css)
+```
+
+- Components use only the token utilities (or `var(--ds-*)`). Tailwind's own palette is unset, so a raw color cannot be reached by accident.
+- `scripts/check-hex.mjs` fails on any hex literal outside `packages/tokens`. Spacing is a 4px grid (`--spacing: 4px`, so `h-8` = 32px and `w-55` = 220px). There are no arbitrary pixel values, gradients, blur or glass, and radius stays at 12px or less (SPEC §4.17).
+
+### Component inventory (`packages/ui`)
+
+| Area | Components |
+|---|---|
+| Actions | `Button`, `IconButton`, `DropdownMenu` / `Menu` / `MenuGroup` / `MenuItem` / `SubMenu` / `MenuSeparator` |
+| Forms | `Field`, `TextField`, `TextArea`, `Select` (native, 15 options or fewer), `PopupSelect` + `OptionList` (searchable, multi, creatable), `Checkbox`, `Radio` / `RadioGroup`, `Switch` |
+| Feedback | `FlagProvider` / `Flag` (toasts), `InlineMessage`, `Banner`, `Modal`, `ConfirmDialog`, `Spinner`, `Skeleton`, `ProgressBar`, `EmptyState`, `Tooltip` |
+| Display | `Avatar`, `Badge`, `Lozenge`, `StatusDot`, `Kbd`, `Icon` (Font Awesome subset, `iconMap`), `PriorityIcon`, `StatusIcon`, `Table`, `Pagination`, `Tabs` |
+| Navigation | `SideNav` / `SideNavItem` / `SideNavGroup`, `Breadcrumbs` |
+| Primitives | `Portal`, `Popover` (+ `computePosition`), `useControllableState`, `useEnterStyle` |
+
+`ComponentGallery` renders every component in both themes. The web app serves it at `/__gallery?enable=1`, and it is part of the visual baseline.
+
+### Shell geometry (SPEC §4.10, binding)
+
+| Element | ≥1280 | 1024–1280 | 768–1024 | <768 |
+|---|---|---|---|---|
+| Sidebar | 220px, full height, `surface-sunken` | 180px | 180px | drawer (menu button in each view header) |
+| Detail panel | 400px, 1px left border | 360px | overlays content | becomes a route (`/issue/:id`) |
+| View header | 48px | 48px | 48px | 48px |
+| Issue row | 32px | 32px | 32px | 32px |
+
+- There is no top bar. Workspace name, search, `+ New`, Settings and the account live in the sidebar.
+- `e2e/layout.spec.ts` asserts these constants: no wide fixed top element, the sidebar and panel widths, header and row heights, and the order of the sidebar sections.
+- Settings keep their own 200px section list from 768px up. Below that, a "Sections" menu button in the settings header switches sections, and members don't see owner-only sections.
+
+### Theming
+
+- `tokens.css` defines the dark theme on `:root` and on `[data-theme='dark']`, with `[data-theme='light']` overriding it.
+- `public/theme-init.js` sets `data-theme` before first paint (from `localStorage` `vel.theme`, otherwise `prefers-color-scheme`). It is an external script because of the strict CSP.
+- After sign-in the profile's saved theme (`dark`, `light` or `system`) wins and is stored on the profile. The palette command "Switch theme" toggles it.
+- Light values are the SPEC values. Dark values are generated from the published `atlassian-dark` theme (see deviations below).
+
+### Design boundary and visual baselines
+
+- The design owner owns `packages/ui`, `packages/tokens`, the visual layer of `apps/web` and the baselines (`HANDOFF.md` §0). Other contributors fix behavior without restyling, and log visual issues in the Design review queue in `apps/web/WEB_PROGRESS.md`.
+- `apps/web/e2e/0-visual.spec.ts` snapshots the component gallery and the shell (`/team/ENG/active`) in both themes at 1440×900 and 1024×768, on Chromium only. The baselines are in `e2e/0-visual.spec.ts-snapshots/` and the tolerance is `maxDiffPixelRatio` 0.002.
+- The shell shots compare real content: the E2E seed runs `seed-cli --deterministic`, and the spec's `0-` prefix makes it the first file to run, before any spec adds randomly named data. Only relative times and absolute dates are masked, because they follow the run date.
+- Without approved baselines the spec skips. A normal run never writes baselines.
+- To update after an intended visual change:
+  1. Rebuild (`pnpm --filter @velocity/web build`).
+  2. Run `cd apps/web && E2E_SLOT=<n> npx playwright test visual --project=chromium --update-snapshots`.
+  3. Have the design owner look at every changed PNG before accepting it.
+  4. Confirm that a normal full Chromium run passes against the new baselines.
+
+### Keyboard map
+
+This table is checked against the command registry: the `useCommands` registrations in `components/commands/GlobalCommands.tsx`, `IssueCommands.tsx`, `components/issues/IssueList.tsx`, `IssueBoard.tsx`, `ListScreen.tsx` and `screens/inbox/Inbox.tsx`.
+
+- One global listener (`keyboard/react.tsx`) resolves keys by layer: text field, then modal, then panel or list, then global.
+- Commands with keys show in the `?` help. Most also appear in the ⌘K/Ctrl+K palette, which additionally lists keyless actions: Go to Insights, Switch theme, New team/project/view, Duplicate issue, Copy issue ID/link, Set project/cycle/estimate, Log out, and per-team "Go to" entries.
+
+| Keys | Action | Where |
+|---|---|---|
+| `Mod+K` | Command palette (works in text fields) | global |
+| `C` | Create issue | global |
+| `/` | Focus search | global |
+| `?` | Keyboard shortcuts help | global |
+| `Esc` | Close panel or full-page issue, else clear selection; closes menus and modals | global |
+| `G` `I` / `G` `M` / `G` `A` / `G` `P` / `G` `S` / `G` `V` | Go to Inbox / My issues / All issues / Projects / Settings / Views | global |
+| `G` `C` / `G` `B` / `G` `T` | Go to the current team's Active / Backlog / current cycle | global |
+| `J` `K` or `↓` `↑` | Move focus (hold to repeat) | list, board, inbox |
+| `←` `→` | Move between board columns | board |
+| `Enter` / `Mod+Enter` | Open in the panel / full page | list (board and inbox: `Enter`) |
+| `X` / `Shift+X` / `Mod+A` | Toggle selection / select range / select all | list (`X` on board too) |
+| `Alt+↑` / `Alt+↓` | Reorder within the group | list |
+| `B` | Toggle board and list | issue views |
+| `E` | Mark done or reopen (inbox: mark read or unread) | focused, selected or open issue |
+| `I` | Assign to me (again to unassign) | issue |
+| `A` / `L` / `P` / `S` / `R` | Assignee / label / priority / status / relation picker | issue (`R`: one issue) |
+| `M` | Move to team (board: move to column) | issue |
+| `V` | Issue context menu ("Move issue") | issue |
+| `Y` | Archive | issue |
+| `#` | Delete with confirmation (inbox: `#` or `Delete` removes the notification) | issue |
+| `Mod+Enter` | Submit comment | markdown editor |
+
+Compared with SPEC §4.12, the registry adds `G` `C` (Active), `G` `V` (Views), `Mod+A`, the board's arrow keys and `M` for move to column. Inside menus, listboxes and popups, arrow keys, `Home`/`End` and typeahead belong to that widget, which the engine does not intercept.
 
 ## Recorded deviations from the specification
 

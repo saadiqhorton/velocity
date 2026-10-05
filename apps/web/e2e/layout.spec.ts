@@ -71,3 +71,31 @@ for (const { width, height, colorScheme } of cases) {
     expect((await detailPanel.boundingBox())?.width).toBeCloseTo(width === 1440 ? 400 : 360, -1);
   });
 }
+
+test('phone settings: the section menu replaces the hidden section list', async ({ newSession }) => {
+  const { page } = await newSession({ viewport: { width: 390, height: 844 } });
+  await page.goto('/settings/profile');
+  await expect(page.getByTestId('settings-profile')).toBeVisible();
+  await expect(page.getByTestId('settings-nav')).toBeHidden();
+
+  const trigger = page.getByRole('button', { name: 'Sections', exact: true });
+  await trigger.focus();
+  await page.keyboard.press('ArrowDown');
+  const menu = page.getByRole('menu', { name: 'Settings sections' });
+  await expect(menu).toBeVisible();
+  await expect(menu.getByRole('menuitem', { name: 'Profile' })).toHaveAttribute('aria-current', 'page');
+  await expect(menu.getByRole('menuitem', { name: 'Profile' })).toBeFocused();
+  // The whole list fits on a phone (or scrolls inside the popup), never off-screen.
+  const box = await menu.boundingBox();
+  expect(box && box.x >= 0 && box.x + box.width <= 390).toBe(true);
+
+  await menu.getByRole('menuitem', { name: 'Members' }).click();
+  await expect(page).toHaveURL(/\/settings\/members$/);
+  await expect(menu).toBeHidden();
+  await expect(trigger).toBeFocused();
+
+  // From 768 up the section list is back and the menu is gone.
+  await page.setViewportSize({ width: 768, height: 1024 });
+  await expect(page.getByTestId('settings-nav')).toBeVisible();
+  await expect(page.getByTestId('settings-section-menu')).toBeHidden();
+});

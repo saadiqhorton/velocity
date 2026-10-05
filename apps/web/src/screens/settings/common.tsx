@@ -6,6 +6,7 @@ import type { BreadcrumbItem } from '@velocity/ui';
 import { useWorkspace } from '@/app/workspace';
 import { useSidebar } from '@/stores/sidebar';
 import { m } from '@/i18n';
+import { SettingsSectionMenu } from './nav';
 
 export interface Crumb {
   label: string;
@@ -45,6 +46,7 @@ export function SettingsPage({ title, parents = [], description, actions, wide, 
       <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-5" data-testid="view-header">
         <IconButton label={m.nav.openMenu} size="sm" icon={<Icon name="sidebar" />} className="md:hidden" onClick={() => setDrawerOpen(true)} />
         <Breadcrumbs items={crumbs} className="min-w-0" />
+        <SettingsSectionMenu />
       </header>
       <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto">
         {/* One left edge for every settings page; forms keep a readable measure inside the wide column. */}

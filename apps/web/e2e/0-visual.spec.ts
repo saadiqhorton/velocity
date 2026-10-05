@@ -1,13 +1,17 @@
-// Lane F — visual snapshots (WP9). Chromium only; baselines are generated and approved by the
-// design owner after the design pass. Until baselines exist this spec skips, so it never fails CI
-// (and a normal run never writes unapproved baselines). Generate them explicitly with
+// Visual snapshots (WP9). Chromium only; the design owner generates and approves the baselines
+// (HANDOFF §0). Until baselines exist this spec skips, so it never fails CI (and a normal run never
+// writes unapproved baselines). Generate them explicitly with
 //   npx playwright test visual --project=chromium --update-snapshots      (or VISUAL_UPDATE=1)
+//
+// The `0-` prefix is load-bearing: Playwright runs files in name order (one worker), so this spec
+// runs straight after setup + seed and the shell baseline sees only the deterministic seed. Every
+// later spec adds issues and teams with random names (`uniqueTitle`) to the shared database.
 import { existsSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, test } from './support/fixtures';
 
-const SNAPSHOT_DIR = join(dirname(fileURLToPath(import.meta.url)), 'visual.spec.ts-snapshots');
+const SNAPSHOT_DIR = join(dirname(fileURLToPath(import.meta.url)), '0-visual.spec.ts-snapshots');
 
 function hasBaselines(): boolean {
   try {
@@ -23,25 +27,19 @@ const SIZES = [
 ] as const;
 const THEMES = ['dark', 'light'] as const;
 
-/** Masks relative timestamps ("2h ago", "just now") that drift between runs. */
+/**
+ * Masks what drifts with the clock: relative times ("2h ago") and absolute dates, which follow the
+ * run date because the seed anchors its timestamps to it (dated elements carry the full date as a
+ * title). Covers this year and last, since seeded issues go back 120 days.
+ */
 async function maskTimes(page: import('@playwright/test').Page): Promise<import('@playwright/test').Locator[]> {
-  return page.locator('time, [title*="2026"]').all();
+  const year = new Date().getUTCFullYear();
+  return page.locator(`time, [title*="${year}"], [title*="${year - 1}"]`).all();
 }
 
-/**
- * The E2E seed is random (titles, labels, counts, cycle progress) and earlier specs add teams,
- * projects and notifications to the shared DB, so the shell baseline masks that data and keeps
- * what §4.10.4 pins: region geometry (sidebar, header, list), shell chrome and the theme.
- */
-function maskSeedData(page: import('@playwright/test').Page): import('@playwright/test').Locator[] {
-  return [
-    page.getByTestId('sidebar').getByRole('navigation', { name: 'Primary' }),
-    page.getByTestId('issue-list'),
-    page.getByTestId('view-count'),
-    page.getByTestId('cycle-picker'),
-    page.getByTestId('cycle-progress'),
-  ];
-}
+// The shell baseline compares real content: the E2E seed runs `seed-cli --deterministic` (fixed RNG,
+// timestamps anchored to the run date) and this spec runs before any other (see the file name).
+// Only what still drifts is masked: relative times and dates.
 
 test.describe('visual snapshots', () => {
   test.skip(({ browserName }) => browserName !== 'chromium', 'Baselines are Chromium-only');
@@ -73,7 +71,7 @@ test.describe('visual snapshots', () => {
         await expect(page.getByTestId('issue-row').first()).toBeVisible();
         await expect(page).toHaveScreenshot(`shell-${theme}-${size.name}.png`, {
           fullPage: false,
-          mask: [...(await maskTimes(page)), ...maskSeedData(page)],
+          mask: await maskTimes(page),
         });
       });
     }
