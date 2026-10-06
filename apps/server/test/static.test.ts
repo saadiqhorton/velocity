@@ -55,4 +55,12 @@ describe('SPA index under the production CSP (SPEC §7.1.4)', () => {
     const b = await getIndex('/');
     expect(a.nonce).not.toBe(b.nonce);
   });
+
+  it('limits form-action to self and github.com for the in-app GitHub App manifest form', async () => {
+    running = await boot({ webDistDir: dist });
+    const { csp } = await getIndex('/');
+    const formAction = csp.split(';').map((d) => d.trim()).find((d) => d.startsWith('form-action'));
+    expect(formAction).toBe("form-action 'self' https://github.com");
+  });
 });
+

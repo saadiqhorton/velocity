@@ -60,6 +60,14 @@ function isLetter(k: string): boolean {
   return k.length === 1 && /[a-z]/i.test(k);
 }
 
+/**
+ * Punctuation keys read by their physical position when a modifier is held, so `⌘⇧.`
+ * stays `mod+shift+.` instead of becoming `mod+>` (layout-dependent) and colliding with
+ * `⌘.` once shift is dropped for symbols (U2 copy shortcuts).
+ */
+const PHYSICAL_PUNCTUATION: Record<string, string> = { Period: '.', Comma: ',' };
+const PHYSICAL_KEYS = new Set(Object.values(PHYSICAL_PUNCTUATION));
+
 /** Normalize a key event into a binding token: `[mod+][alt+][shift+]key`. */
 export function eventToToken(e: KeyLike): string {
   let key = e.key;
@@ -67,14 +75,18 @@ export function eventToToken(e: KeyLike): string {
   // Alt+letter yields a symbol on macOS (alt+a = å); recover the physical letter.
   if (e.altKey && e.code && /^Key[A-Z]$/.test(e.code)) key = e.code.slice(3);
   if (e.altKey && e.code && /^Digit\d$/.test(e.code)) key = e.code.slice(5);
+  const modified = Boolean(e.metaKey || e.ctrlKey || e.altKey);
+  const physical = modified && e.code ? PHYSICAL_PUNCTUATION[e.code] : undefined;
+  if (physical) key = physical;
   let k = key.length === 1 ? key : key.toLowerCase();
   k = NAMED[k] ?? k;
   if (isLetter(k)) k = k.toLowerCase();
   const parts: string[] = [];
   if (e.metaKey || e.ctrlKey) parts.push('mod');
   if (e.altKey) parts.push('alt');
-  // Shift matters for letters and named keys; for symbols (?, #, >) it is implied by the key.
-  if (e.shiftKey && (isLetter(k) || k.length > 1)) parts.push('shift');
+  // Shift matters for letters and named keys; for symbols (?, #, >) it is implied by the key,
+  // except for physical punctuation under a modifier (see PHYSICAL_PUNCTUATION).
+  if (e.shiftKey && (isLetter(k) || k.length > 1 || Boolean(physical))) parts.push('shift');
   parts.push(k);
   return parts.join('+');
 }
@@ -99,7 +111,8 @@ export function normalizeBinding(binding: string): string {
       const parts: string[] = [];
       if (mods.has('mod')) parts.push('mod');
       if (mods.has('alt')) parts.push('alt');
-      if (mods.has('shift') && (isLetter(key) || key.length > 1)) parts.push('shift');
+      const physical = (mods.has('mod') || mods.has('alt')) && PHYSICAL_KEYS.has(key);
+      if (mods.has('shift') && (isLetter(key) || key.length > 1 || physical)) parts.push('shift');
       parts.push(key);
       return parts.join('+');
     })
@@ -304,6 +317,12 @@ export function formatBinding(binding: string, mac: boolean): string[][] {
             return 'Esc';
           case 'space':
             return 'Space';
+          case 'backspace':
+            return '⌫';
+          case 'contextmenu':
+            return 'Menu';
+          case 'f10':
+            return 'F10';
           case 'tab':
             return 'Tab';
           default:

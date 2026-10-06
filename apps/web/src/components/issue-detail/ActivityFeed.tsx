@@ -47,31 +47,38 @@ function sentence(e: Entry, ws: WorkspaceData): string {
   return `${verb} ${describeValue(e.type, e.toValue, ws)}`;
 }
 
+export type ActivityEntry = Entry;
+
+/** One history line: actor, what changed, when. */
+export function ActivityItem({ entry: e }: { entry: Entry }) {
+  const ws = useWorkspace();
+  const actor = e.actor?.name ?? (e.actorKind === 'github' ? m.activity.actorGithub : e.actorKind === 'import' ? m.activity.actorImport : m.activity.actorSystem);
+  return (
+    <li className="flex min-h-8 items-start gap-2 py-1 text-base" data-testid="activity-entry">
+      <span className="mt-0.5 flex w-5 shrink-0 justify-center">
+        {e.actor ? <Avatar name={e.actor.name} src={e.actor.avatarUrl} size={20} /> : <Icon name={e.actorKind === 'github' ? 'github' : 'refresh'} className="text-fg-subtlest" />}
+      </span>
+      <span className="min-w-0 flex-1 text-fg-subtle">
+        <span className="font-medium text-fg">{actor}</span> {sentence(e, ws)}
+      </span>
+      <time className="shrink-0 text-sm text-fg-subtlest" dateTime={e.createdAt} title={formatDateTime(e.createdAt)}>
+        {formatRelative(e.createdAt)}
+      </time>
+    </li>
+  );
+}
+
 /** Activity timeline (SPEC §3.5.4): property changes, moves, archive/trash, GitHub events. */
 export function ActivityFeed({ issueId }: { issueId: string }) {
-  const ws = useWorkspace();
   const { data, loading } = useQuery(IssueActivityDocument, { variables: { id: issueId }, fetchPolicy: 'cache-and-network' });
   const entries = [...(data?.issue?.activity ?? [])].reverse();
   if (loading && !data) return <Skeleton rows={4} />;
   if (entries.length === 0) return <p className="text-base text-fg-subtlest">{m.issue.noActivity}</p>;
   return (
     <ol className="flex flex-col" data-testid="activity">
-      {entries.map((e) => {
-        const actor = e.actor?.name ?? (e.actorKind === 'github' ? m.activity.actorGithub : e.actorKind === 'import' ? m.activity.actorImport : m.activity.actorSystem);
-        return (
-          <li key={e.id} className="flex min-h-8 items-start gap-2 py-1 text-base">
-            <span className="mt-0.5 flex w-5 justify-center">
-              {e.actor ? <Avatar name={e.actor.name} src={e.actor.avatarUrl} size={20} /> : <Icon name={e.actorKind === 'github' ? 'github' : 'refresh'} className="text-fg-subtlest" />}
-            </span>
-            <span className="min-w-0 flex-1 text-fg-subtle">
-              <span className="font-medium text-fg">{actor}</span> {sentence(e, ws)}
-            </span>
-            <time className="shrink-0 text-sm text-fg-subtlest" dateTime={e.createdAt} title={formatDateTime(e.createdAt)}>
-              {formatRelative(e.createdAt)}
-            </time>
-          </li>
-        );
-      })}
+      {entries.map((e) => (
+        <ActivityItem key={e.id} entry={e} />
+      ))}
     </ol>
   );
 }

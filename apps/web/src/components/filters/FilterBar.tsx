@@ -22,6 +22,7 @@ import {
 import type { ChipField } from '@/lib/chips';
 import { ColorDot, ProjectIcon, TeamIcon } from '@/components/common/EntityIcons';
 import { PRIORITY_KEYS } from '@/components/issues/IssueRow';
+import { useFeatures } from '@/lib/features';
 import { m } from '@/i18n';
 
 const FIELD_ICON: Record<ChipField, ReactNode> = {
@@ -266,7 +267,9 @@ export function FilterBar({ chips, onChange, teamId, hiddenFields = [] }: Filter
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const [fieldOpen, setFieldOpen] = useState(false);
 
-  const fieldChoices: PopupOption[] = CHIP_FIELDS.filter((f) => !hiddenFields.includes(f)).map((f) => ({
+  const features = useFeatures();
+  const offFields: FilterField[] = [...(features.cycles ? [] : (['cycle'] as const)), ...(features.estimates ? [] : (['estimate'] as const))];
+  const fieldChoices: PopupOption[] = CHIP_FIELDS.filter((f) => !hiddenFields.includes(f) && !offFields.includes(f)).map((f) => ({
     value: f,
     label: fieldLabel(f),
     icon: FIELD_ICON[f],

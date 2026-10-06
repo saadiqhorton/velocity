@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import { ServiceBase } from './base';
 import type { ServiceActor } from './context';
 import { assertCan } from './lib/permissions';
+import { teamIdsFor } from './lib/team-key';
 
 export type SearchType = 'issue' | 'project' | 'team' | 'member' | 'view';
 
@@ -76,7 +77,7 @@ export class SearchService extends ServiceBase {
       const r = await this.db.execute<SearchHit>(sql`
         select 'issue' as type, i.id, i.title, t.key || '-' || i.number as subtitle, 2.0 as rank
         from issues i join teams t on t.id = i.team_id
-        where t.key = ${ident[1]!.toUpperCase()} and i.number = ${Number(ident[2])} and i.trashed_at is null
+        where t.id in ${teamIdsFor(ident[1]!)} and i.number = ${Number(ident[2])} and i.trashed_at is null
         limit 1`);
       if (r.rows.length) return r.rows;
     }

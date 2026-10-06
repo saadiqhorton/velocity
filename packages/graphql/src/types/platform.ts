@@ -169,13 +169,33 @@ GithubLinkRef.implement({
   }),
 });
 
-const GithubIntegrationRef = builder.objectRef<{ configured: boolean; installUrl: string | null; installs: import('@velocity/services').GithubInstallRow[] }>('GithubIntegration');
+const GithubIntegrationRef = builder.objectRef<{
+  configured: boolean;
+  source: 'database' | 'environment' | null;
+  appName: string | null;
+  installUrl: string | null;
+  installs: import('@velocity/services').GithubInstallRow[];
+}>('GithubIntegration');
 GithubIntegrationRef.implement({
   fields: (t) => ({
-    configured: t.exposeBoolean('configured', { description: 'GitHub App credentials are present in the environment.' }),
+    configured: t.exposeBoolean('configured', { description: 'GitHub App credentials are present (in the database or the environment).' }),
+    source: t.string({ nullable: true, description: 'Where the App credentials came from: an in-app manifest registration or the environment.', resolve: (g) => g.source }),
+    appName: t.exposeString('appName', { nullable: true, description: 'The registered App name when it was created in-app.' }),
     installUrl: t.exposeString('installUrl', { nullable: true }),
     installs: t.field({ type: [GithubInstallRef], resolve: (g) => g.installs }),
   }),
+});
+
+const GithubAppManifestRef = builder.objectRef<{ action: string; manifest: string }>('GithubAppManifest');
+GithubAppManifestRef.implement({
+  fields: (t) => ({
+    action: t.exposeString('action', { description: 'URL to POST the manifest form to (github.com/settings/apps/new or the org equivalent).' }),
+    manifest: t.exposeString('manifest', { description: 'The JSON-encoded App manifest to submit in the `manifest` form field.' }),
+  }),
+});
+
+const ConfirmGithubAppInput = builder.inputType('ConfirmGithubAppInput', {
+  fields: (t) => ({ code: t.string({ required: true }), state: t.string({ required: true }) }),
 });
 
 const GithubSettingsInput = builder.inputType('GithubSettingsInput', {
@@ -336,8 +356,14 @@ builder.queryFields((t) => ({
     type: GithubIntegrationRef,
     resolve: async (_r, _a, ctx) => {
       const actor = requireActor(ctx);
-      const configured = ctx.services.github.isConfigured();
-      return { configured, installUrl: ctx.services.github.installUrl(), installs: configured ? await ctx.services.github.installs(actor) : [] };
+      const status = await ctx.services.github.setupStatus();
+      return {
+        configured: status.configured,
+        source: status.source,
+        appName: status.appName,
+        installUrl: await ctx.services.github.installUrl(),
+        installs: status.configured ? await ctx.services.github.installs(actor) : [],
+      };
     },
   }),
   importRuns: t.field({ type: [ImportRunRef], resolve: (_r, _a, ctx) => ctx.services.importer.list(requireActor(ctx)) }),
@@ -418,6 +444,25 @@ builder.mutationFields((t) => ({
     type: DeliveryRef,
     args: { deliveryId: t.arg.id({ required: true }) },
     resolve: (_r, a, ctx) => ctx.services.webhooks.redeliver(requireActor(ctx), a.deliveryId),
+  }),
+
+  beginGithubAppSetup: t.field({
+    type: GithubAppManifestRef,
+    args: { organization: t.arg.string() },
+    resolve: (_r, a, ctx) => ctx.services.github.beginManifest(requireSessionActor(ctx), { organization: a.organization }),
+  }),
+  confirmGithubAppSetup: t.boolean({
+    args: { input: t.arg({ type: ConfirmGithubAppInput, required: true }) },
+    resolve: async (_r, a, ctx) => {
+      await ctx.services.github.confirmManifest(requireSessionActor(ctx), { code: a.input.code, state: a.input.state });
+      return true;
+    },
+  }),
+  removeGithubApp: t.boolean({
+    resolve: async (_r, _a, ctx) => {
+      await ctx.services.github.removeApp(requireActor(ctx));
+      return true;
+    },
   }),
 
   githubCompleteInstall: t.field({

@@ -84,7 +84,7 @@ function ReactionBar({ comment, emoji }: { comment: CommentFieldsFragment; emoji
   );
 }
 
-function CommentItem({ comment, emoji }: { comment: CommentFieldsFragment; emoji: readonly string[] }) {
+export function CommentItem({ comment, emoji }: { comment: CommentFieldsFragment; emoji: readonly string[] }) {
   const [editing, setEditing] = useState(false);
   const [confirm, setConfirm] = useState(false);
   const editor = useRef<MarkdownEditorHandle>(null);
@@ -185,7 +185,7 @@ function CommentItem({ comment, emoji }: { comment: CommentFieldsFragment; emoji
   );
 }
 
-function Composer({ issueId }: { issueId: string }) {
+export function Composer({ issueId }: { issueId: string }) {
   const { viewer } = useWorkspace();
   const editor = useRef<MarkdownEditorHandle>(null);
   const [empty, setEmpty] = useState(true);

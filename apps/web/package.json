@@ -6,9 +6,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "graphql-codegen --config codegen.ts && vite build",
+    "build": "graphql-codegen --config codegen.ts && node scripts/sync-persisted.mjs && vite build",
     "preview": "vite preview",
-    "codegen": "graphql-codegen --config codegen.ts",
+    "codegen": "graphql-codegen --config codegen.ts && node scripts/sync-persisted.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run --passWithNoTests",
     "test:e2e": "playwright test"

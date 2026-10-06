@@ -14,7 +14,10 @@ import type { CreateDefaults } from '@/stores/ui';
 import { groupToken } from '@/lib/grouping';
 import type { GroupBy, ListRow } from '@/lib/grouping';
 import type { DisplayState } from '@/lib/viewState';
-import { useOpenIssue, usePanelIssueId } from '@/lib/navigation';
+import { useClosePanel, useOpenIssue, usePanelIssueId } from '@/lib/navigation';
+import { forgetListMemory, listReturnPath, peekListMemory } from '@/lib/issueNav';
+import { useLocation } from 'react-router-dom';
+import { spaceTargetOk, openRowContextMenu } from './rowActions';
 import { useOptimisticMutation } from '@/lib/mutation';
 import { ContentSkeleton } from '@/components/shell/ShellSkeleton';
 import { IssueRow, PlaceholderRow } from './IssueRow';
@@ -66,8 +69,13 @@ export function IssueList({ listId, data, display, onToggleGroup, context, empty
   const setSelection = useSelection((s) => s.set);
   const openCreate = useUi((s) => s.openCreate);
   const openIssue = useOpenIssue();
+  const closePanel = useClosePanel();
   const panelIssueId = usePanelIssueId();
   const domFocusPending = useRef(false);
+  const location = useLocation();
+  // Scroll + focus to restore when coming back from the issue page (U1), read once.
+  const restore = useRef<ReturnType<typeof peekListMemory> | undefined>(undefined);
+  if (restore.current === undefined) restore.current = peekListMemory(listId, listReturnPath(location.pathname, location.search));
 
   const order = useMemo(() => rows.flatMap((r) => (r.type === 'issue' ? [r.issue.id] : [])), [rows]);
   const indexById = useMemo(() => {
@@ -103,6 +111,8 @@ export function IssueList({ listId, data, display, onToggleGroup, context, empty
     getScrollElement: () => scrollRef.current,
     estimateSize: () => ROW_HEIGHT,
     overscan: 16,
+    // Back from the issue page: start where the list was (U1).
+    initialOffset: () => restore.current?.scrollTop ?? 0,
     rangeExtractor,
     getItemKey: (index) => {
       const r = rows[index];
@@ -126,6 +136,39 @@ export function IssueList({ listId, data, display, onToggleGroup, context, empty
     if (need >= 0) data.ensureLoaded(need);
     else if (data.hasMore && lastItemIndex >= rows.length - 8) data.ensureLoaded(data.loadedCount);
   }, [items, rows, data, lastItemIndex]);
+
+  const indexByIdRef = useRef(indexById);
+  useEffect(() => {
+    indexByIdRef.current = indexById;
+  });
+  // Coming back from the issue page: same scroll offset, same row focused (U1).
+  const ready = !data.initialLoading && rows.length > 0;
+  useEffect(() => {
+    const mem = restore.current;
+    const el = scrollRef.current;
+    if (!mem || !ready || !el) return;
+    restore.current = null;
+    forgetListMemory(listId);
+    if (el.scrollTop !== mem.scrollTop) el.scrollTop = mem.scrollTop;
+    if (mem.focusedId && indexByIdRef.current.has(mem.focusedId)) {
+      domFocusPending.current = true;
+      setFocused(mem.focusedId);
+    }
+    // StrictMode re-runs effects after a simulated unmount (which clears the active list): re-arm.
+    // `ready` only flips once, so this never re-applies after a refetch.
+    return () => {
+      restore.current = mem;
+    };
+  }, [ready, setFocused, listId]);
+
+  /** Open the full page with this list as its context (U1). */
+  const openFull = useCallback(
+    (id: string) => {
+      const issue = issues.find((i) => i.id === id);
+      openIssue(id, { fromList: listId, identifier: issue?.identifier, scrollTop: scrollRef.current?.scrollTop ?? 0 });
+    },
+    [issues, openIssue, listId],
+  );
 
   // Keep the focused row in view and give it DOM focus after keyboard moves.
   useEffect(() => {
@@ -202,7 +245,7 @@ export function IssueList({ listId, data, display, onToggleGroup, context, empty
         when: () => isActiveList() && Boolean(useActiveList.getState().focusedId),
         run: () => {
           const id = useActiveList.getState().focusedId;
-          if (id) openIssue(id);
+          if (id) openFull(id);
         },
       },
       {
@@ -215,8 +258,22 @@ export function IssueList({ listId, data, display, onToggleGroup, context, empty
         when: () => isActiveList() && Boolean(useActiveList.getState().focusedId),
         run: () => {
           const id = useActiveList.getState().focusedId;
-          const issue = issues.find((i) => i.id === id);
-          if (id) openIssue(id, { fullPage: true, identifier: issue?.identifier });
+          if (id) openFull(id);
+        },
+      },
+      {
+        id: 'list.peek',
+        title: m.cmd.peekIssue,
+        group: 'list',
+        keys: ['space'],
+        scope: 'list',
+        palette: false,
+        when: () => isActiveList() && Boolean(useActiveList.getState().focusedId) && spaceTargetOk(),
+        run: () => {
+          const id = useActiveList.getState().focusedId;
+          if (!id) return;
+          if (panelIssueId === id) closePanel();
+          else openIssue(id, { peek: true });
         },
       },
       {
@@ -290,9 +347,16 @@ export function IssueList({ listId, data, display, onToggleGroup, context, empty
         range(issue.id, order);
         return;
       }
-      openIssue(issue.id);
+      openFull(issue.id);
     },
-    [setFocused, toggle, range, order, openIssue],
+    [setFocused, toggle, range, order, openFull],
+  );
+  const onRowContextMenu = useCallback(
+    (issue: IssueRowFieldsFragment, e: MouseEvent<HTMLDivElement>) => {
+      setFocused(issue.id);
+      openRowContextMenu(issue.id, e);
+    },
+    [setFocused],
   );
   const onToggleSelect = useCallback(
     (issue: IssueRowFieldsFragment, shift: boolean) => {
@@ -384,6 +448,7 @@ export function IssueList({ listId, data, display, onToggleGroup, context, empty
           onRowClick={onRowClick}
           onToggleSelect={onToggleSelect}
           onFocusRow={onFocusRow}
+          onContextMenu={onRowContextMenu}
         />
       </div>
     );

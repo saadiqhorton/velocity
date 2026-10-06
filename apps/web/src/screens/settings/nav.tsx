@@ -3,6 +3,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Button, DropdownMenu, Icon, MenuGroup, MenuItem } from '@velocity/ui';
 import type { IconName } from '@velocity/ui';
 import { useWorkspace } from '@/app/workspace';
+import { ALL_FEATURES, useFeatures } from '@/lib/features';
+import type { Features } from '@/lib/features';
 import { m } from '@/i18n';
 
 export interface SettingsNavEntry {
@@ -19,7 +21,7 @@ export interface SettingsNavGroup {
 }
 
 /** Settings sections by group (SPEC §4.11.9). Members never see owner-only sections. */
-export function settingsNavGroups(isOwner: boolean): SettingsNavGroup[] {
+export function settingsNavGroups(isOwner: boolean, features: Features = ALL_FEATURES): SettingsNavGroup[] {
   const s = m.settings.sections;
   const groups: SettingsNavGroup[] = [
     {
@@ -29,6 +31,7 @@ export function settingsNavGroups(isOwner: boolean): SettingsNavGroup[] {
         { path: 'profile', label: s.profile, icon: 'user' },
         { path: 'sessions', label: s.sessions, icon: 'key' },
         { path: 'api-keys', label: s.apiKeys, icon: 'key' },
+        { path: 'coding-tools', label: s.codingTools, icon: 'code' },
       ],
     },
     {
@@ -36,7 +39,9 @@ export function settingsNavGroups(isOwner: boolean): SettingsNavGroup[] {
       title: s.workspace,
       items: [
         { path: 'general', label: s.general, icon: 'settings', ownerOnly: true },
-        { path: 'members', label: s.members, icon: 'users' },
+        { path: 'features', label: s.features, icon: 'toggle', ownerOnly: true },
+        // Solo mode (U4): member management hides with the Members feature.
+        ...(features.members ? [{ path: 'members', label: s.members, icon: 'users' as const }] : []),
         { path: 'teams', label: s.teams, icon: 'team' },
         { path: 'labels', label: s.labels, icon: 'label' },
       ],
@@ -79,6 +84,7 @@ const FOCUS_STATE = 'settingsSectionMenu';
  */
 export function SettingsSectionMenu() {
   const { viewer } = useWorkspace();
+  const features = useFeatures();
   const { pathname, state } = useLocation();
   const navigate = useNavigate();
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -98,7 +104,7 @@ export function SettingsSectionMenu() {
           </Button>
         }
       >
-        {settingsNavGroups(viewer.isOwner).map((g) => (
+        {settingsNavGroups(viewer.isOwner, features).map((g) => (
           <MenuGroup key={g.id} heading={g.title}>
             {g.items.map((item) => (
               <MenuItem

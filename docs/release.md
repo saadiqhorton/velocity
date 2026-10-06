@@ -1,6 +1,16 @@
 # Release verification
 
-Pushing a `v*` tag starts [the release workflow](../.github/workflows/release.yml). The image job builds `linux/amd64` and `linux/arm64`, pushes to GHCR, generates an SPDX JSON SBOM, signs the image digest and attaches the SBOM attestation with Cosign. After those steps succeed, it creates or updates the GitHub release with the SBOM asset. The npm job then builds and publishes `@velocity/mcp` with provenance. It waits for the image job, so a failed image release cannot publish the npm package.
+Pushing a `v*` tag starts [CI](../.github/workflows/ci.yml), which runs lint, typecheck, unit tests, browser and visual tests, dependency audit, and a built-image Compose smoke test. Only after every job passes does CI call [the release workflow](../.github/workflows/release.yml). The image job builds `linux/amd64` and `linux/arm64`, pushes to GHCR, generates an SPDX JSON SBOM, signs the image digest and attaches the SBOM attestation with Cosign. After those steps succeed, it creates or updates the GitHub release with the SBOM asset. The npm job then builds and publishes `@velocity/mcp` with provenance. It waits for the image job, so a failed image release cannot publish the npm package.
+
+## Manual upgrade gate
+
+Before pushing a release tag, run the upgrade and restore check from a clean checkout with full Git history and Docker access:
+
+```sh
+OLD_REF=b62299922fe2721dc74ac01a5e2907853c0209b5 scripts/deploy/upgrade-smoke.sh
+```
+
+The script builds the pinned baseline and current images, verifies an existing issue survives migration, checks the pre-migration dump, restores it into a separate database, and boots the current image against that restore. It reads the expected migration counts from each checkout's migration journal. This remains a manual gate because the historical checkout's dependency resolution and two image builds have not been verified on a clean CI runner.
 
 ## Local dry run (2026-10-05)
 

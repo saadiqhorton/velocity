@@ -12,3 +12,20 @@ query TeamsAdmin {
     ...TeamFields
   }
 }
+
+fragment WorkspaceFeaturesFields on WorkspaceFeatures {
+  cycles
+  estimates
+  insights
+  members
+  solo
+}
+
+mutation UpdateWorkspaceFeatures($input: WorkspaceFeaturesInput!) {
+  updateWorkspaceFeatures(input: $input) {
+    slug
+    features {
+      ...WorkspaceFeaturesFields
+    }
+  }
+}

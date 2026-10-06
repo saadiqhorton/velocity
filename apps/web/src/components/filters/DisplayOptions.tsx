@@ -4,6 +4,7 @@ import { Button, Icon, Popover, Select, Switch } from '@velocity/ui';
 import type { GroupBy, Ordering } from '@/lib/grouping';
 import { COLUMN_KEYS } from '@/lib/viewState';
 import type { ColumnKey, DisplayState, Layout, ShowCompleted } from '@/lib/viewState';
+import { useFeatures } from '@/lib/features';
 import { m } from '@/i18n';
 
 const GROUPINGS: GroupBy[] = ['status', 'assignee', 'priority', 'label', 'project', 'cycle', 'team', 'none'];
@@ -37,6 +38,11 @@ export interface DisplayOptionsProps {
 export function DisplayOptions({ display, onChange, hiddenGroupings = [], allowBoard = true, dirty, onReset }: DisplayOptionsProps) {
   const [anchor, setAnchor] = useState<HTMLButtonElement | null>(null);
   const [open, setOpen] = useState(false);
+  // Solo mode (U4): no cycle grouping/column without cycles, no estimate sort/column without estimates.
+  const features = useFeatures();
+  const offGroupings: GroupBy[] = features.cycles ? [] : ['cycle'];
+  const offOrderings: Ordering[] = features.estimates ? [] : ['estimate'];
+  const offColumns: ColumnKey[] = [...(features.cycles ? [] : (['cycle'] as const)), ...(features.estimates ? [] : (['estimate'] as const))];
   const set = <K extends keyof DisplayState>(key: K, value: DisplayState[K]) => onChange({ ...display, [key]: value });
   const toggleColumn = (c: ColumnKey) =>
     set('columns', display.columns.includes(c) ? display.columns.filter((x) => x !== c) : COLUMN_KEYS.filter((k) => k === c || display.columns.includes(k)));
@@ -100,7 +106,7 @@ export function DisplayOptions({ display, onChange, hiddenGroupings = [], allowB
                 aria-label={m.view.grouping}
                 value={display.grouping}
                 onChange={(e) => set('grouping', e.target.value as GroupBy)}
-                options={GROUPINGS.filter((g) => !hiddenGroupings.includes(g)).map((g) => ({ value: g, label: m.view.groupBy[g] }))}
+                options={GROUPINGS.filter((g) => !hiddenGroupings.includes(g) && !offGroupings.includes(g)).map((g) => ({ value: g, label: m.view.groupBy[g] }))}
               />
             </span>
           </label>
@@ -112,7 +118,7 @@ export function DisplayOptions({ display, onChange, hiddenGroupings = [], allowB
                 aria-label={m.view.ordering}
                 value={display.ordering}
                 onChange={(e) => set('ordering', e.target.value as Ordering)}
-                options={ORDERINGS.map((o) => ({ value: o, label: m.view.orderBy[o] }))}
+                options={ORDERINGS.filter((o) => !offOrderings.includes(o)).map((o) => ({ value: o, label: m.view.orderBy[o] }))}
               />
             </span>
           </label>
@@ -143,7 +149,7 @@ export function DisplayOptions({ display, onChange, hiddenGroupings = [], allowB
           <div className="border-t border-border pt-3">
             <div className="mb-2 text-sm font-medium text-fg-subtle">{m.view.columns}</div>
             <div className="flex flex-wrap gap-1">
-              {COLUMN_KEYS.map((c) => {
+              {COLUMN_KEYS.filter((c) => !offColumns.includes(c)).map((c) => {
                 const on = display.columns.includes(c);
                 return (
                   <button

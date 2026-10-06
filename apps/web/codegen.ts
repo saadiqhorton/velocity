@@ -1,4 +1,5 @@
 import type { CodegenConfig } from '@graphql-codegen/cli';
+import { addTypenameSelectionDocumentTransform } from '@graphql-codegen/client-preset';
 
 /**
  * Typed documents for the web app (SPEC §5.4). Operations live in src/graphql/*.graphql;
@@ -12,7 +13,12 @@ const config: CodegenConfig = {
   generates: {
     './src/gql/': {
       preset: 'client',
-      presetConfig: { fragmentMasking: false },
+      // The server ships this generated map with the image. Browser operations send its
+      // hash while the public API continues to accept ordinary GraphQL documents.
+      presetConfig: { fragmentMasking: false, persistedDocuments: true },
+      // The server executes the manifest text, so it needs the same typename fields
+      // Apollo would otherwise add to the browser's outgoing document for its cache.
+      documentTransforms: [addTypenameSelectionDocumentTransform],
       config: {
         useTypeImports: true,
         enumsAsTypes: true,

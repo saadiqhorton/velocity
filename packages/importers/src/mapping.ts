@@ -13,7 +13,7 @@ export function suggestMapping(bundle: ImportBundle, ws: ImportWorkspaceSnapshot
     users: {},
     include: { projects: true, cycles: true, comments: true, relations: true, archived: false },
   };
-  const taken = new Set(ws.teams.map((t) => t.key.toUpperCase()));
+  const taken = new Set([...ws.teams.map((t) => t.key), ...(ws.reservedTeamKeys ?? [])].map((key) => key.toUpperCase()));
   const teamByExt = new Map<string, ImportWorkspaceSnapshot['teams'][number] | null>();
 
   for (const t of bundle.teams) {

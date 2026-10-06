@@ -31,10 +31,18 @@ describe('settings section navigation', () => {
   it('hides owner-only sections from members', () => {
     const owner = settingsNavGroups(true).flatMap((g) => g.items.map((i) => i.path));
     const member = settingsNavGroups(false).flatMap((g) => g.items.map((i) => i.path));
-    expect(owner).toEqual(['profile', 'sessions', 'api-keys', 'general', 'members', 'teams', 'labels', 'github', 'mcp', 'webhooks', 'import', 'export', 'audit']);
-    expect(member).toEqual(['profile', 'sessions', 'api-keys', 'members', 'teams', 'labels', 'mcp']);
+    expect(owner).toEqual(['profile', 'sessions', 'api-keys', 'coding-tools', 'general', 'features', 'members', 'teams', 'labels', 'github', 'mcp', 'webhooks', 'import', 'export', 'audit']);
+    expect(member).toEqual(['profile', 'sessions', 'api-keys', 'coding-tools', 'members', 'teams', 'labels', 'mcp']);
     // A group with nothing left for a member disappears entirely.
     expect(settingsNavGroups(false).map((g) => g.id)).toEqual(['account', 'workspace', 'integrations']);
+  });
+
+  it('hides member management in Solo mode (U4)', () => {
+    const solo = { cycles: false, estimates: false, insights: false, members: false, solo: true };
+    const paths = settingsNavGroups(true, solo).flatMap((g) => g.items.map((i) => i.path));
+    expect(paths).not.toContain('members');
+    expect(paths).toContain('features');
+    expect(paths).toContain('profile');
   });
 
   it('treats nested pages as part of their section', () => {

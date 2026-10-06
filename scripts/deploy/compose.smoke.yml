@@ -2,6 +2,7 @@
 # Supply POSTGRES_PASSWORD, APP_SECRET and VELOCITY_IMAGE via --env-file.
 services:
   app:
+    build: !reset null
     env_file: !reset []
     environment:
       APP_SECRET: ${APP_SECRET:?set APP_SECRET for smoke checks}

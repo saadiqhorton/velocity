@@ -25,12 +25,7 @@ test.describe('issue reordering', () => {
     const [indexABefore, indexBBefore] = rowIndexesBefore;
     expect(indexBBefore).toBeLessThan(indexABefore); // B is above A initially
 
-    // Focus B's row (click it, then press Escape if a panel opened).
-    await rowB.click();
-    const panel = page.getByTestId('detail-panel');
-    if (await panel.isVisible()) {
-      await page.keyboard.press('Escape');
-    }
+    // Focus B's row (a click would open the issue page, U1).
     await rowB.focus();
     await expect(rowB).toBeFocused();
 
@@ -78,11 +73,6 @@ test.describe('issue reordering', () => {
 
     // Focus A and move it up past B.
     const rows = page.getByTestId('issue-row');
-    await rowA.click();
-    const panel = page.getByTestId('detail-panel');
-    if (await panel.isVisible()) {
-      await page.keyboard.press('Escape');
-    }
     await rowA.focus();
 
     await page.keyboard.press('Alt+ArrowUp');

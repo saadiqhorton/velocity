@@ -40,6 +40,23 @@ async function maskTimes(page: import('@playwright/test').Page): Promise<import(
   return page.locator(`time, [title*="${year}"], [title*="${year - 1}"]`).all();
 }
 
+/**
+ * A tall `fullPage` capture in the Playwright image can measure a few pixels short on the first
+ * attempt (the scroll-and-stitch path settles after one pass), which fails Playwright's
+ * two-consecutive-screenshot stability check even though the page itself never moves. Wait for the
+ * self-hosted font and then take warm-up screenshots until the captured height stops changing.
+ */
+async function settleFullPage(page: import('@playwright/test').Page): Promise<void> {
+  await page.evaluate(() => document.fonts.ready);
+  let previous = -1;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const height = (await page.screenshot({ fullPage: true })).readUInt32BE(20);
+    if (height === previous) return;
+    previous = height;
+    await page.waitForTimeout(100);
+  }
+}
+
 // The shell baseline compares real content: the E2E seed runs `seed-cli --deterministic` (fixed RNG,
 // timestamps anchored to the run date) and this spec runs before any other (see the file name).
 // Only what still drifts is masked: relative times and dates.
@@ -60,6 +77,7 @@ test.describe('visual snapshots', { tag: '@visual' }, () => {
         await page.setViewportSize({ width: size.width, height: size.height });
         await page.goto(`/__gallery?enable=1&theme=${theme}`);
         await expect(page.locator('[data-theme-name]')).toHaveAttribute('data-theme-name', theme);
+        await settleFullPage(page);
         await expect(page).toHaveScreenshot(`gallery-${theme}-${size.name}.png`, {
           fullPage: true,
           mask: await maskTimes(page),

@@ -12,6 +12,7 @@ import { useSelection } from '@/stores/selection';
 import { useTheme } from '@/stores/theme';
 import { useUi } from '@/stores/ui';
 import { useSetTheme } from '@/components/shell/theme';
+import { teamUsesCycles, useFeatures } from '@/lib/features';
 import { m } from '@/i18n';
 
 /** Team context for G-chords: route → active list → open issue → first team. */
@@ -29,10 +30,10 @@ function useCurrentTeamKey(): () => string | null {
 
 /** Global commands (SPEC §4.12, §4.13): palette, create, search, help, G-chords, theme. */
 export function GlobalCommands() {
-  const location = useLocation();
   const navigate = useNavigate();
   const client = useApolloClient();
   const ws = useWorkspace();
+  const features = useFeatures();
   const ui = useUi();
   const teamKey = useCurrentTeamKey();
   const panelIssue = usePanelIssueId();
@@ -63,7 +64,7 @@ export function GlobalCommands() {
       keywords: [t.key],
       run: () => navigate(`/team/${t.key}/backlog`),
     },
-    ...(t.cycleEnabled
+    ...(teamUsesCycles(features, t)
       ? [
           {
             id: `nav.team.${t.id}.cycles`,
@@ -115,13 +116,10 @@ export function GlobalCommands() {
         group: 'general',
         keys: ['escape'],
         palette: false,
-        when: () => Boolean(panelIssue) || location.pathname.startsWith('/issue/') || useSelection.getState().selected.size > 0,
+        // On the issue page, Esc with nothing else to close returns to the list (IssuePageHeader).
+        when: () => Boolean(panelIssue) || useSelection.getState().selected.size > 0,
         run: () => {
           if (panelIssue) closePanel();
-          else if (location.pathname.startsWith('/issue/')) {
-            if (window.history.state?.idx > 0) navigate(-1);
-            else goTeam('active');
-          }
           else useSelection.getState().clear();
         },
       },
@@ -131,10 +129,10 @@ export function GlobalCommands() {
       { id: 'go.all', title: m.cmd.goAll, group: 'navigation', keys: ['g a'], run: () => navigate('/issues') },
       { id: 'go.projects', title: m.cmd.goProjects, group: 'navigation', keys: ['g p'], run: () => navigate('/projects') },
       { id: 'go.settings', title: m.cmd.goSettings, group: 'navigation', keys: ['g s'], run: () => navigate('/settings') },
-      { id: 'go.cycle', title: m.cmd.goCycle, group: 'navigation', keys: ['g t'], run: () => goTeam('cycles') },
+      { id: 'go.cycle', title: m.cmd.goCycle, group: 'navigation', keys: ['g t'], when: () => features.cycles, run: () => goTeam('cycles') },
       { id: 'go.active', title: m.cmd.goActive, group: 'navigation', keys: ['g c'], run: () => goTeam('active') },
       { id: 'go.views', title: m.cmd.goViews, group: 'navigation', keys: ['g v'], run: () => navigate('/views') },
-      { id: 'go.insights', title: m.cmd.goInsights, group: 'navigation', run: () => navigate('/insights') },
+      { id: 'go.insights', title: m.cmd.goInsights, group: 'navigation', when: () => features.insights, run: () => navigate('/insights') },
       {
         id: 'theme.toggle',
         title: m.cmd.toggleTheme,

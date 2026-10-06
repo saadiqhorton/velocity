@@ -49,6 +49,15 @@ beforeAll(async () => {
 afterAll(async () => h.close());
 
 describe('issue list API', () => {
+  it('resolves an identifier written before a team-key rename', async () => {
+    const team = await h.services.teams.create(owner, { key: 'OLDAPI', name: 'Old API team' });
+    const issue = await h.services.issues.create(owner, { teamId: team.id, title: 'Keep API link' });
+    await h.services.teams.update(owner, team.id, { key: 'NEWAPI' });
+    const oldIdentifier = `OLDAPI-${issue.number}`;
+    const result = await executeApi(h, member, 'query OldIssue($identifier: String!) { issueByIdentifier(identifier: $identifier) { id identifier } }', { identifier: oldIdentifier });
+    expect(payload(result, 'issueByIdentifier')).toMatchObject({ id: issue.id, identifier: `NEWAPI-${issue.number}` });
+  });
+
   it('combines team, DSL filtering, ordering, and cursor pagination', async () => {
     const first = await executeApi(h, member, ISSUE_LIST, {
       teamKey: 'API', filter: 'title contains:"Alpha"', ordering: 'priority', first: 1,
@@ -131,6 +140,44 @@ describe('typed GraphQL errors', () => {
 });
 
 describe('API permission truth table', () => {
+  it('stores coding tools for the viewer without exposing them on other members', async () => {
+    const query = 'query { viewer { id preferences { codingTools { id preset name kind template enabled shortcut } promptInstructions } } }';
+    const mutation = 'mutation SavePreferences($input: UpdatePreferencesInput!) { updatePreferences(input: $input) { codingTools { id preset name kind template enabled shortcut } promptInstructions } }';
+    expect((payload(await executeApi(h, member, query), 'viewer')).preferences).toBeNull();
+    const input = {
+      codingTools: [{ id: 'codex', preset: 'codex', name: 'Codex', kind: 'deeplink', template: 'codex://new?prompt={prompt}', enabled: true, shortcut: 'mod+alt+.' }],
+      promptInstructions: 'Use tests',
+    };
+    expect(errorCode(await executeApi(h, apiActor(member, 'read'), mutation, { input }))).toBe('FORBIDDEN');
+    expect(errorCode(await executeApi(h, null, mutation, { input }))).toBe('UNAUTHENTICATED');
+    expect(errorCode(await executeApi(h, member, mutation, { input: { ...input, codingTools: [{ ...input.codingTools[0], template: 'javascript:{prompt}' }] } }))).toBe('VALIDATION');
+    const saved = payload(await executeApi(h, member, mutation, { input }), 'updatePreferences');
+    expect(saved).toEqual({ codingTools: [{ ...input.codingTools[0] }], promptInstructions: input.promptInstructions });
+    expect(payload(await executeApi(h, member, query), 'viewer').preferences).toEqual(saved);
+    expect(payload(await executeApi(h, owner, query), 'viewer').preferences).toBeNull();
+    const members = payload(await executeApi(h, owner, 'query { users { id preferences { promptInstructions } } }'), 'users') as unknown as { id: string; preferences: unknown }[];
+    expect(members.find((u) => u.id === member.userId)?.preferences).toBeNull();
+  });
+
+  it('exposes solo flags and permits only the owner to update them', async () => {
+    const query = 'query { workspace { features { cycles estimates insights members solo } } }';
+    expect(payload(await executeApi(h, member, query), 'workspace').features).toEqual({
+      cycles: false, estimates: false, insights: false, members: false, solo: true,
+    });
+    const mutation = 'mutation SetFeatures($input: WorkspaceFeaturesInput!) { updateWorkspaceFeatures(input: $input) { features { cycles estimates insights members solo } } }';
+    const input = { cycles: true, estimates: true };
+    for (const actor of [member, apiActor(member, 'write'), apiActor(owner, 'read')]) {
+      expect(errorCode(await executeApi(h, actor, mutation, { input }))).toBe('FORBIDDEN');
+    }
+    expect(errorCode(await executeApi(h, null, mutation, { input }))).toBe('UNAUTHENTICATED');
+    expect(errorCode(await executeApi(h, owner, mutation, { input: {} }))).toBe('VALIDATION');
+    expect(errorCode(await executeApi(h, owner, mutation, { input: { cycles: null } }))).toBe('VALIDATION');
+    const changed = payload(await executeApi(h, owner, mutation, { input }), 'updateWorkspaceFeatures');
+    expect(changed.features).toEqual({ cycles: true, estimates: true, insights: false, members: false, solo: false });
+    expect(payload(await executeApi(h, member, query), 'workspace').features).toEqual(changed.features);
+    await executeApi(h, owner, mutation, { input: { cycles: false, estimates: false } });
+  });
+
   it('allows owner and member sessions to read and write issues, with owner-only operations guarded', async () => {
     for (const actor of [owner, member]) {
       const query = await executeApi(h, actor, ISSUE_LIST, { teamId, first: 1 });
@@ -291,6 +338,58 @@ describe('API permission truth table', () => {
     expect((payload(removed, 'removeAvatar') as { avatarUrl: string | null }).avatarUrl).toBeNull();
     const after = await executeApi(h, owner, 'query { viewer { avatarUrl } }');
     expect((payload(after, 'viewer') as { avatarUrl: string | null }).avatarUrl).toBeNull();
+  });
+});
+
+describe('GitHub App manifest setup API', () => {
+  const BEGIN = 'mutation Begin($organization: String) { beginGithubAppSetup(organization: $organization) { action manifest } }';
+  const CONFIRM = 'mutation Confirm($input: ConfirmGithubAppInput!) { confirmGithubAppSetup(input: $input) }';
+  const REMOVE = 'mutation { removeGithubApp }';
+
+  it('lets the owner begin setup with a github.com action URL, state, and webhook hook URL', async () => {
+    const begun = payload(await executeApi(h, owner, BEGIN), 'beginGithubAppSetup') as { action: string; manifest: string };
+    const url = new URL(begun.action);
+    expect(url.origin).toBe('https://github.com');
+    expect(url.searchParams.get('state')).toBeTruthy();
+    const manifest = JSON.parse(begun.manifest) as { hook_attributes: { url: string } };
+    expect(manifest.hook_attributes.url.endsWith('/api/github/webhook')).toBe(true);
+    const org = payload(await executeApi(h, owner, BEGIN, { organization: 'acme' }), 'beginGithubAppSetup') as { action: string };
+    expect(org.action).toContain('https://github.com/organizations/acme/settings/apps/new?state=');
+  });
+
+  it('rejects an invalid organization name', async () => {
+    for (const organization of ['bad org', '-lead', 'a/b', 'x'.repeat(40)]) {
+      expect(errorCode(await executeApi(h, owner, BEGIN, { organization }))).toBe('VALIDATION');
+    }
+  });
+
+  it('rejects members for begin, confirm, and remove', async () => {
+    expect(errorCode(await executeApi(h, member, BEGIN))).toBe('FORBIDDEN');
+    expect(errorCode(await executeApi(h, member, CONFIRM, { input: { code: 'c', state: 's' } }))).toBe('FORBIDDEN');
+    expect(errorCode(await executeApi(h, member, REMOVE))).toBe('FORBIDDEN');
+    expect(errorCode(await executeApi(h, null, BEGIN))).toBe('UNAUTHENTICATED');
+  });
+
+  it('rejects a tampered state without calling GitHub', async () => {
+    const begun = payload(await executeApi(h, owner, BEGIN), 'beginGithubAppSetup') as { action: string };
+    const state = new URL(begun.action).searchParams.get('state') ?? '';
+    let calls = 0;
+    const original = h.services.github.fetchImpl;
+    h.services.github.fetchImpl = (async () => { calls += 1; return new Response('{}'); }) as typeof fetch;
+    try {
+      for (const bad of ['forged.state.sig', `${state}x`, '']) {
+        expect(errorCode(await executeApi(h, owner, CONFIRM, { input: { code: 'code', state: bad } }))).toBe('VALIDATION');
+      }
+    } finally {
+      h.services.github.fetchImpl = original;
+    }
+    expect(calls).toBe(0);
+  });
+
+  it('requires a session, not an API key, to begin or confirm setup', async () => {
+    const key = apiActor(owner, 'write');
+    expect(errorCode(await executeApi(h, key, BEGIN))).toBe('FORBIDDEN');
+    expect(errorCode(await executeApi(h, key, CONFIRM, { input: { code: 'c', state: 's' } }))).toBe('FORBIDDEN');
   });
 });
 

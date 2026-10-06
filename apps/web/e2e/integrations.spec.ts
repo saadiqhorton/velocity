@@ -125,7 +125,7 @@ test('signed PR opened webhook links the issue and merge closes it', async ({ pa
 
   await page.goto(`/issue/${issue.identifier}`);
   await expect(page.getByTestId('issue-title')).toHaveValue(title);
-  await page.getByRole('tab', { name: 'GitHub' }).click();
+  // The issue page lists linked pull requests in its main column (U1); the panel keeps a GitHub tab.
   await expect(page.getByTestId('github-links')).toContainText(`e2e-repo#${prNumber}`);
   await expect(page.getByTestId('github-links')).toContainText('Open');
 
@@ -133,7 +133,38 @@ test('signed PR opened webhook links the issue and merge closes it', async ({ pa
   await expect.poll(async () => (await githubIssue(page, issue.id)).status.category, { timeout: 15_000 }).toBe('done');
   await page.reload();
   await expect(page.getByTestId('prop-status')).toContainText('Done');
-  await page.getByRole('tab', { name: 'GitHub' }).click();
   await expect(page.getByTestId('github-links')).toContainText('Merged');
   expect((await githubIssue(page, issue.id)).githubLinks[0]?.mergedAt).toBeTruthy();
 });
+
+// github.com is unreachable in tests: the manifest POST is intercepted and fulfilled locally.
+test('owner sees GitHub setup and the manifest form posts to github.com with state', async ({ page }) => {
+  let posted: { url: string; body: string } | null = null;
+  await page.route('https://github.com/**', async (route) => {
+    const req = route.request();
+    posted = { url: req.url(), body: req.postData() ?? '' };
+    await route.fulfill({ status: 200, contentType: 'text/html', body: '<html><body>github stub</body></html>' });
+  });
+  await page.goto('/settings/github');
+  await expect(page.getByTestId('github-setup')).toBeVisible();
+  await page.getByTestId('github-setup-org').fill('qa-org');
+  await page.getByTestId('github-setup-button').click();
+  await expect.poll(() => posted, { timeout: 15_000 }).not.toBeNull();
+  const { url, body } = posted as unknown as { url: string; body: string };
+  expect(url).toMatch(/^https:\/\/github\.com\/organizations\/qa-org\/settings\/apps\/new\?state=.+/);
+  const manifest = JSON.parse(new URLSearchParams(body).get('manifest') ?? '{}') as Record<string, unknown>;
+  expect(manifest).toMatchObject({
+    name: 'Velocity',
+    public: false,
+    default_permissions: { issues: 'write', pull_requests: 'read', metadata: 'read' },
+  });
+  expect(String(manifest.redirect_url)).toMatch(/\/settings\/github$/);
+});
+
+test('invalid manifest code on return from GitHub shows an error and strips the params', async ({ page }) => {
+  await page.goto('/settings/github?code=bogus&state=bogus');
+  await expect(page.getByText('The setup link is invalid or expired. Start the setup again.')).toBeVisible();
+  await expect(page).not.toHaveURL(/code=|state=/);
+  await expect(page.getByTestId('github-setup')).toBeVisible();
+});
+// Removing a stored App needs real GitHub credentials (a manifest conversion), so it is not covered here.

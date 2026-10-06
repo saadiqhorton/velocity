@@ -12,7 +12,10 @@ import { useUi } from '@/stores/ui';
 import type { CreateDefaults, PickerKind } from '@/stores/ui';
 import { usePulse } from '@/stores/sync';
 import type { GroupBy, IssueGroup } from '@/lib/grouping';
-import { useOpenIssue, usePanelIssueId } from '@/lib/navigation';
+import { useClosePanel, useOpenIssue, usePanelIssueId } from '@/lib/navigation';
+import { forgetListMemory, listReturnPath, peekListMemory } from '@/lib/issueNav';
+import { useLocation } from 'react-router-dom';
+import { openRowContextMenu, spaceTargetOk } from './rowActions';
 import { ContentSkeleton } from '@/components/shell/ShellSkeleton';
 import { groupInfo } from './GroupHeader';
 import { LabelChips } from './LabelChips';
@@ -20,6 +23,7 @@ import { PRIORITY_KEYS } from './IssueRow';
 import { useUpdateIssues } from './actions';
 import { useLoadWhenVisible } from './useLoadWhenVisible';
 import type { IssueListResult } from './useIssueList';
+import { useFeatures } from '@/lib/features';
 import { m } from '@/i18n';
 
 const CARD_HEIGHT = 96;
@@ -63,10 +67,12 @@ interface CardProps {
   onClick: (issue: IssueRowFieldsFragment, e: ReactMouseEvent) => void;
   onFocus: (issue: IssueRowFieldsFragment) => void;
   onDragStart: (e: DragEvent, issue: IssueRowFieldsFragment) => void;
+  onContextMenu: (issue: IssueRowFieldsFragment, e: ReactMouseEvent<HTMLDivElement>) => void;
 }
 
-const BoardCard = memo(function BoardCard({ issue, focused, selected, onClick, onFocus, onDragStart }: CardProps) {
+const BoardCard = memo(function BoardCard({ issue, focused, selected, onClick, onFocus, onDragStart, onContextMenu }: CardProps) {
   const pulse = usePulse(issue.id);
+  const estimates = useFeatures().estimates;
   return (
     <div
       role="button"
@@ -78,6 +84,7 @@ const BoardCard = memo(function BoardCard({ issue, focused, selected, onClick, o
       aria-label={m.list.rowLabel(issue.identifier, issue.title)}
       onClick={(e) => onClick(issue, e)}
       onFocus={() => onFocus(issue)}
+      onContextMenu={(e) => onContextMenu(issue, e)}
       onDragStart={(e) => onDragStart(e, issue)}
       className={clsx(
         'flex h-full cursor-default select-none flex-col gap-1.5 rounded-md border bg-surface p-3 text-base outline-none transition-colors duration-100',
@@ -95,7 +102,7 @@ const BoardCard = memo(function BoardCard({ issue, focused, selected, onClick, o
         <PriorityIcon priority={PRIORITY_KEYS[issue.priority] ?? 'none'} />
         <StatusIcon category={issue.status.category} color={issue.status.color} label={issue.status.name} />
         {issue.labels.length > 0 ? <LabelChips labels={issue.labels} max={1} /> : null}
-        {issue.estimate !== null ? <span className="rounded-sm border border-border px-1 text-sm text-fg-subtle">{issue.estimate}</span> : null}
+        {estimates && issue.estimate !== null ? <span className="rounded-sm border border-border px-1 text-sm text-fg-subtle">{issue.estimate}</span> : null}
       </div>
     </div>
   );
@@ -111,6 +118,7 @@ interface ColumnProps {
   cycleNames?: ReadonlyMap<string, string>;
   onCardClick: (issue: IssueRowFieldsFragment, e: ReactMouseEvent) => void;
   onCardFocus: (issue: IssueRowFieldsFragment) => void;
+  onCardContextMenu: (issue: IssueRowFieldsFragment, e: ReactMouseEvent<HTMLDivElement>) => void;
   onDragStart: (e: DragEvent, issue: IssueRowFieldsFragment) => void;
   onDragEnter: (key: string | null) => void;
   onDrop: (key: string | null) => void;
@@ -120,7 +128,7 @@ interface ColumnProps {
   loadedCount: number;
 }
 
-function BoardColumn({ group, grouping, focusedId, selected, dropActive, context, cycleNames, onCardClick, onCardFocus, onDragStart, onDragEnter, onDrop, onNeedMore, loadedCount }: ColumnProps) {
+function BoardColumn({ group, grouping, focusedId, selected, dropActive, context, cycleNames, onCardClick, onCardFocus, onCardContextMenu, onDragStart, onDragEnter, onDrop, onNeedMore, loadedCount }: ColumnProps) {
   const ws = useWorkspace();
   const openCreate = useUi((s) => s.openCreate);
   const info = groupInfo(grouping, group.key, ws, cycleNames);
@@ -175,7 +183,7 @@ function BoardColumn({ group, grouping, focusedId, selected, dropActive, context
                 key={issue.id}
                 style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: CARD_HEIGHT, transform: `translateY(${it.start}px)` }}
               >
-                <BoardCard issue={issue} focused={issue.id === focusedId} selected={selected.has(issue.id)} onClick={onCardClick} onFocus={onCardFocus} onDragStart={onDragStart} />
+                <BoardCard issue={issue} focused={issue.id === focusedId} selected={selected.has(issue.id)} onClick={onCardClick} onFocus={onCardFocus} onDragStart={onDragStart} onContextMenu={onCardContextMenu} />
               </div>
             );
           })}
@@ -209,8 +217,12 @@ export function IssueBoard({ listId, data, grouping, context, cycleNames, empty 
   const loadMore = useCallback(() => ensureLoaded(loadedCount + BOARD_PAGE), [ensureLoaded, loadedCount]);
   const update = useUpdateIssues();
   const openIssue = useOpenIssue();
+  const closePanel = useClosePanel();
   const panelIssueId = usePanelIssueId();
   const openPicker = useUi((s) => s.openPicker);
+  const location = useLocation();
+  const restore = useRef<ReturnType<typeof peekListMemory> | undefined>(undefined);
+  if (restore.current === undefined) restore.current = peekListMemory(listId, listReturnPath(location.pathname, location.search));
   const focusedId = useActiveList((s) => (s.listId === listId ? s.focusedId : null));
   const setList = useActiveList((s) => s.setList);
   const clearList = useActiveList((s) => s.clearList);
@@ -264,6 +276,33 @@ export function IssueBoard({ listId, data, grouping, context, cycleNames, empty 
   };
 
   const isActive = () => useActiveList.getState().listId === listId;
+
+  /** Full page with this board as its list context (U1). */
+  const openFull = useCallback(
+    (id: string) => {
+      const issue = data.issues.find((i) => i.id === id);
+      openIssue(id, { fromList: listId, identifier: issue?.identifier });
+    },
+    [data.issues, openIssue, listId],
+  );
+
+  // Back from the issue page: focus the card that was open (U1).
+  const ready = order.length > 0;
+  const latest = useRef({ order, focusCard });
+  useEffect(() => {
+    latest.current = { order, focusCard };
+  });
+  useEffect(() => {
+    const mem = restore.current;
+    if (!mem || !ready) return;
+    restore.current = null;
+    forgetListMemory(listId);
+    if (mem.focusedId && latest.current.order.includes(mem.focusedId)) latest.current.focusCard(mem.focusedId);
+    // StrictMode's simulated unmount clears the active list: re-arm. `ready` flips once.
+    return () => {
+      restore.current = mem;
+    };
+  }, [ready, listId]);
   const picker = PICKER_FOR[grouping];
 
   useCommands(() => [
@@ -281,7 +320,22 @@ export function IssueBoard({ listId, data, grouping, context, cycleNames, empty 
       when: () => isActive() && Boolean(useActiveList.getState().focusedId),
       run: () => {
         const id = useActiveList.getState().focusedId;
-        if (id) openIssue(id);
+        if (id) openFull(id);
+      },
+    },
+    {
+      id: 'board.peek',
+      title: m.cmd.peekIssue,
+      group: 'list',
+      keys: ['space'],
+      scope: 'list',
+      palette: false,
+      when: () => isActive() && Boolean(useActiveList.getState().focusedId) && spaceTargetOk(),
+      run: () => {
+        const id = useActiveList.getState().focusedId;
+        if (!id) return;
+        if (panelIssueId === id) closePanel();
+        else openIssue(id, { peek: true });
       },
     },
     {
@@ -316,9 +370,16 @@ export function IssueBoard({ listId, data, grouping, context, cycleNames, empty 
     (issue: IssueRowFieldsFragment, e: ReactMouseEvent) => {
       setFocused(issue.id);
       if (e.metaKey || e.ctrlKey || e.shiftKey) toggle(issue.id);
-      else openIssue(issue.id);
+      else openFull(issue.id);
     },
-    [setFocused, toggle, openIssue],
+    [setFocused, toggle, openFull],
+  );
+  const onCardContextMenu = useCallback(
+    (issue: IssueRowFieldsFragment, e: ReactMouseEvent<HTMLDivElement>) => {
+      setFocused(issue.id);
+      openRowContextMenu(issue.id, e);
+    },
+    [setFocused],
   );
   const onDragStart = useCallback(
     (e: DragEvent, issue: IssueRowFieldsFragment) => {
@@ -363,6 +424,7 @@ export function IssueBoard({ listId, data, grouping, context, cycleNames, empty 
           cycleNames={cycleNames}
           onCardClick={onCardClick}
           onCardFocus={(issue) => setFocused(issue.id)}
+          onCardContextMenu={onCardContextMenu}
           onDragStart={onDragStart}
           onDragEnter={(key) => {
             if (drag && drag.over !== key) setDrag({ ...drag, over: key });

@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { App } from '@octokit/app';
-import { githubEvents, githubInstalls, githubLinks, issueActivity } from '@velocity/schema';
+import { githubApp, githubEvents, githubInstalls, githubLinks, issueActivity } from '@velocity/schema';
 import type { GithubInstallSettings } from '@velocity/schema';
 import { publish } from '@velocity/events';
 import { ServiceBase } from './base';
@@ -11,10 +11,36 @@ import { actorUserId, systemActor } from './context';
 import type { Tx } from './db';
 import { ServiceError, notFound, unauthenticated, validation } from './errors';
 import type { IssueRow, IssueService } from './issues';
-import { verifyHmacSignature } from './lib/crypto';
+import { createCipherBox, verifyHmacSignature } from './lib/crypto';
+import type { CipherBox } from './lib/crypto';
+import { createGithubManifestState, verifyGithubManifestState } from './lib/github-manifest-state';
 import { extractIssueRefsFromBranch, findIssueReferences } from './lib/issue-reference';
 import { assertCan } from './lib/permissions';
 import type { TeamRow, TeamService } from './teams';
+
+export type GithubAppRow = typeof githubApp.$inferSelect;
+
+/** The GitHub App registration the manifest flow returns (`POST /app-manifests/:code/conversions`). */
+export interface GithubAppManifestResult {
+  /** GitHub App ID (`id` in the API response). */
+  appId: number;
+  slug: string;
+  name: string;
+  clientId: string;
+  clientSecret: string;
+  webhookSecret: string;
+  pem: string;
+}
+
+/** Credentials resolved from the DB (manifest flow) or env, whichever is configured. */
+export interface ResolvedGithubConfig {
+  appId: string | null;
+  privateKey: string | null;
+  webhookSecret: string | null;
+  clientSecret: string | null;
+  appSlug: string | null;
+  source: 'database' | 'environment' | null;
+}
 
 export type GithubInstallRow = typeof githubInstalls.$inferSelect;
 export type GithubLinkRow = typeof githubLinks.$inferSelect;
@@ -99,18 +125,31 @@ function normalizePull(p: RawPull): GitHubPull {
  */
 export class OctokitGitHubApi implements GitHubApi {
   private app: App | null = null;
-  constructor(private readonly cfg: AppConfig['github']) {}
+  private creds: { appId: string | null; privateKey: string | null } | null = null;
 
-  private getApp(): App {
-    if (!this.app) {
-      if (!this.cfg.appId || !this.cfg.privateKey) throw new ServiceError('VALIDATION', 'The GitHub App is not configured.');
-      this.app = new App({ appId: this.cfg.appId, privateKey: this.cfg.privateKey.replace(/\\n/g, '\n') });
-    }
+  /**
+   * `creds` may be a static config or a resolver. The resolver lets credentials created through the
+   * in-app manifest flow (stored encrypted, loaded lazily) drive Octokit without recreating the
+   * service. The returned App is cached until a credential change invalidates it.
+   */
+  constructor(
+    private readonly cfg: AppConfig['github'],
+    private readonly resolveCreds?: () => Promise<{ appId: string | null; privateKey: string | null }>,
+  ) {}
+
+  private async ensure(): Promise<App> {
+    if (this.app) return this.app;
+    const creds = this.resolveCreds ? await this.resolveCreds() : { appId: this.cfg.appId, privateKey: this.cfg.privateKey };
+    if (!creds.appId || !creds.privateKey) throw new ServiceError('VALIDATION', 'The GitHub App is not configured.');
+    // A credential change replaces the cached App.
+    if (this.creds && (this.creds.appId !== creds.appId || this.creds.privateKey !== creds.privateKey)) this.app = null;
+    this.creds = creds;
+    this.app ??= new App({ appId: creds.appId, privateKey: creds.privateKey.replace(/\\n/g, '\n') });
     return this.app;
   }
 
   async getInstallation(installationId: number): Promise<{ accountLogin: string; accountType: 'User' | 'Organization' }> {
-    const res = await this.getApp().octokit.request('GET /app/installations/{installation_id}', { installation_id: installationId });
+    const res = await (await this.ensure()).octokit.request('GET /app/installations/{installation_id}', { installation_id: installationId });
     const account = res.data.account as { login?: string; name?: string; type?: string } | null;
     return {
       accountLogin: account?.login ?? account?.name ?? 'unknown',
@@ -119,7 +158,7 @@ export class OctokitGitHubApi implements GitHubApi {
   }
 
   async listInstallationRepos(installationId: number): Promise<string[]> {
-    const octokit = await this.getApp().getInstallationOctokit(installationId);
+    const octokit = await (await this.ensure()).getInstallationOctokit(installationId);
     const out: string[] = [];
     for (let page = 1; page <= 50; page++) {
       const res = await octokit.request('GET /installation/repositories', { per_page: 100, page });
@@ -131,7 +170,7 @@ export class OctokitGitHubApi implements GitHubApi {
 
   async listPullsSince(installationId: number, repo: string, opts: { since: Date; page: number; perPage: number }): Promise<{ pulls: GitHubPull[]; hasMore: boolean }> {
     const [owner, name] = splitRepo(repo);
-    const octokit = await this.getApp().getInstallationOctokit(installationId);
+    const octokit = await (await this.ensure()).getInstallationOctokit(installationId);
     const res = await octokit.request('GET /repos/{owner}/{repo}/pulls', {
       owner,
       repo: name,
@@ -149,14 +188,14 @@ export class OctokitGitHubApi implements GitHubApi {
 
   async getPull(installationId: number, repo: string, number: number): Promise<GitHubPull> {
     const [owner, name] = splitRepo(repo);
-    const octokit = await this.getApp().getInstallationOctokit(installationId);
+    const octokit = await (await this.ensure()).getInstallationOctokit(installationId);
     const res = await octokit.request('GET /repos/{owner}/{repo}/pulls/{pull_number}', { owner, repo: name, pull_number: number });
     return normalizePull(res.data as unknown as RawPull);
   }
 
   async createIssueComment(installationId: number, repo: string, issueNumber: number, body: string): Promise<void> {
     const [owner, name] = splitRepo(repo);
-    const octokit = await this.getApp().getInstallationOctokit(installationId);
+    const octokit = await (await this.ensure()).getInstallationOctokit(installationId);
     await octokit.request('POST /repos/{owner}/{repo}/issues/{issue_number}/comments', { owner, repo: name, issue_number: issueNumber, body });
   }
 }
@@ -282,6 +321,10 @@ export class GitHubService extends ServiceBase {
   protected teamService!: TeamService;
   protected commentService!: CommentService;
   private apiImpl: GitHubApi | null;
+  private cipher!: CipherBox;
+  /** Cached resolved credentials; invalidated whenever the App is created or removed. */
+  private resolved: ResolvedGithubConfig | null = null;
+  private storedAppUnreadable = false;
 
   constructor(deps: ServiceDeps, api?: GitHubApi) {
     super(deps);
@@ -293,11 +336,160 @@ export class GitHubService extends ServiceBase {
     this.issueService = deps.issues;
     this.teamService = deps.teams;
     this.commentService = deps.comments;
+    this.cipher = createCipherBox(this.config.appSecret);
+  }
+
+  // ───────────── App credentials (manifest flow + env fallback) ─────────────
+
+  /** A GitHub App created from inside the UI (encrypted at rest) overrides the env configuration. */
+  private async loadAppRow(): Promise<GithubAppRow | null> {
+    const [row] = await this.db.select().from(githubApp).where(eq(githubApp.id, 1));
+    return row ?? null;
+  }
+
+  /** Resolve credentials from the DB when an in-app App exists, otherwise from the environment. */
+  async resolvedConfig(): Promise<ResolvedGithubConfig> {
+    if (this.resolved) return this.resolved;
+    const row = await this.loadAppRow();
+    this.storedAppUnreadable = false;
+    let fromRow: ResolvedGithubConfig | null = null;
+    if (row) {
+      try {
+        fromRow = {
+          appId: row.appId,
+          privateKey: this.cipher.decrypt(row.privateKeyEncrypted).replace(/\\n/g, '\n'),
+          webhookSecret: this.cipher.decrypt(row.webhookSecretEncrypted),
+          clientSecret: row.clientSecretEncrypted ? this.cipher.decrypt(row.clientSecretEncrypted) : null,
+          appSlug: row.slug,
+          source: 'database',
+        };
+      } catch (err) {
+        // APP_SECRET changed since the App was saved. Fall back to env; the owner can remove and re-run setup.
+        this.storedAppUnreadable = true;
+        this.logger.warn({ err, appId: row.appId }, 'stored GitHub App credentials cannot be decrypted (APP_SECRET changed?); falling back to environment config');
+      }
+    }
+    if (fromRow) {
+      this.resolved = fromRow;
+    } else {
+      const cfg = this.config.github;
+      this.resolved = { ...cfg, source: cfg.appId && cfg.privateKey ? 'environment' : null };
+    }
+    return this.resolved;
+  }
+
+  private invalidateResolved(): void {
+    this.resolved = null;
+    // The Octokit seam memoizes the old private key; drop it so the next call re-mints.
+    if (this.apiImpl instanceof OctokitGitHubApi) this.apiImpl = null;
+  }
+
+  /** Persist the App GitHub created from our manifest, encrypted with APP_SECRET. */
+  async saveAppFromManifest(actor: ServiceActor, result: GithubAppManifestResult): Promise<void> {
+    assertCan(actor, 'workspace.integrations');
+    if (!result.appId || !result.pem || !result.webhookSecret || !result.slug) throw validation('GitHub returned an incomplete App registration.');
+    await this.tx(async (tx) => {
+      const row = {
+        id: 1 as const,
+        appId: String(result.appId),
+        slug: result.slug,
+        name: result.name,
+        clientId: result.clientId ?? '',
+        clientSecretEncrypted: this.cipher.encrypt(result.clientSecret ?? ''),
+        privateKeyEncrypted: this.cipher.encrypt(result.pem),
+        webhookSecretEncrypted: this.cipher.encrypt(result.webhookSecret),
+        createdBy: actorUserId(actor),
+        updatedAt: this.now(),
+      };
+      await tx.insert(githubApp).values(row).onConflictDoUpdate({ target: githubApp.id, set: row });
+      await this.audit.log(tx, actor, { action: 'github.app_configured', objectType: 'workspace', objectId: '1', changes: { appId: row.appId, slug: row.slug, source: 'manifest' } });
+    });
+    this.invalidateResolved();
+  }
+
+  /** Remove in-app credentials, falling back to the environment on the next request. */
+  async removeApp(actor: ServiceActor): Promise<void> {
+    assertCan(actor, 'workspace.integrations');
+    const existing = await this.loadAppRow();
+    if (!existing) return;
+    await this.tx(async (tx) => {
+      await tx.delete(githubApp).where(eq(githubApp.id, 1));
+      await this.audit.log(tx, actor, { action: 'github.app_removed', objectType: 'workspace', objectId: '1', changes: { appId: existing.appId, slug: existing.slug } });
+    });
+    this.invalidateResolved();
+  }
+
+  async setupStatus(): Promise<{ configured: boolean; source: ResolvedGithubConfig['source']; appSlug: string | null; appName: string | null; storedAppUnreadable: boolean }> {
+    const cfg = await this.resolvedConfig();
+    const row = cfg.source === 'database' ? await this.loadAppRow() : null;
+    return { configured: Boolean(cfg.appId && cfg.privateKey && cfg.webhookSecret), source: cfg.source, appSlug: cfg.appSlug, appName: row?.name ?? null, storedAppUnreadable: this.storedAppUnreadable };
+  }
+
+  /** Overridable for tests. */
+  fetchImpl: typeof fetch = fetch;
+
+  /**
+   * Build the GitHub App manifest the browser POSTs to GitHub (SPEC §6.5.3 permissions). The owner
+   * presses "Set up GitHub", GitHub creates the App and calls back with a code we exchange for the
+   * private key and secrets — no server filesystem access required.
+   */
+  async beginManifest(actor: ServiceActor, opts: { organization?: string | null } = {}): Promise<{ action: string; manifest: string }> {
+    assertCan(actor, 'workspace.integrations');
+    const base = this.config.appUrl.replace(/\/$/, '');
+    const org = opts.organization?.trim();
+    if (org && !/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/.test(org)) throw validation('Enter a valid GitHub organization name.', { field: 'organization' });
+    const state = createGithubManifestState(this.config.appSecret, this.now().getTime());
+    const manifest = {
+      name: 'Velocity',
+      url: base,
+      hook_attributes: { url: `${base}/api/github/webhook`, active: true },
+      redirect_url: `${base}/settings/github`,
+      callback_urls: [`${base}/settings/github`],
+      setup_url: `${base}/api/github/setup`,
+      description: 'Link pull requests to Velocity issues, close issues on merge, and import repository history.',
+      public: false,
+      // Minimal scopes (SPEC §6.5.3): write issues, read pull requests and metadata.
+      default_permissions: { issues: 'write', pull_requests: 'read', metadata: 'read' },
+      default_events: ['pull_request', 'pull_request_review', 'push', 'issues'],
+    };
+    const action = org
+      ? `https://github.com/organizations/${org}/settings/apps/new?state=${encodeURIComponent(state)}`
+      : `https://github.com/settings/apps/new?state=${encodeURIComponent(state)}`;
+    return { action, manifest: JSON.stringify(manifest) };
+  }
+
+  /** Exchange the one-hour manifest code for the App's credentials and store them encrypted. */
+  async confirmManifest(actor: ServiceActor, input: { code: string; state: string }): Promise<void> {
+    assertCan(actor, 'workspace.integrations');
+    if (!verifyGithubManifestState(this.config.appSecret, input.state, this.now().getTime())) {
+      throw validation('This GitHub setup link is invalid or has expired. Start the setup again.');
+    }
+    const res = await this.fetchImpl(`https://api.github.com/app-manifests/${encodeURIComponent(input.code)}/conversions`, {
+      method: 'POST',
+      headers: { accept: 'application/vnd.github+json', 'user-agent': 'velocity', 'x-github-api-version': '2022-11-28' },
+    });
+    if (!res.ok) throw validation('GitHub could not complete the App registration. Start the setup again.');
+    const data = (await res.json()) as { id?: number; slug?: string; name?: string; client_id?: string; client_secret?: string; webhook_secret?: string; pem?: string };
+    await this.saveAppFromManifest(actor, {
+      appId: Number(data.id),
+      slug: data.slug ?? '',
+      name: data.name ?? 'Velocity',
+      clientId: data.client_id ?? '',
+      clientSecret: data.client_secret ?? '',
+      webhookSecret: data.webhook_secret ?? '',
+      pem: data.pem ?? '',
+    });
   }
 
   /** The GitHub API seam (lazily defaults to the Octokit-backed implementation). */
   get api(): GitHubApi {
-    if (!this.apiImpl) this.apiImpl = new OctokitGitHubApi(this.config.github);
+    if (!this.apiImpl) {
+      const cfg = this.config.github;
+      this.apiImpl = new OctokitGitHubApi(cfg, async () => {
+        const resolved = await this.resolvedConfig();
+        return { appId: resolved.appId, privateKey: resolved.privateKey };
+      });
+    }
     return this.apiImpl;
   }
 
@@ -305,12 +497,14 @@ export class GitHubService extends ServiceBase {
     this.apiImpl = api;
   }
 
-  isConfigured(): boolean {
-    return Boolean(this.config.github.appId && this.config.github.privateKey && this.config.github.webhookSecret);
+  async isConfigured(): Promise<boolean> {
+    const cfg = await this.resolvedConfig();
+    return Boolean(cfg.appId && cfg.privateKey && cfg.webhookSecret);
   }
 
-  installUrl(): string | null {
-    return this.config.github.appSlug ? `https://github.com/apps/${this.config.github.appSlug}/installations/new` : null;
+  async installUrl(): Promise<string | null> {
+    const cfg = await this.resolvedConfig();
+    return cfg.appSlug ? `https://github.com/apps/${cfg.appSlug}/installations/new` : null;
   }
 
   // ───────────── Installs ─────────────
@@ -417,7 +611,7 @@ export class GitHubService extends ServiceBase {
   // ───────────── Webhook intake ─────────────
 
   async receiveWebhook(input: { deliveryId: string; event: string; signature: string | null; rawBody: string }): Promise<WebhookReceipt> {
-    const secret = this.config.github.webhookSecret;
+    const secret = (await this.resolvedConfig()).webhookSecret;
     if (!secret) throw unauthenticated('GitHub webhooks are not configured.');
     if (!verifyHmacSignature(secret, input.rawBody, input.signature)) throw unauthenticated('Invalid webhook signature.');
     if (!input.deliveryId) throw validation('Missing delivery id.');
@@ -496,7 +690,7 @@ export class GitHubService extends ServiceBase {
 
   private async teamKeys(): Promise<{ teams: TeamRow[]; keys: string[] }> {
     const teams = await this.teamService.list(null, { includeArchived: true });
-    return { teams, keys: teams.map((t) => t.key) };
+    return { teams, keys: await this.teamService.allKeys() };
   }
 
   /** Repo → team: explicit map, else team key ↔ repo name (uppercased alphanumerics). */

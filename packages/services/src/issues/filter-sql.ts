@@ -20,6 +20,7 @@ import type {
   FilterValue,
 } from '@velocity/schema/filter-ast';
 import { validation } from '../errors';
+import { teamIdsFor } from '../lib/team-key';
 
 export interface FilterCompileContext {
   /** Resolves `me`. Null (system actor) → `me` matches nothing. */
@@ -62,7 +63,8 @@ function eqScalar(field: FilterComparison['field'], s: FilterScalar, ctx: Filter
   switch (field) {
     case 'team': {
       const v = str(s);
-      return sql`issues.team_id in (select t.id from teams t where t.key = ${v.toUpperCase()} or lower(t.name) = ${v.toLowerCase()} or t.id = ${idOrNull(v)}::uuid)`;
+      return sql`issues.team_id in (select t.id from teams t where lower(t.name) = ${v.toLowerCase()} or t.id = ${idOrNull(v)}::uuid)
+        or issues.team_id in ${teamIdsFor(v)}`;
     }
     case 'status': {
       const v = str(s);
@@ -113,14 +115,14 @@ function eqScalar(field: FilterComparison['field'], s: FilterScalar, ctx: Filter
     case 'identifier': {
       const m = IDENT_RE.exec(str(s));
       if (!m) return NONE;
-      return sql`(issues.number = ${Number(m[2])} and issues.team_id in (select t.id from teams t where t.key = ${m[1]!.toUpperCase()}))`;
+      return sql`(issues.number = ${Number(m[2])} and issues.team_id in ${teamIdsFor(m[1]!)})`;
     }
     case 'parent': {
       if (s.kind === 'empty') return sql`issues.parent_id is null`;
       const v = str(s);
       const m = IDENT_RE.exec(v);
       if (m) {
-        return sql`issues.parent_id in (select p.id from issues p join teams t on t.id = p.team_id where t.key = ${m[1]!.toUpperCase()} and p.number = ${Number(m[2])})`;
+        return sql`issues.parent_id in (select p.id from issues p where p.team_id in ${teamIdsFor(m[1]!)} and p.number = ${Number(m[2])})`;
       }
       return sql`issues.parent_id = ${idOrNull(v)}::uuid`;
     }

@@ -14,7 +14,6 @@ test.describe('bulk selection and actions', () => {
     const row3 = await createIssueViaKeyboard(page, title3);
 
     // Focus on the first visible row (row3) and select it with x
-    await row3.click();
     await row3.focus();
     await expect(row3).toBeFocused();
     await page.keyboard.press('x');
@@ -57,8 +56,10 @@ test.describe('bulk selection and actions', () => {
     await expect(reloadedRow2).toContainText('Performance');
     await expect(reloadedRow3).toContainText('Performance');
 
-    // Focus one of the rows and verify selection bar is visible
-    await reloadedRow1.click();
+    // Focus one of the rows, peek it (Space, U1) and verify the selection bar is visible
+    await reloadedRow1.focus();
+    await page.keyboard.press(' ');
+    await expect(page.getByTestId('detail-panel')).toBeVisible();
     await reloadedRow1.focus();
     // Press x to select it
     await page.keyboard.press('x');
@@ -85,7 +86,6 @@ test.describe('bulk selection and actions', () => {
     const row2 = await createIssueViaKeyboard(page, title2);
 
     // Focus on the first visible row (row2) and select it with x
-    await row2.click();
     await row2.focus();
     await page.keyboard.press('x');
     await expect(row2).toHaveAttribute('aria-selected', 'true');
@@ -173,7 +173,7 @@ test.describe('bulk selection and actions', () => {
     const panel = page.getByTestId('detail-panel');
     for (const title of [first, second]) {
       await rowByTitle(page, title).focus();
-      await page.keyboard.press('Enter');
+      await page.keyboard.press(' ');
       await expect(panel.getByTestId('issue-title')).toHaveValue(title);
       await expect(panel.getByTestId('prop-cycle')).toContainText(cycleName);
       await page.keyboard.press('Escape');

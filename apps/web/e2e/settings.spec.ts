@@ -258,7 +258,9 @@ test.describe('settings', () => {
   test('GitHub settings show configuration requirements and configured-state controls', async ({ page }) => {
     await page.goto('/settings/github');
     await expect(page.getByTestId('settings-github')).toBeVisible();
-    await expect(page.getByText('GitHub App is not configured on this server')).toBeVisible();
+    await expect(page.getByTestId('github-setup')).toBeVisible();
+    await expect(page.getByText('Connect GitHub', { exact: true })).toBeVisible();
+    await page.getByTestId('github-setup').getByText('Configure via environment variables instead').click();
     await expect(page.getByTestId('github-env').locator('li')).toHaveCount(5);
 
     await page.route('**/graphql', async (route) => {
@@ -270,6 +272,8 @@ test.describe('settings', () => {
           githubIntegration: {
             __typename: 'GithubIntegration',
             configured: true,
+            source: 'database',
+            appName: 'velocity-test',
             installUrl: 'https://github.com/apps/velocity-test/installations/new',
             installs: [{
               __typename: 'GithubInstall', id: '00000000-0000-4000-8000-000000000001', installationId: 123,

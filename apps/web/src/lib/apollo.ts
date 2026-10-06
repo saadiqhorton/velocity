@@ -2,6 +2,7 @@ import { ApolloClient, ApolloLink, HttpLink, InMemoryCache, Observable, split } 
 import type { FieldPolicy, Reference } from '@apollo/client';
 import { GraphQLWsLink } from '@apollo/client/link/subscriptions';
 import { onError } from '@apollo/client/link/error';
+import { createPersistedQueryLink } from '@apollo/client/link/persisted-queries';
 import { getMainDefinition } from '@apollo/client/utilities';
 import { print } from 'graphql';
 import { createClient } from 'graphql-ws';
@@ -112,7 +113,7 @@ export function createCache(): InMemoryCache {
       ApiKey: { fields: { mutationsPerHour: replace } },
       GithubInstall: { fields: { repos: replace } },
       // Singletons without ids.
-      Workspace: { keyFields: [] },
+      Workspace: { keyFields: [], fields: { features: { merge: true } } },
       SetupStatus: { keyFields: [] },
       GithubIntegration: { keyFields: [], fields: { installs: replace } },
       McpInfo: { keyFields: [] },
@@ -232,6 +233,13 @@ export function createApollo(opts: { onUnauthenticated: () => void }): ApolloSet
   });
 
   const http = new HttpLink({ uri: '/graphql', credentials: 'same-origin' });
+  const persisted = createPersistedQueryLink({
+    generateHash: (document) => {
+      const hash = (document as typeof document & { __meta__?: { hash?: string } }).__meta__?.hash;
+      if (!hash?.startsWith('sha256:')) throw new Error('App GraphQL operation is missing its generated persisted hash.');
+      return hash.slice('sha256:'.length);
+    },
+  });
   const wsLink = new GraphQLWsLink(ws);
   const link = split(
     ({ query }) => {
@@ -239,7 +247,7 @@ export function createApollo(opts: { onUnauthenticated: () => void }): ApolloSet
       return def.kind === 'OperationDefinition' && def.operation === 'subscription';
     },
     wsLink,
-    ApolloLink.from([errorLink, csrfLink, uploadLink, http]),
+    ApolloLink.from([errorLink, csrfLink, uploadLink, persisted, http]),
   );
 
   client = new ApolloClient({

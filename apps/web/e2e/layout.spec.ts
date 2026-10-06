@@ -64,8 +64,9 @@ for (const { width, height, colorScheme } of cases) {
     }, handles);
     expect(ordered).toBe(true);
 
+    // The panel is the Space peek since U1 (Enter opens the full page).
     await page.keyboard.press('j');
-    await page.keyboard.press('Enter');
+    await page.keyboard.press(' ');
     const detailPanel = page.getByTestId('detail-panel');
     await expect(detailPanel).toBeVisible();
     expect((await detailPanel.boundingBox())?.width).toBeCloseTo(width === 1440 ? 400 : 360, -1);

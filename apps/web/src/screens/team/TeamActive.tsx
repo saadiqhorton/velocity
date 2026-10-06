@@ -8,15 +8,15 @@ import type { CycleDetailFieldsFragment } from '@/gql/graphql';
 import { useTeamByKey } from '@/app/workspace';
 import { ListScreen } from '@/components/issues/ListScreen';
 import { TeamIcon } from '@/components/common/EntityIcons';
-import { DEFAULT_DISPLAY } from '@/lib/viewState';
+import { ACTIVE_WITHOUT_CYCLES, DEFAULT_DISPLAY } from '@/lib/viewState';
 import type { ViewState } from '@/lib/viewState';
 import { formatShortDate } from '@/lib/format';
 import { useUi } from '@/stores/ui';
 import { NotFound } from '@/screens/workspace/NotFound';
+import { teamUsesCycles, useFeatures } from '@/lib/features';
 import { m } from '@/i18n';
 
-/** Without cycles: todo + in progress + done in the last week (SPEC §4.11.1). */
-export const ACTIVE_WITHOUT_CYCLES = 'statusCategory in:todo,in_progress or (statusCategory:done and completedAt gte:-1w)';
+export { ACTIVE_WITHOUT_CYCLES };
 
 export function cycleProgress(c: Pick<CycleDetailFieldsFragment, 'liveStats' | 'stats' | 'closedAt'>): { done: number; total: number; percent: number } {
   const s = c.closedAt && c.stats ? c.stats : c.liveStats;
@@ -32,11 +32,12 @@ function cycleLabel(c: Pick<CycleDetailFieldsFragment, 'name' | 'startsAt' | 'en
 export function TeamActive() {
   const { key } = useParams();
   const team = useTeamByKey(key);
+  const features = useFeatures();
   const [params, setParams] = useSearchParams();
   const openCreate = useUi((s) => s.openCreate);
   const cyclesQ = useQuery(TeamCyclesDocument, {
     variables: { teamId: team?.id ?? '', includeClosed: true, first: 12 },
-    skip: !team?.cycleEnabled,
+    skip: !teamUsesCycles(features, team),
   });
   const defaults = useMemo<ViewState>(() => ({ filter: '', display: DEFAULT_DISPLAY }), []);
 
@@ -47,7 +48,8 @@ export function TeamActive() {
 
   const selectedId = params.get('cycle') ?? team.activeCycle?.id ?? null;
   const cycle = cycles.find((c) => c.id === selectedId) ?? null;
-  const usesCycles = team.cycleEnabled && Boolean(selectedId);
+  // Solo mode (U4): without the Cycles feature the screen is the plain Active list.
+  const usesCycles = teamUsesCycles(features, team) && Boolean(selectedId);
 
   const options: PopupOption[] = cycles.map((c) => ({
     value: c.id,

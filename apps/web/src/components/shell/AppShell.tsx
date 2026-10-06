@@ -11,6 +11,7 @@ import { ShellSkeleton, ContentSkeleton } from './ShellSkeleton';
 import { CycleClosingBanner, DeletionBanner, OfflineBanner } from './Banners';
 import { DetailPanel, preloadIssueDetail } from './DetailPanel';
 import { ThemeSync } from './theme';
+import { CodingToolsSync } from './CodingToolsSync';
 import { GlobalCommands } from '@/components/commands/GlobalCommands';
 import { IssueCommands } from '@/components/commands/IssueCommands';
 import { Overlays } from './Overlays';
@@ -37,6 +38,7 @@ export function AppShell() {
 
   return (
     <WorkspaceProvider value={ws}>
+      <CodingToolsSync viewer={ws.viewer}>
       <ThemeSync />
       <Realtime />
       <GlobalCommands />
@@ -63,6 +65,7 @@ export function AppShell() {
         <DetailPanel />
       </div>
       <Overlays />
+      </CodingToolsSync>
     </WorkspaceProvider>
   );
 }

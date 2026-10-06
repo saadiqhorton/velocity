@@ -1,5 +1,5 @@
 import { and, asc, eq, inArray, isNull, max, ne, sql } from 'drizzle-orm';
-import { issues, statuses, teamCounters, teamMembers, teams, users, workflows } from '@velocity/schema';
+import { issues, statuses, teamCounters, teamKeyAliases, teamMembers, teams, users, workflows } from '@velocity/schema';
 import type { CarryOver, PaletteColor, StatusCategory } from '@velocity/schema';
 import { MAX_STATUSES_PER_TEAM, PALETTE_COLORS, STATUS_CATEGORIES, TEAM_KEY_RE } from '@velocity/schema';
 import { publish } from '@velocity/events';
@@ -85,9 +85,22 @@ export class TeamService extends ServiceBase {
     const cached = this.keyCache.get(upper);
     if (cached !== undefined) return cached;
     const [t] = await this.db.select().from(teams).where(and(eq(teams.key, upper), isNull(teams.deletedAt)));
-    const row = t ?? null;
+    const [aliased] = t ? [] : await this.db.select({ team: teams }).from(teamKeyAliases)
+      .innerJoin(teams, eq(teams.id, teamKeyAliases.teamId))
+      .where(and(eq(teamKeyAliases.key, upper), isNull(teams.deletedAt)));
+    const row = t ?? aliased?.team ?? null;
     this.keyCache.set(upper, row);
     return row;
+  }
+
+  async allKeys(): Promise<string[]> {
+    return (await this.db.select({ key: teamKeyAliases.key }).from(teamKeyAliases)).map((row) => row.key);
+  }
+
+  private async reserveKey(tx: Tx, key: string, teamId: string): Promise<void> {
+    await tx.insert(teamKeyAliases).values({ key, teamId }).onConflictDoNothing();
+    const [alias] = await tx.select({ teamId: teamKeyAliases.teamId }).from(teamKeyAliases).where(eq(teamKeyAliases.key, key));
+    if (alias?.teamId !== teamId) throw conflict(`A team has already used key ${key}.`, { field: 'key' });
   }
 
   async require(id: string, executor: DbOrTx = this.db): Promise<TeamRow> {
@@ -139,6 +152,7 @@ export class TeamService extends ServiceBase {
           })
           .returning();
         if (!t) throw new Error('team insert failed');
+        await this.reserveKey(tx, key, t.id);
         await tx.insert(teamCounters).values({ teamId: t.id, nextNumber: 1 });
         const [wf] = await tx.insert(workflows).values({ teamId: t.id }).returning();
         if (!wf) throw new Error('workflow insert failed');
@@ -153,7 +167,7 @@ export class TeamService extends ServiceBase {
       this.keyCache.clear();
       return team;
     } catch (err) {
-      if (isUniqueViolation(err, 'teams_key_uq')) throw conflict(`A team with key ${key} already exists.`, { field: 'key' });
+      if (isUniqueViolation(err, 'teams_key_uq') || isUniqueViolation(err, 'team_key_aliases_pkey')) throw conflict(`A team with key ${key} already exists.`, { field: 'key' });
       throw err;
     }
   }
@@ -177,6 +191,7 @@ export class TeamService extends ServiceBase {
     if (patch.estimateScale) set.estimateScale = patch.estimateScale;
     try {
       const team = await this.tx(async (tx) => {
+        if (key !== undefined) await this.reserveKey(tx, key, id);
         const [t] = await tx.update(teams).set(set).where(eq(teams.id, id)).returning();
         if (!t) throw notFound('Team');
         await publish(tx, 'team.updated', { teamId: id, actor: toActorRef(actor) });
@@ -186,7 +201,7 @@ export class TeamService extends ServiceBase {
       this.keyCache.clear();
       return team;
     } catch (err) {
-      if (isUniqueViolation(err, 'teams_key_uq')) throw conflict(`A team with key ${key} already exists.`, { field: 'key' });
+      if (isUniqueViolation(err, 'teams_key_uq') || isUniqueViolation(err, 'team_key_aliases_pkey')) throw conflict(`A team with key ${key} already exists.`, { field: 'key' });
       throw err;
     }
   }
@@ -235,12 +250,11 @@ export class TeamService extends ServiceBase {
       await this.issueService.moveAllFromTeam(actor, id, opts.moveIssuesToTeamId);
     }
     await this.tx(async (tx) => {
-      await tx.update(teams).set({ deletedAt: this.now(), key: sql`${teams.key}`, updatedAt: this.now() }).where(eq(teams.id, id));
+      await tx.update(teams).set({ deletedAt: this.now(), updatedAt: this.now() }).where(eq(teams.id, id));
       await this.audit.log(tx, actor, { action: 'team.deleted', objectType: 'team', objectId: id, changes: { key: team.key, name: team.name, movedTo: opts.moveIssuesToTeamId ?? null } });
       await publish(tx, 'team.updated', { teamId: id, actor: toActorRef(actor) });
     });
-    // Free the key for reuse: deleted teams keep a tombstone key (team keys are unique).
-    await this.db.update(teams).set({ key: `X${id.replace(/-/g, '').slice(-9).toUpperCase()}` }).where(eq(teams.id, id));
+    // Keep the key reserved: historical issue identifiers may still point through moved issues.
     this.keyCache.clear();
   }
 

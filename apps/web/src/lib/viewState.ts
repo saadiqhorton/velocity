@@ -161,6 +161,9 @@ export function composeFilter(user: string, extra: readonly string[]): string {
 }
 
 /** DSL clause for the "completed issues" display option. */
+/** Team Active without cycles: todo + in progress + done in the last week (SPEC §4.11.1). */
+export const ACTIVE_WITHOUT_CYCLES = 'statusCategory in:todo,in_progress or (statusCategory:done and completedAt gte:-1w)';
+
 export function completedClause(show: ShowCompleted): string | null {
   switch (show) {
     case 'none':

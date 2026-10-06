@@ -266,6 +266,8 @@ fragment GithubInstallFields on GithubInstall {
 query Integrations {
   githubIntegration {
     configured
+    source
+    appName
     installUrl
     installs {
       ...GithubInstallFields
@@ -277,6 +279,21 @@ query Integrations {
     serverUrl
     stdioCommand
   }
+}
+
+mutation BeginGithubAppSetup($organization: String) {
+  beginGithubAppSetup(organization: $organization) {
+    action
+    manifest
+  }
+}
+
+mutation ConfirmGithubAppSetup($input: ConfirmGithubAppInput!) {
+  confirmGithubAppSetup(input: $input)
+}
+
+mutation RemoveGithubApp {
+  removeGithubApp
 }
 
 mutation GithubCompleteInstall($installationId: Int!) {

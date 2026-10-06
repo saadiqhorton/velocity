@@ -126,4 +126,15 @@ describe('HTTP boundary (SPEC §7.1, §6.3)', () => {
     expect((await running.app.pool.query('select count(*)::int as n from github_events')).rows[0].n).toBe(1);
     expect((await fetch(`${running.base}/api/github/webhook`)).status).toBe(405);
   });
+
+  it('redirects the GitHub post-install callback to the SPA settings route', async () => {
+    running = await boot();
+    const get = (qs: string) => fetch(`${running!.base}/api/github/setup${qs}`, { redirect: 'manual' });
+    const ok = await get('?installation_id=12345&setup_action=install');
+    expect(ok.status).toBe(302);
+    expect(ok.headers.get('location')).toBe('/settings/github?installation_id=12345');
+    expect((await get('')).headers.get('location')).toBe('/settings/github');
+    expect((await get('?installation_id=abc')).headers.get('location')).toBe('/settings/github');
+    expect((await get('?installation_id=1%26x%3D2')).headers.get('location')).toBe('/settings/github');
+  });
 });

@@ -114,7 +114,7 @@ export function SearchScreen() {
       pushSearch(q);
       switch (r.type) {
         case 'issue':
-          if (r.issue) openIssue(r.issue.id, { identifier: r.issue.identifier });
+          if (r.issue) openIssue(r.issue.id, { identifier: r.issue.identifier, peek: false });
           break;
         case 'team':
           if (r.team) navigate(`/team/${r.team.key}/active`);

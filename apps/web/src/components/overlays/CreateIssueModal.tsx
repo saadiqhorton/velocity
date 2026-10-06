@@ -24,6 +24,7 @@ import {
   teamOptions,
 } from '@/components/issues/pickers';
 import { PRIORITY_KEYS } from '@/components/issues/IssueRow';
+import { teamUsesCycles, useFeatures } from '@/lib/features';
 import { m } from '@/i18n';
 
 interface ChipPickerProps {
@@ -65,6 +66,7 @@ function ChipPicker({ label, options, value, onChange, icon, text, testId }: Chi
 
 /** Create issue (SPEC §3.5.1, §4.9.8): title + team; every property inline; Enter submits. */
 export function CreateIssueModal() {
+  const features = useFeatures();
   const ws = useWorkspace();
   const defaults = useUi((s) => s.createDefaults);
   const close = useUi((s) => s.closeCreate);
@@ -264,7 +266,7 @@ export function CreateIssueModal() {
             icon={project ? <ProjectIcon project={project} /> : <Icon name="project" />}
             text={project?.name ?? m.issue.project}
           />
-          {team?.cycleEnabled ? (
+          {teamUsesCycles(features, team) ? (
             <ChipPicker
               label={m.issue.cycle}
               testId="create-cycle"
@@ -275,6 +277,7 @@ export function CreateIssueModal() {
               text={cycle?.name ?? m.issue.cycle}
             />
           ) : null}
+          {features.estimates ? (
           <ChipPicker
             label={m.issue.estimate}
             testId="create-estimate"
@@ -284,6 +287,7 @@ export function CreateIssueModal() {
             icon={<Icon name="chart" />}
             text={estimate === null ? m.issue.estimate : estimateLabel(team?.estimateScale, estimate)}
           />
+          ) : null}
         </div>
       </div>
     </Modal>

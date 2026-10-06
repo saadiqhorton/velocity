@@ -923,11 +923,11 @@ Postgres FTS: GIN on `issue_search(search_vector)` — title (weight A) + descri
 
 ## 5.10 Configuration
 
-Environment only (`.env.example` canonical; no secrets in DB):
+Environment (`.env.example` canonical; no secrets in DB, except the encrypted in-app GitHub App credentials of §6.5.4):
 
 - `DATABASE_URL`, `APP_URL`, `APP_SECRET` (≥ 32 chars), `CADDY_DOMAIN`
 - `UPLOAD_DIR` (default `/data/uploads`), `MAX_UPLOAD_MB`
-- `GITHUB_APP_ID / GITHUB_APP_PRIVATE_KEY / GITHUB_APP_SECRET / GITHUB_WEBHOOK_SECRET` (optional — GitHub off when unset)
+- `GITHUB_APP_ID / GITHUB_APP_PRIVATE_KEY / GITHUB_APP_SECRET / GITHUB_WEBHOOK_SECRET` (optional — GitHub off when unset and no in-app App exists; an App created in-app (§6.5.4) is stored encrypted in the DB and takes precedence)
 - `MCP_HTTP_ENABLED`, `MCP_HTTP_TOKEN` (optional HTTP transport for remote agents)
 - `DISABLE_SIGNUP` (default true after first user; invite-link flow for members)
 - `LOG_LEVEL`, `SENTRY_DSN` (optional)
@@ -1101,6 +1101,19 @@ GitHub App (org or personal-account installs); settings map repos ↔ teams (aut
 ### 6.5.3 Security
 
 Signature verification mandatory; installation tokens encrypted at rest (§7.1.3); minimal scopes (issues w, PRs r, metadata r); all GitHub processing via queue; audit-logged config changes.
+
+### 6.5.4 In-app GitHub App setup
+
+An owner can create the GitHub App from the UI instead of setting `GITHUB_*` env vars (Settings → GitHub, `workspace.integrations`, owner-only; `beginGithubAppSetup` requires a session actor).
+
+- **Flow:** the owner picks personal account or an organization name (validated against GitHub's login charset). The server returns the manifest and a target URL (`https://github.com/settings/apps/new` or `https://github.com/organizations/<org>/settings/apps/new`, with `state`); the SPA submits it as a top-level form POST. After the owner approves on GitHub, GitHub redirects to `<APP_URL>/settings/github?code=…&state=…` and the SPA calls `confirmGithubAppSetup`, which verifies `state` and exchanges the one-hour code at `POST https://api.github.com/app-manifests/<code>/conversions`. Nothing is written to the server filesystem.
+- **CSRF state:** `<nonce>.<issuedAt>.<hmac>` signed with `APP_SECRET`, 1 h TTL, stateless; an invalid or expired state is rejected and setup must be restarted.
+- **Manifest:** name `Velocity` (App names are globally unique on GitHub; the owner may rename it on GitHub's form), private App; webhook `<APP_URL>/api/github/webhook`; callback/redirect `<APP_URL>/settings/github`; setup URL `<APP_URL>/api/github/setup`. Permissions: issues write, pull_requests read, metadata read (§6.5.3). Events: `pull_request`, `pull_request_review`, `push`, `issues`.
+- **Storage:** singleton `github_app` row (`id = 1`): app id, slug, name, client id plus `client_secret`, `private_key`, `webhook_secret` encrypted with the AES-256-GCM key derived from `APP_SECRET` (§7.1.3).
+- **Precedence:** if a `github_app` row exists it wins over `GITHUB_*` env vars entirely; otherwise env vars are used. `removeGithubApp` deletes the row (existing installs are untouched) and falls back to env, or to "not configured" if env is unset. Resolved credentials are cached in-process and invalidated on save/remove.
+- **Audit:** `github.app_configured` and `github.app_removed` (app id and slug only, never secrets).
+- **Network requirements:** `APP_URL` must be reachable by github.com for webhook delivery (a localhost `APP_URL` completes setup but receives no events). The SPA CSP allows `form-action 'self' https://github.com` solely so the manifest form can be submitted.
+- **APP_SECRET rotation:** stored credentials become undecryptable. `resolvedConfig` catches the decrypt failure, logs a warning (app id only), and falls back to the `GITHUB_*` env config (or "not configured" if unset) instead of failing; `setupStatus` reports `storedAppUnreadable: true`. `removeGithubApp` works on an unreadable row (it deletes without decrypting), so the owner can clear it and re-run setup. Restoring the original `APP_SECRET` also recovers. `storedAppUnreadable` is not yet surfaced through GraphQL/UI.
 
 ## 6.6 MCP Server
 

@@ -54,9 +54,9 @@ test.describe('realtime', () => {
     const rowB = rowByTitle(pageB, title);
     await expect(rowB).toBeVisible({ timeout: 10000 });
 
-    // A focuses the row and opens the issue detail panel.
+    // A focuses the row and peeks the issue in the detail panel (Space, U1).
     await rowA.focus();
-    await page.keyboard.press('Enter');
+    await page.keyboard.press(' ');
     const panel = PANEL(page);
     await expect(panel).toBeVisible();
 

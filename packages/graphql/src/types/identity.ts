@@ -1,6 +1,7 @@
 import { GraphQLError } from 'graphql';
 import { builder } from '../builder';
 import { requireActor, requireSessionActor } from '../errors';
+import { safeUserPreferences } from '@velocity/services';
 import {
   ApiKeyScopeEnum,
   CarryOverEnum,
@@ -16,8 +17,30 @@ import {
   WorkspaceRef,
 } from '../refs';
 import type { GqlContext } from '../context';
+import type { CodingToolPreference, UserPreferences, WorkspaceFeatures } from '@velocity/schema';
 
 // ───────────── Object types ─────────────
+
+const CodingToolKindEnum = builder.enumType('CodingToolKind', { values: ['deeplink', 'command'] as const });
+const CodingToolRef = builder.objectRef<CodingToolPreference>('CodingTool');
+CodingToolRef.implement({
+  fields: (t) => ({
+    id: t.exposeString('id'),
+    preset: t.exposeString('preset', { nullable: true }),
+    name: t.exposeString('name'),
+    kind: t.field({ type: CodingToolKindEnum, resolve: (tool) => tool.kind }),
+    template: t.exposeString('template'),
+    enabled: t.exposeBoolean('enabled'),
+    shortcut: t.exposeString('shortcut', { nullable: true }),
+  }),
+});
+const UserPreferencesRef = builder.objectRef<UserPreferences>('UserPreferences');
+UserPreferencesRef.implement({
+  fields: (t) => ({
+    codingTools: t.field({ type: [CodingToolRef], resolve: (preferences) => preferences.codingTools }),
+    promptInstructions: t.exposeString('promptInstructions'),
+  }),
+});
 
 UserRef.implement({
   description: 'A workspace member. Every member is a peer; the owner can administer the workspace (SPEC §3.2.3).',
@@ -34,7 +57,25 @@ UserRef.implement({
     timezone: t.exposeString('timezone'),
     locale: t.exposeString('locale'),
     theme: t.field({ type: ThemeEnum, resolve: (u, _a, ctx) => (u.id === ctx.actor?.userId ? u.theme : 'system') }),
+    preferences: t.field({
+      type: UserPreferencesRef,
+      nullable: true,
+      description: 'Your saved coding tools, or null until settings are saved. Hidden on other members.',
+      // Defensive read: a malformed stored value returns null instead of failing the viewer query.
+      resolve: (u, _a, ctx) => (u.id === ctx.actor?.userId ? safeUserPreferences(u.preferences) : null),
+    }),
     createdAt: t.expose('createdAt', { type: 'DateTime' }),
+  }),
+});
+
+const WorkspaceFeaturesRef = builder.objectRef<WorkspaceFeatures>('WorkspaceFeatures');
+WorkspaceFeaturesRef.implement({
+  fields: (t) => ({
+    cycles: t.exposeBoolean('cycles'),
+    estimates: t.exposeBoolean('estimates'),
+    insights: t.exposeBoolean('insights'),
+    members: t.exposeBoolean('members'),
+    solo: t.boolean({ resolve: (f) => !f.cycles && !f.estimates && !f.insights && !f.members }),
   }),
 });
 
@@ -44,6 +85,7 @@ WorkspaceRef.implement({
     slug: t.exposeString('slug'),
     timezone: t.exposeString('timezone'),
     locale: t.exposeString('locale'),
+    features: t.field({ type: WorkspaceFeaturesRef, resolve: (w) => w.features }),
     setupCompleted: t.boolean({ resolve: (w) => Boolean(w.setupCompletedAt) }),
     deletionRequestedAt: t.expose('deletionRequestedAt', { type: 'DateTime', nullable: true }),
     deletionScheduledFor: t.field({
@@ -237,8 +279,28 @@ const SignupInput = builder.inputType('SignupInput', {
 const ProfileInput = builder.inputType('UpdateProfileInput', {
   fields: (t) => ({ name: t.string(), email: t.string(), username: t.string(), timezone: t.string(), locale: t.string(), theme: t.field({ type: ThemeEnum }) }),
 });
+const CodingToolInput = builder.inputType('CodingToolInput', {
+  fields: (t) => ({
+    id: t.string({ required: true }),
+    preset: t.string(),
+    name: t.string({ required: true }),
+    kind: t.field({ type: CodingToolKindEnum, required: true }),
+    template: t.string({ required: true }),
+    enabled: t.boolean({ required: true }),
+    shortcut: t.string(),
+  }),
+});
+const PreferencesInput = builder.inputType('UpdatePreferencesInput', {
+  fields: (t) => ({
+    codingTools: t.field({ type: [CodingToolInput], required: true }),
+    promptInstructions: t.string({ required: true }),
+  }),
+});
 const WorkspaceInput = builder.inputType('UpdateWorkspaceInput', {
   fields: (t) => ({ name: t.string(), slug: t.string(), timezone: t.string(), locale: t.string() }),
+});
+const WorkspaceFeaturesInput = builder.inputType('WorkspaceFeaturesInput', {
+  fields: (t) => ({ cycles: t.boolean(), estimates: t.boolean(), insights: t.boolean(), members: t.boolean() }),
 });
 const TeamCreateInput = builder.inputType('CreateTeamInput', {
   fields: (t) => ({
@@ -435,6 +497,19 @@ builder.mutationFields((t) => ({
     args: { input: t.arg({ type: ProfileInput, required: true }) },
     resolve: (_r, { input }, ctx) => ctx.services.users.updateProfile(requireActor(ctx), input),
   }),
+  updatePreferences: t.field({
+    type: UserPreferencesRef,
+    description: 'Replace the signed-in member’s coding tool settings. A first save can migrate local settings.',
+    args: { input: t.arg({ type: PreferencesInput, required: true }) },
+    resolve: (_r, { input }, ctx) => ctx.services.users.updatePreferences(requireActor(ctx), {
+      codingTools: input.codingTools.map((tool) => ({
+        id: tool.id, name: tool.name, kind: tool.kind, template: tool.template, enabled: tool.enabled,
+        ...(tool.preset == null ? {} : { preset: tool.preset }),
+        ...(tool.shortcut == null ? {} : { shortcut: tool.shortcut }),
+      })),
+      promptInstructions: input.promptInstructions,
+    }),
+  }),
   uploadAvatar: t.field({
     type: UserRef,
     description: 'Upload a profile image. Re-encoded as WebP with metadata removed, at most 256px.',
@@ -492,6 +567,12 @@ builder.mutationFields((t) => ({
     type: WorkspaceRef,
     args: { input: t.arg({ type: WorkspaceInput, required: true }) },
     resolve: (_r, { input }, ctx) => ctx.services.workspace.update(requireActor(ctx), input),
+  }),
+  updateWorkspaceFeatures: t.field({
+    type: WorkspaceRef,
+    description: 'Owner-only UI feature switches. Existing cycle and estimate API fields remain available.',
+    args: { input: t.arg({ type: WorkspaceFeaturesInput, required: true }) },
+    resolve: (_r, { input }, ctx) => ctx.services.workspace.updateFeatures(requireActor(ctx), input),
   }),
   requestWorkspaceDeletion: t.field({
     type: WorkspaceRef,

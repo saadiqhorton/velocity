@@ -13,6 +13,7 @@ import { useUi } from '@/stores/ui';
 import { useTheme } from '@/stores/theme';
 import { useSetTheme } from './theme';
 import { ProjectIcon, TeamIcon } from '@/components/common/EntityIcons';
+import { teamUsesCycles, useFeatures } from '@/lib/features';
 import { m } from '@/i18n';
 
 const MAX_PROJECTS = 8;
@@ -64,6 +65,7 @@ function TeamGroup({ team }: { team: TeamFieldsFragment }) {
   const collapsed = useSidebar((s) => s.collapsed[`team:${team.id}`] ?? false);
   const setCollapsed = useSidebar((s) => s.setCollapsed);
   const base = `/team/${team.key}`;
+  const features = useFeatures();
   return (
     <SideNavGroup
       variant="item"
@@ -74,19 +76,22 @@ function TeamGroup({ team }: { team: TeamFieldsFragment }) {
       onCollapsedChange={(c) => setCollapsed(`team:${team.id}`, c)}
     >
       <SideNavItem as={Link} to={`${base}/active`} level={1} icon={<Icon name="active" />} selected={isActive(`${base}/active`)}>
-        {m.nav.active}
+        {features.solo ? m.nav.issues : m.nav.active}
       </SideNavItem>
       <SideNavItem as={Link} to={`${base}/backlog`} level={1} icon={<Icon name="backlog" />} selected={isActive(`${base}/backlog`)}>
         {m.nav.backlog}
       </SideNavItem>
-      {team.cycleEnabled ? (
+      {teamUsesCycles(features, team) ? (
         <SideNavItem as={Link} to={`${base}/cycles`} level={1} icon={<Icon name="cycle" />} selected={isActive(`${base}/cycles`)}>
           {m.nav.cycles}
         </SideNavItem>
       ) : null}
-      <SideNavItem as={Link} to={`${base}/projects`} level={1} icon={<Icon name="project" />} selected={isActive(`${base}/projects`)}>
-        {m.nav.projects}
-      </SideNavItem>
+      {/* Solo mode (U4): projects live in the workspace Projects section only. */}
+      {!features.solo ? (
+        <SideNavItem as={Link} to={`${base}/projects`} level={1} icon={<Icon name="project" />} selected={isActive(`${base}/projects`)}>
+          {m.nav.projects}
+        </SideNavItem>
+      ) : null}
       <SideNavItem as={Link} to={`${base}/views`} level={1} icon={<Icon name="view" />} selected={isActive(`${base}/views`)}>
         {m.nav.views}
       </SideNavItem>

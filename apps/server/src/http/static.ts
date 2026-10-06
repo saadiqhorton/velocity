@@ -33,7 +33,9 @@ export function contentSecurityPolicy(nonce: string): string {
     "connect-src 'self' ws: wss:",
     "object-src 'none'",
     "base-uri 'self'",
-    "form-action 'self'",
+    // `self` for app forms; github.com lets the owner submit GitHub's App-manifest form (in-app
+    // GitHub setup). Form-action is still restricted to these two origins, so no other exfiltration.
+    "form-action 'self' https://github.com",
     "frame-ancestors 'none'",
   ].join('; ');
 }

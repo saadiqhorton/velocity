@@ -125,7 +125,7 @@ packages/ui components + apps/web/src/styles/app.css (@import tailwindcss, token
 
 ### Keyboard map
 
-This table is checked against the command registry: the `useCommands` registrations in `components/commands/GlobalCommands.tsx`, `IssueCommands.tsx`, `components/issues/IssueList.tsx`, `IssueBoard.tsx`, `ListScreen.tsx` and `screens/inbox/Inbox.tsx`.
+This table is checked against the command registry: the `useCommands` registrations in `components/commands/GlobalCommands.tsx`, `IssueCommands.tsx`, `components/issues/IssueList.tsx`, `IssueBoard.tsx`, `ListScreen.tsx`, `components/issue-detail/IssuePageHeader.tsx` and `screens/inbox/Inbox.tsx`.
 
 - One global listener (`keyboard/react.tsx`) resolves keys by layer: text field, then modal, then panel or list, then global.
 - Commands with keys show in the `?` help. Most also appear in the ⌘K/Ctrl+K palette, which additionally lists keyless actions: Go to Insights, Switch theme, New team/project/view, Duplicate issue, Copy issue ID/link, Set project/cycle/estimate, Log out, and per-team "Go to" entries.
@@ -136,12 +136,17 @@ This table is checked against the command registry: the `useCommands` registrati
 | `C` | Create issue | global |
 | `/` | Focus search | global |
 | `?` | Keyboard shortcuts help | global |
-| `Esc` | Close panel or full-page issue, else clear selection; closes menus and modals | global |
+| `Esc` | Close the peek panel, else clear selection; closes menus and modals. On the issue page: back to the list | global, issue page |
 | `G` `I` / `G` `M` / `G` `A` / `G` `P` / `G` `S` / `G` `V` | Go to Inbox / My issues / All issues / Projects / Settings / Views | global |
 | `G` `C` / `G` `B` / `G` `T` | Go to the current team's Active / Backlog / current cycle | global |
 | `J` `K` or `↓` `↑` | Move focus (hold to repeat) | list, board, inbox |
 | `←` `→` | Move between board columns | board |
-| `Enter` / `Mod+Enter` | Open in the panel / full page | list (board and inbox: `Enter`) |
+| `Enter` / `Mod+Enter` | Open the full issue page (inbox: `Enter` opens the panel) | list, board |
+| `Space` | Peek in the side panel; `Space` again (or `Esc`) closes it | list, board |
+| `J` `K` or `↓` `↑` / `⌫` | Next / previous issue of the list the page came from; back to that list | issue page |
+| `Mod+Alt+P` / `Mod+Shift+.` / `Mod+.` / `Mod+Shift+,` | Copy as prompt / branch name / ID / link (work in text fields) | issue page, focused row, peek panel |
+| `Mod+Alt+.` (configurable) | Open in the first coding tool (Settings › Coding tools) | issue |
+| `Shift+F10` / Menu key, right-click | Issue context menu | row, card, issue |
 | `X` / `Shift+X` / `Mod+A` | Toggle selection / select range / select all | list (`X` on board too) |
 | `Alt+↑` / `Alt+↓` | Reorder within the group | list |
 | `B` | Toggle board and list | issue views |
@@ -149,12 +154,12 @@ This table is checked against the command registry: the `useCommands` registrati
 | `I` | Assign to me (again to unassign) | issue |
 | `A` / `L` / `P` / `S` / `R` | Assignee / label / priority / status / relation picker | issue (`R`: one issue) |
 | `M` | Move to team (board: move to column) | issue |
-| `V` | Issue context menu ("Move issue") | issue |
+| `V` | Issue context menu | issue |
 | `Y` | Archive | issue |
 | `#` | Delete with confirmation (inbox: `#` or `Delete` removes the notification) | issue |
 | `Mod+Enter` | Submit comment | markdown editor |
 
-Compared with SPEC §4.12, the registry adds `G` `C` (Active), `G` `V` (Views), `Mod+A`, the board's arrow keys and `M` for move to column. Inside menus, listboxes and popups, arrow keys, `Home`/`End` and typeahead belong to that widget, which the engine does not intercept.
+Roadmap v1.2 (U1/U2) changed `Enter` from the panel to the full page, added `Space` peek and the copy and menu keys; `.` and `,` under a modifier are read by physical key (`event.code`), so `Mod+Shift+.` never collapses into `Mod+.`. Compared with SPEC §4.12, the registry adds `G` `C` (Active), `G` `V` (Views), `Mod+A`, the board's arrow keys and `M` for move to column. Inside menus, listboxes and popups, arrow keys, `Home`/`End` and typeahead belong to that widget, which the engine does not intercept.
 
 ## Recorded deviations from the specification
 
@@ -162,11 +167,12 @@ These implementation choices are documented for transparency; `SPEC.md` remains 
 
 - The light theme follows the specified values. The dark theme uses the published `@atlaskit/tokens` `atlassian-dark` theme, as allowed by the specification's published-token rule. Dark lozenge text is lightened to maintain 4.5:1 contrast on a 15% tint.
 - The schema contains additional tables for singleton workspace state, invites, team counters, project-team links, issue activity, ordered favorites, MCP sessions, import items, and exports. API keys also store a lookup/display prefix.
+- Team keys are stored in a permanent alias table. Renaming a team changes its displayed issue prefix while old identifiers continue to resolve to that team; old keys cannot be assigned to another team. The aliases survive soft deletion so moved-issue pointers keep resolving.
 - Database tests use shared PostgreSQL configured by `TEST_DATABASE_URL` and clone a per-run template database rather than starting testcontainers.
 - Markdown sanitization escapes raw HTML (so text such as `Map<string, number>` remains visible); unsafe URL schemes such as `javascript:` and `data:` are replaced with `#`.
 - Outbound webhook retries use the app schedule of 1, 5, 15, 30, and 60 minutes, then dead-letter. pg-boss retry is disabled for that queue.
 - Cycle rotation runs as an hourly sweep to honor each team's local midnight. Manual early close sets `endsAt` to now; catch-up windows are inserted already closed.
 - GitHub installation tokens are minted per call and are not stored. Backfill links PRs without notifications or automatic issue closing. Issue-sync deduplication uses an activity marker. Commits link when they reference an issue but never close it.
 - The MCP implementation has 13 tool names because project retrieval and project listing are separate tools.
-- GraphiQL and persisted documents are not implemented; GraphQL introspection remains enabled. Avatar upload is implemented with decoded and re-encoded PNG/JPEG/GIF/WebP images, metadata removal, and a 256px maximum dimension; `GET /avatars/:id` requires member authentication.
+- GraphiQL is disabled; GraphQL introspection remains enabled. Codegen creates a persisted-operation manifest and adds `__typename` for Apollo's cache. The browser sends hashes for ordinary app operations (uploads and WebSocket subscriptions send full documents); the server resolves hashes from its bundled manifest. Full documents remain accepted for the public API and for clients during rolling upgrades. Avatar upload is implemented with decoded and re-encoded PNG/JPEG/GIF/WebP images, metadata removal, and a 256px maximum dimension; `GET /avatars/:id` requires member authentication.
 - `is:blocked` counts unresolved blockers only. `DISABLE_SIGNUP=false` enables open signup. Rate limits are per process.

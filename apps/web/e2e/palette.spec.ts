@@ -51,7 +51,8 @@ test.describe('command palette', () => {
     await expect(option).toBeVisible();
     await option.click();
     await expect(palette(page)).toBeHidden();
-    await expect(page).toHaveURL(/issue=/);
+    // The palette opens the full issue page (U1).
+    await expect(page).toHaveURL(/\/issue\/ENG-1$/);
     await expect(page.getByTestId('issue-identifier')).toHaveText('ENG-1');
   });
 

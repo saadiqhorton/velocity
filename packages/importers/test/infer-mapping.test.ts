@@ -96,6 +96,15 @@ describe('suggestMapping', () => {
     expect(m2.teams.x).toEqual({ mode: 'existing', teamId: 'T1' });
   });
 
+  it('does not suggest a historical key reserved by a renamed team', () => {
+    const m = suggestMapping(bundle({ teams: [{ externalId: 'x', key: 'OLD', name: 'Unrelated' }] }), {
+      ...ws,
+      reservedTeamKeys: ['OLD', 'ENG', 'OPS'],
+    });
+    expect(m.teams.x?.mode).toBe('create');
+    expect(m.teams.x?.mode === 'create' && m.teams.x.key).not.toBe('OLD');
+  });
+
   it('maps statuses to existing or creates with inferred/default category', () => {
     const m = suggestMapping(
       bundle({

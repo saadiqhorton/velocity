@@ -35,6 +35,7 @@ import { orderBetween, needsRebalance } from '../lib/fractional-order';
 import { parseIdentifier } from '../lib/identifiers';
 import { sanitizeMarkdown } from '../lib/markdown';
 import { assertCan } from '../lib/permissions';
+import { teamIdsFor } from '../lib/team-key';
 import { recomputeProjectProgress } from '../projects';
 import type { TeamService } from '../teams';
 import { compileFilter, displayOrdering, groupOrder, orderSql } from './filter-sql';
@@ -201,8 +202,7 @@ export class IssueService extends ServiceBase {
     const [row] = await this.db
       .select({ issue: issues })
       .from(issues)
-      .innerJoin(teams, eq(teams.id, issues.teamId))
-      .where(and(eq(teams.key, parsed.teamKey), eq(issues.number, parsed.number)));
+      .where(and(sql`${issues.teamId} in ${teamIdsFor(parsed.teamKey)}`, eq(issues.number, parsed.number)));
     let issue: IssueRow | null = row?.issue ?? null;
     let hops = 0;
     while (issue?.movedToIssueId && opts.followMoves !== false && hops++ < 10) {

@@ -7,6 +7,7 @@ import { useWorkspace } from '@/app/workspace';
 import { useConnection } from '@/stores/connection';
 import { useOptimisticMutation } from '@/lib/mutation';
 import { formatDate } from '@/lib/format';
+import { useFeatures } from '@/lib/features';
 import { m } from '@/i18n';
 
 export const OFFLINE_BANNER_DELAY_MS = 5000;
@@ -42,7 +43,8 @@ function readDismissed(): string[] {
 
 /** Workspace-level banner for cycles that close within a day (SPEC §3.11). */
 export function CycleClosingBanner() {
-  const { data } = useQuery(CyclesClosingSoonDocument, { fetchPolicy: 'cache-and-network' });
+  const features = useFeatures();
+  const { data } = useQuery(CyclesClosingSoonDocument, { fetchPolicy: 'cache-and-network', skip: !features.cycles });
   const [dismissed, setDismissed] = useState<string[]>(readDismissed);
   const cycles = (data?.cyclesClosingSoon ?? []).filter((c) => !dismissed.includes(c.id));
   if (cycles.length === 0) return null;

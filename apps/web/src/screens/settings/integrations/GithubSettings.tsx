@@ -1,12 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useApolloClient, useQuery } from '@apollo/client';
-import { Button, ConfirmDialog, EmptyState, Icon, InlineMessage, Lozenge, ProgressBar, Select, Skeleton, Spinner, Switch } from '@velocity/ui';
+import { Button, ConfirmDialog, EmptyState, Icon, InlineMessage, Lozenge, ProgressBar, Select, Skeleton, Spinner, Switch, TextField } from '@velocity/ui';
 import {
+  BeginGithubAppSetupDocument,
+  ConfirmGithubAppSetupDocument,
   GithubCancelBackfillDocument,
   GithubCompleteInstallDocument,
   GithubStartBackfillDocument,
   IntegrationsDocument,
+  RemoveGithubAppDocument,
   UninstallGithubDocument,
   UpdateGithubSettingsDocument,
 } from '@/gql/graphql';
@@ -20,8 +23,89 @@ import { OwnerOnlyNotice, SettingsPage, SettingsRow, SettingsSection, useIsOwner
 
 type Install = IntegrationsQuery['githubIntegration']['installs'][number];
 
-/** Environment variables a GitHub App needs on the server (docs/self-hosting.md). */
+/** Environment variables an advanced self-hoster can use instead (docs/self-hosting.md). */
 const ENV_VARS = ['GITHUB_APP_ID', 'GITHUB_APP_SLUG', 'GITHUB_APP_PRIVATE_KEY', 'GITHUB_APP_CLIENT_SECRET', 'GITHUB_WEBHOOK_SECRET'] as const;
+
+/**
+ * One-click GitHub setup. Builds the App manifest on the server, then submits GitHub's registration
+ * form as a top-level POST (a normal form, so the strict CSP `form-action` allows it). GitHub creates
+ * the App and redirects back to /settings/github with a code we exchange server-side.
+ */
+function SetupGithubApp() {
+  const t = m.settingsIntegrations.github;
+  const [organization, setOrganization] = useState('');
+  const form = useRef<HTMLFormElement>(null);
+  const [manifest, setManifest] = useState<{ action: string; manifest: string } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [begin, { loading }] = useOptimisticMutation(BeginGithubAppSetupDocument, {
+    optimistic: { serverConfirmed: 'GitHub registers the App; the server cannot predict its id and secrets.' },
+    rollback: () => t.setUpFailed,
+    silent: true,
+  });
+
+  useEffect(() => {
+    if (manifest) form.current?.submit();
+  }, [manifest]);
+
+  const start = () => {
+    setError(null);
+    void begin({ organization: organization.trim() || undefined }).then(({ data, error: err }) => {
+      if (err || !data) {
+        setError(t.setUpFailed);
+        return;
+      }
+      setManifest(data.beginGithubAppSetup);
+    });
+  };
+
+  return (
+    <div className="rounded-md border border-border bg-surface p-4" data-testid="github-setup">
+      <div className="flex items-start gap-3">
+        <Icon name="github" className="mt-0.5 shrink-0 text-fg-subtle" />
+        <div className="min-w-0 flex-1">
+          <p className="text-base font-medium text-fg">{t.notConfiguredTitle}</p>
+          <p className="mt-0.5 text-sm text-fg-subtle">{t.notConfiguredBody}</p>
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end">
+            <div className="w-full sm:max-w-64">
+              <TextField
+                label={t.setUpOrgLabel}
+                placeholder={t.setUpOrgPlaceholder}
+                helperText={t.setUpOrgHelp}
+                value={organization}
+                onChange={(e) => setOrganization(e.target.value)}
+                data-testid="github-setup-org"
+              />
+            </div>
+            <Button variant="primary" loading={loading} onClick={start} data-testid="github-setup-button">
+              {loading ? t.setUpSubmitting : t.setUp}
+            </Button>
+          </div>
+          {error ? (
+            <InlineMessage appearance="error" onDismiss={() => setError(null)}>
+              {error}
+            </InlineMessage>
+          ) : null}
+          <details className="mt-3">
+            <summary className="cursor-pointer text-sm text-fg-subtle">{t.envFallbackTitle}</summary>
+            <p className="mt-1 text-sm text-fg-subtle">{t.envFallbackBody}</p>
+            <ul className="mt-2 flex flex-col gap-0.5" data-testid="github-env">
+              {ENV_VARS.map((v) => (
+                <li key={v}>
+                  <code className="font-mono text-sm">{v}</code>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-1 text-sm text-fg-subtle">{t.envFallbackDocs}</p>
+          </details>
+        </div>
+      </div>
+      {/* Top-level form POST to github.com/settings/apps/new (SPEC §6.5.4 manifest flow). */}
+      <form ref={form} method="post" action={manifest?.action ?? ''} className="hidden" data-testid="github-manifest-form">
+        <input type="hidden" name="manifest" value={manifest?.manifest ?? ''} readOnly />
+      </form>
+    </div>
+  );
+}
 
 function repoTeamMapOf(install: Install): Record<string, string> {
   const raw = install.repoTeamMap;
@@ -201,6 +285,8 @@ export function GithubSettings() {
   const isOwner = useIsOwner();
   const [params, setParams] = useSearchParams();
   const installationParam = params.get('installation_id');
+  const appCode = params.get('code');
+  const appState = params.get('state');
   const { data, loading, error, refetch, startPolling, stopPolling } = useQuery(IntegrationsDocument);
   const installs = data?.githubIntegration.installs ?? [];
   const anyRunning = installs.some((i) => i.backfillStatus === 'running');
@@ -213,6 +299,7 @@ export function GithubSettings() {
 
   const [completing, setCompleting] = useState(false);
   const [completeError, setCompleteError] = useState<string | null>(null);
+  const [showRemove, setShowRemove] = useState(false);
   const handled = useRef<string | null>(null);
   const [complete] = useOptimisticMutation(GithubCompleteInstallDocument, {
     optimistic: { serverConfirmed: 'The installation is verified with GitHub on the server.' },
@@ -220,6 +307,30 @@ export function GithubSettings() {
     silent: true,
     refetchQueries: [IntegrationsDocument],
   });
+  const [confirmApp] = useOptimisticMutation(ConfirmGithubAppSetupDocument, {
+    optimistic: { serverConfirmed: 'The server exchanges the code with GitHub and stores the App credentials.' },
+    rollback: () => t.confirmFailed,
+    silent: true,
+    refetchQueries: [IntegrationsDocument],
+  });
+  const [removeApp, removeState] = useOptimisticMutation(RemoveGithubAppDocument, {
+    optimistic: { serverConfirmed: 'The server deletes the stored App credentials.' },
+    rollback: () => t.removeAppFailed,
+    refetchQueries: [IntegrationsDocument],
+  });
+
+  // GitHub redirected back from the App-manifest form with a one-hour code.
+  // Depend on the primitive params; `handled` makes StrictMode/re-render re-runs a no-op.
+  useEffect(() => {
+    if (!appCode || !appState || handled.current === `app:${appCode}`) return;
+    handled.current = `app:${appCode}`;
+    setCompleting(true);
+    void confirmApp({ input: { code: appCode, state: appState } }).then(({ error: err }) => {
+      setCompleting(false);
+      setCompleteError(err ? t.confirmFailed : null);
+      setParams({}, { replace: true });
+    });
+  }, [appCode, appState, confirmApp, setParams, t]);
 
   const installationId = installationParam === null ? null : Number(installationParam);
   const invalidParam = installationId !== null && !(Number.isInteger(installationId) && installationId > 0);
@@ -236,6 +347,8 @@ export function GithubSettings() {
   }, [installationId, invalidParam, installationParam, complete, setParams]);
 
   const configured = data?.githubIntegration.configured ?? false;
+  const source = data?.githubIntegration.source ?? null;
+  const appName = data?.githubIntegration.appName ?? null;
   const installUrl = data?.githubIntegration.installUrl ?? null;
   const install = () => {
     if (installUrl) window.location.assign(installUrl);
@@ -265,7 +378,7 @@ export function GithubSettings() {
       {completeError || invalidParam ? (
         <InlineMessage
           appearance="error"
-          title={t.installFailedTitle}
+          title={t.confirmFailedTitle}
           onDismiss={() => {
             setCompleteError(null);
             setParams({}, { replace: true });
@@ -284,17 +397,7 @@ export function GithubSettings() {
           {describeError(error).message}
         </InlineMessage>
       ) : !configured ? (
-        <InlineMessage appearance="info" title={t.notConfiguredTitle}>
-          <p>{t.notConfiguredBody}</p>
-          <ul className="mt-2 flex flex-col gap-0.5" data-testid="github-env">
-            {ENV_VARS.map((v) => (
-              <li key={v}>
-                <code className="font-mono text-sm">{v}</code>
-              </li>
-            ))}
-          </ul>
-          <p className="mt-2">{t.notConfiguredDocs}</p>
-        </InlineMessage>
+        <SetupGithubApp />
       ) : installs.length === 0 ? (
         <div className="rounded-md border border-border">
           <EmptyState
@@ -313,6 +416,36 @@ export function GithubSettings() {
         installs.map((i) => <InstallSection key={i.id} install={i} canEdit={isOwner} />)
       )}
       {configured && !installUrl && !loading ? <InlineMessage appearance="warning">{t.noInstallUrl}</InlineMessage> : null}
+      {configured && isOwner ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
+          <p className="text-sm text-fg-subtle">
+            {source === 'database' ? (
+              <>
+                {t.configuredSourceDb}
+                {appName ? ` ${t.appNameLabel(appName)}` : ''}
+              </>
+            ) : (
+              t.configuredSourceEnv
+            )}
+          </p>
+          {source === 'database' ? (
+            <Button variant="default" size="sm" onClick={() => setShowRemove(true)} data-testid="github-remove-app">
+              {t.removeApp}
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
+      <ConfirmDialog
+        open={showRemove}
+        onClose={() => setShowRemove(false)}
+        title={t.removeAppTitle}
+        description={t.removeAppBody}
+        confirmLabel={t.removeApp}
+        loading={removeState.loading}
+        onConfirm={() => {
+          void removeApp({}).then(() => setShowRemove(false));
+        }}
+      />
     </SettingsPage>
   );
 }

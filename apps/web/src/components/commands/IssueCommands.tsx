@@ -8,6 +8,10 @@ import { targetAnchor, targetIssueIds } from '@/lib/targets';
 import { useUi } from '@/stores/ui';
 import type { PickerKind } from '@/stores/ui';
 import { useArchiveIssues, useDuplicateIssue, useToggleDone, useUpdateIssues } from '@/components/issues/actions';
+import { useIssueAi } from '@/components/issues/useIssueAi';
+import { COPY_BRANCH_KEYS, COPY_ID_KEYS, COPY_LINK_KEYS, COPY_PROMPT_KEYS } from '@/components/overlays/IssueMenuItems';
+import { enabledTools, useCodingTools } from '@/stores/codingTools';
+import { useFeatures } from '@/lib/features';
 import { m } from '@/i18n';
 
 const hasTargets = () => targetIssueIds().length > 0;
@@ -31,7 +35,14 @@ export function IssueCommands() {
     if (ids.length > 0) openPicker({ kind, issueIds: ids, anchor: targetAnchor(property ?? kind) });
   };
 
-  const copy = (text: string, title: string) => void navigator.clipboard?.writeText(text).then(() => showFlag({ title, severity: 'success' }));
+  const ai = useIssueAi();
+  const features = useFeatures();
+  const tools = enabledTools(useCodingTools((s) => s.tools));
+  const single = () => targetIssueIds().length === 1;
+  const withSingle = (fn: (id: string) => Promise<unknown>) => () => {
+    const id = targetIssueIds()[0];
+    if (id) void fn(id);
+  };
 
   useCommands(() => [
     { id: 'issue.done', title: m.cmd.markDone, group: 'issue', keys: ['e'], when: hasTargets, run: () => void toggleDone(targetIssueIds()) },
@@ -65,8 +76,8 @@ export function IssueCommands() {
     },
     { id: 'issue.relation', title: m.cmd.relation, group: 'issue', keys: ['r'], when: () => targetIssueIds().length === 1, run: picker('relation') },
     { id: 'issue.project', title: m.cmd.project, group: 'issue', when: hasTargets, run: picker('project') },
-    { id: 'issue.cycle', title: m.cmd.cycle, group: 'issue', when: hasTargets, run: picker('cycle') },
-    { id: 'issue.estimate', title: m.cmd.estimate, group: 'issue', when: hasTargets, run: picker('estimate') },
+    { id: 'issue.cycle', title: m.cmd.cycle, group: 'issue', when: () => features.cycles && hasTargets(), run: picker('cycle') },
+    { id: 'issue.estimate', title: m.cmd.estimate, group: 'issue', when: () => features.estimates && hasTargets(), run: picker('estimate') },
     { id: 'issue.archive', title: m.cmd.archive, group: 'issue', keys: ['y'], when: hasTargets, run: () => void archive(targetIssueIds()) },
     { id: 'issue.delete', title: m.cmd.delete, group: 'issue', keys: ['#'], when: hasTargets, run: () => askDelete(targetIssueIds()) },
     {
@@ -84,25 +95,32 @@ export function IssueCommands() {
       },
     },
     {
-      id: 'issue.copyId',
-      title: m.cmd.copyId,
+      id: 'issue.menu',
+      title: m.cmd.contextMenu,
       group: 'issue',
-      when: () => targetIssueIds().length === 1,
+      keys: ['shift+f10', 'contextmenu'],
+      palette: false,
+      when: hasTargets,
       run: () => {
-        const row = readIssueRow(client.cache, targetIssueIds()[0] ?? '');
-        if (row) copy(row.identifier, m.issue.copiedId(row.identifier));
+        const ids = targetIssueIds();
+        if (ids.length > 0) openContextMenu({ issueIds: ids, anchor: targetAnchor() });
       },
     },
-    {
-      id: 'issue.copyUrl',
-      title: m.cmd.copyUrl,
-      group: 'issue',
-      when: () => targetIssueIds().length === 1,
-      run: () => {
-        const row = readIssueRow(client.cache, targetIssueIds()[0] ?? '');
-        if (row) copy(`${window.location.origin}/issue/${row.identifier}`, m.view.linkCopied);
-      },
-    },
+    // Copy actions (Roadmap v1.2 U2): work on the page, a focused row, the peek panel and the palette.
+    { id: 'issue.copyPrompt', title: m.cmd.copyPrompt, group: 'issue', keys: [COPY_PROMPT_KEYS], allowInInput: true, keywords: ['ai', 'agent', 'prompt'], when: single, run: withSingle(ai.copyPrompt) },
+    { id: 'issue.copyBranch', title: m.cmd.copyBranch, group: 'issue', keys: [COPY_BRANCH_KEYS], allowInInput: true, keywords: ['git'], when: single, run: withSingle(ai.copyBranch) },
+    { id: 'issue.copyId', title: m.cmd.copyId, group: 'issue', keys: [COPY_ID_KEYS], allowInInput: true, when: single, run: withSingle(ai.copyId) },
+    { id: 'issue.copyUrl', title: m.cmd.copyUrl, group: 'issue', keys: [COPY_LINK_KEYS], allowInInput: true, when: single, run: withSingle(ai.copyLink) },
+    ...tools.map((tool, i) => ({
+      id: `issue.openIn.${tool.id}`,
+      title: m.cmd.openInTool(tool.name),
+      group: 'issue' as const,
+      keys: tool.shortcut ? [tool.shortcut] : undefined,
+      allowInInput: true,
+      keywords: ['ai', 'agent', 'open in', i === 0 ? 'first' : ''].filter(Boolean),
+      when: single,
+      run: withSingle((id) => ai.launch(tool, id)),
+    })),
   ]);
   return null;
 }

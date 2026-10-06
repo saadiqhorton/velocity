@@ -2,6 +2,7 @@ import { and, asc, eq, inArray, isNull, notInArray, sql } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import sharp from 'sharp';
 import { apiKeys, issues, sessions, statuses, users } from '@velocity/schema';
+import type { UserPreferences } from '@velocity/schema';
 import { ServiceBase } from './base';
 import type { AuditService } from './audit';
 import type { ServiceActor } from './context';
@@ -12,6 +13,7 @@ import { randomToken } from './lib/crypto';
 import { validatePassword } from './lib/password-policy';
 import { assertCan } from './lib/permissions';
 import { clamScan } from './attachments';
+import { validateUserPreferences } from './lib/user-preferences';
 
 export type UserRow = typeof users.$inferSelect;
 
@@ -82,6 +84,23 @@ export class UserService extends ServiceBase {
       if (c === 'users_email_uq') throw validation('That email is already used by another member.', { field: 'email' });
       throw err;
     }
+  }
+
+  async updatePreferences(actor: ServiceActor, input: UserPreferences): Promise<UserPreferences> {
+    assertCan(actor, 'issue.write');
+    const preferences = validateUserPreferences(input);
+    return this.tx(async (tx) => {
+      const [user] = await tx.update(users)
+        .set({ preferences, updatedAt: this.now() })
+        .where(and(eq(users.id, actor.userId), isNull(users.deletedAt)))
+        .returning();
+      if (!user) throw notFound('User');
+      await this.audit.log(tx, actor, {
+        action: 'user.preferences_updated', objectType: 'user', objectId: actor.userId,
+        changes: { codingToolCount: preferences.codingTools.length },
+      });
+      return preferences;
+    });
   }
 
   async setAvatar(actor: ServiceActor, avatarPath: string | null): Promise<UserRow> {

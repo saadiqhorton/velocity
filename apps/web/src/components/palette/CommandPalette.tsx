@@ -136,14 +136,14 @@ export function CommandPalette() {
               group: m.palette.issues,
               icon: <StatusIcon category={issue.status.category} color={issue.status.color} label="" />,
             },
-            run: () => openIssue(issue.id),
+            run: () => openIssue(issue.id, { identifier: issue.identifier, peek: false }),
           });
         }
       } else {
         for (const r of recent) {
           out.push({
             option: { value: `recent:${r.id}`, label: `${r.identifier} ${r.title}`, group: m.palette.recent, icon: <Icon name="list" className="text-fg-subtlest" /> },
-            run: () => openIssue(r.id),
+            run: () => openIssue(r.id, { identifier: r.identifier, peek: false }),
           });
         }
       }

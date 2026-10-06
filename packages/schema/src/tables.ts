@@ -57,6 +57,36 @@ const ts = (name: string) => timestamp(name, { withTimezone: true, mode: 'date' 
 const createdAt = () => ts('created_at').notNull().defaultNow();
 const updatedAt = () => ts('updated_at').notNull().defaultNow();
 
+export interface WorkspaceFeatures {
+  cycles: boolean;
+  estimates: boolean;
+  insights: boolean;
+  members: boolean;
+}
+
+/** New workspaces start with team features hidden in the UI. */
+export const SOLO_WORKSPACE_FEATURES: WorkspaceFeatures = {
+  cycles: false,
+  estimates: false,
+  insights: false,
+  members: false,
+};
+
+export interface CodingToolPreference {
+  id: string;
+  preset?: string;
+  name: string;
+  kind: 'deeplink' | 'command';
+  template: string;
+  enabled: boolean;
+  shortcut?: string;
+}
+
+export interface UserPreferences {
+  codingTools: CodingToolPreference[];
+  promptInstructions: string;
+}
+
 // ───────────────────────────── Workspace & identity ─────────────────────────────
 
 export const workspace = pgTable(
@@ -67,6 +97,7 @@ export const workspace = pgTable(
     slug: text('slug').notNull(),
     timezone: text('timezone').notNull().default('UTC'),
     locale: text('locale').notNull().default('en'),
+    features: jsonb('features').$type<WorkspaceFeatures>().notNull().default(SOLO_WORKSPACE_FEATURES),
     setupCompletedAt: ts('setup_completed_at'),
     /** Owner-requested deletion; data retained 7 days, then purged (SPEC §3.3). */
     deletionRequestedAt: ts('deletion_requested_at'),
@@ -88,6 +119,8 @@ export const users = pgTable(
     timezone: text('timezone').notNull().default('UTC'),
     locale: text('locale').notNull().default('en'),
     theme: text('theme').$type<'dark' | 'light' | 'system'>().notNull().default('system'),
+    /** Null means no server setting has been saved; clients may migrate local settings once. */
+    preferences: jsonb('preferences').$type<UserPreferences>(),
     isOwner: boolean('is_owner').notNull().default(false),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -201,6 +234,18 @@ export const teams = pgTable(
     check('teams_cycle_len', sql`${t.cycleLengthWeeks} between 1 and 8`),
     check('teams_cycle_day', sql`${t.cycleStartDay} between 0 and 6`),
   ],
+);
+
+/** Every key ever assigned to a team stays reserved, including after soft deletion. */
+export const teamKeyAliases = pgTable(
+  'team_key_aliases',
+  {
+    key: text('key').primaryKey(),
+    // Deliberately no FK: a later retention purge must not make old keys reusable.
+    teamId: uuid('team_id').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index('team_key_aliases_team_idx').on(t.teamId), check('team_key_aliases_format', sql`${t.key} ~ '^[A-Z][A-Z0-9]{0,9}$'`)],
 );
 
 export const teamMembers = pgTable(
@@ -691,6 +736,31 @@ export interface GithubInstallSettings {
   /** Target team for synced GitHub issues when the repo isn't mapped. */
   issueSyncTeamId?: string | null;
 }
+
+/**
+ * A GitHub App created from inside Velocity through GitHub's manifest flow. Singleton, like
+ * `workspace`. Secrets are stored AES-256-GCM-encrypted (the same `createCipherBox` used for
+ * webhook secrets) and override the `GITHUB_APP_*` environment variables when present. This is
+ * the documented deviation from "secrets env-only": a self-hoster with no server file access can
+ * connect GitHub from the web UI.
+ */
+export const githubApp = pgTable(
+  'github_app',
+  {
+    id: smallint('id').primaryKey().default(1),
+    appId: text('app_id').notNull(),
+    slug: text('slug').notNull(),
+    name: text('name').notNull(),
+    clientId: text('client_id').notNull().default(''),
+    clientSecretEncrypted: text('client_secret_encrypted').notNull(),
+    privateKeyEncrypted: text('private_key_encrypted').notNull(),
+    webhookSecretEncrypted: text('webhook_secret_encrypted').notNull(),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [check('github_app_singleton', sql`${t.id} = 1`)],
+);
 
 export const githubInstalls = pgTable(
   'github_installs',

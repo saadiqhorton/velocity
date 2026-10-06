@@ -30,8 +30,8 @@ test.describe('keyboard loop', () => {
     // Retrying: focus moves after React commits the key handling (WebKit can be a frame behind).
     await expect.poll(() => focusedLabel(page)).toContain(title);
 
-    // Enter opens the 400px panel.
-    await page.keyboard.press('Enter');
+    // Space peeks the issue in the 400px panel (U1; Enter opens the full page).
+    await page.keyboard.press(' ');
     const panel = PANEL(page);
     await expect(panel).toBeVisible();
     await expect(page).toHaveURL(/[?&]issue=[0-9a-f-]{36}/);

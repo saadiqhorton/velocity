@@ -22,6 +22,7 @@ import {
   teamOptions,
 } from './projectUi';
 import type { ProjectRecord } from './projectUi';
+import { useFeatures } from '@/lib/features';
 import { m } from '@/i18n';
 
 /** Inline name with 500ms debounced autosave (blank names are never saved). */
@@ -221,6 +222,7 @@ export function ProjectOverview({ project, milestones, save }: { project: Projec
   const sorted = sortMilestones(milestones);
   const shown = sorted.slice(0, 4);
   const p = project.progress;
+  const estimates = useFeatures().estimates;
   return (
     <div className="mx-auto flex w-full max-w-240 flex-col gap-8 p-5 md:flex-row" data-testid="project-overview">
       <div className="flex min-w-0 flex-1 flex-col gap-4">
@@ -263,7 +265,7 @@ export function ProjectOverview({ project, milestones, save }: { project: Projec
           <p className="text-sm text-fg-subtle" data-testid="project-progress-count">
             {m.cycles.stats(p.done, p.total)}
           </p>
-          {p.pointsTotal > 0 ? <p className="text-sm text-fg-subtle">{m.cycles.points(p.pointsDone, p.pointsTotal)}</p> : null}
+          {estimates && p.pointsTotal > 0 ? <p className="text-sm text-fg-subtle">{m.cycles.points(p.pointsDone, p.pointsTotal)}</p> : null}
         </section>
       </aside>
     </div>

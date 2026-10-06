@@ -15,6 +15,8 @@ import type { ServerConfig } from './config';
 import { graphqlDuration, rateLimited, wsConnections } from './metrics';
 import { RateLimiter } from './rate-limit';
 import type { RateDecision } from './rate-limit';
+import persistedDocuments from '@velocity/graphql/persisted-documents.json';
+import { persistedOperationQuery } from './persisted-operations';
 
 export const SESSION_COOKIE = 'vel_session';
 export const CSRF_COOKIE = 'vel_csrf';
@@ -200,9 +202,12 @@ export function createGraphQLServer(opts: { services: Services; pubsub: Velocity
       addValidationRule(depthLimitRule(10));
       addValidationRule(complexityLimitRule(50_000));
     },
-    onParams({ params, request }) {
+    onParams({ params, request, setParams }) {
+      const persistedQuery = persistedOperationQuery(params, persistedDocuments);
+      if (persistedQuery) setParams({ ...params, query: persistedQuery });
       // Credential endpoints: 10/min per IP (SPEC §6.3), checked before anything else runs.
-      if (params.query && hasAuthOperation(params.query)) {
+      const query = persistedQuery ?? params.query;
+      if (query && hasAuthOperation(query)) {
         const ip = request.headers.get('x-velocity-client-ip') ?? 'unknown';
         const d = authLimiter.check(`auth:${ip}`);
         if (!d.allowed) {

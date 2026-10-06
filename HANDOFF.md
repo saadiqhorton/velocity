@@ -1,6 +1,21 @@
 # Velocity — Engineering Handoff
 
 **Read this, then `SPEC.md`. `SPEC.md` is the source of truth; this file is the current state and how to continue.**
+
+## Live continuation checkpoint — 2026-10-06
+
+This section records the current, **uncommitted** follow-up after the v1.2 audit. The older status and checklists below describe earlier checkpoints; use this section first. Do not commit without an explicit owner request (§0).
+
+- **Owner decisions:** Keep the working name Velocity for this release. A linked PR opening leaves issue status unchanged. Old issue identifiers must continue to resolve after a team-key rename.
+- **Source of truth while working:** verify behavior against the current code, generated schema, migrations and focused tests before editing. Historical roadmap and handoff claims are context, not proof; do not infer that a path is complete or broken solely from those notes.
+- **Implemented in this follow-up, still uncommitted:** frontend: >1,000-issue stepper, attachment-flow E2E, Pi preset, deep-link allowlist; backend: S2 per-user preferences (migration 0005) and permanent team-key aliases (migration 0006); release: full CI gate before tag publication and a built-image Compose smoke step; lead: web S2 sync/one-time legacy migration and generated persisted app GraphQL operations. Agents were told not to spawn subagents.
+- **S2 contract:** `viewer.preferences` is nullable until a user saves; it contains `codingTools` and `promptInstructions`. `updatePreferences(input)` saves both for the viewer. The web app migrates the legacy `velocity.codingTools.v1` browser value once, then uses the server value and prevents one account's settings from leaking to another on the same browser.
+- **Integration follow-up (2026-10-06), still uncommitted:** (1) the generated `packages/mcp-tools/src/guide.ts` was stale against `docs/agents.md` (its sync test failed on the integrated tree) — regenerated with `node packages/mcp-tools/scripts/sync-guide.mjs`. (2) `apps/server` imported `apps/web/src/gql/persisted-documents.json`, breaking the "apps never import apps" rule and the Docker server-build stage. The manifest now lives in the shared `@velocity/graphql` package and is copied there by `apps/web/scripts/sync-persisted.mjs` (run by web `codegen` and `build`); the server imports `@velocity/graphql/persisted-documents.json`, and a regression test (`apps/server/test/persisted-operations.test.ts`) checks every shipped hash and `__typename`. (3) The visual gallery capture flaked in the Playwright image (first `fullPage` screenshot ~4px short for a 5270px page); `e2e/0-visual.spec.ts` now waits for `document.fonts.ready` and takes warm-up full-page captures until the height is stable. (4) `Attachments` shows the existing `noAttachments` copy when empty; the prompt relation sort is stable for unknown relation types.
+- **Verification (integrated tree, 2026-10-06):** `pnpm exec turbo run typecheck --force` 13/13; whole-repo `pnpm test` 13/13; `pnpm build` 5/5 (web bundle 186.1 KB gzip, budget 350); `eslint .` + `check-hex` + `check-legal` + `node --test scripts/*.test.mjs` (8/8) clean. Browser: host Chromium E2E `--grep-invert @visual` **87 passed** (slot 6); Docker WebKit **87 passed, 8 expected visual skips** (slot 7); Docker visual **11 passed** (slot 8). Deploy: fresh `docker build` of the integrated tree + Compose smoke (`scripts/deploy/smoke.mjs`) passed (setup → team → issue, CSRF/auth rejection, readiness, metrics protection, SPA/assets); `scripts/deploy/upgrade-smoke.sh` from `b622999` passed (issue preserved across migrations, automatic pre-migration dump validated, restore into a fresh DB booted and migrated).
+- **Remaining external release checks:** the upgrade smoke was verified locally against Docker on this host, not yet on a clean CI runner. Real GitHub App installation and live Claude Desktop/Cursor MCP client checks still need the owner's credentials/clients (R7). No release tag or publication has been made.
+- **In-app GitHub App setup (2026-10-06), uncommitted:** owner-only manifest flow (`GithubService.beginManifest/confirmManifest/saveAppFromManifest/removeApp`, HMAC state with 1 h TTL, migration 0007 `github_app` singleton with AES-GCM-encrypted private key/webhook secret/client secret, GraphQL `beginGithubAppSetup`/`confirmGithubAppSetup`/`removeGithubApp`, `GithubSettings.tsx` panel, CSP `form-action 'self' https://github.com`). DB row overrides `GITHUB_*` env; removal falls back to env. Docs: SPEC §6.5.4, `docs/self-hosting.md` "GitHub integration". Verified by code read only in this doc pass; E2E coverage in `integrations.spec.ts` is in progress. **Fixed since:** the post-install redirect (`handleGithubSetup`) now lands on `/settings/github`, and `resolvedConfig` catches `APP_SECRET` decrypt failure (warns, falls back to env; `setupStatus.storedAppUnreadable`; `removeApp` works on an unreadable row). **Remaining follow-up:** `storedAppUnreadable` is not exposed via GraphQL/UI yet, so the owner sees no notice. **Needs owner:** a real end-to-end run against github.com with a publicly reachable `APP_URL` (create App, install, webhook delivery, backfill).
+- **Pickup sequence if interrupted:** inspect `git status --short`; the integrated tree passes every gate above. Re-run `pnpm --filter @velocity/web codegen` after any GraphQL change (it also re-syncs the persisted manifest), keep `docs/agents.md` and `packages/mcp-tools/src/guide.ts` in sync, and re-review the full diff before any owner-requested commit.
+
 Last committed checkpoint: 2026-10-04 (evening), after the design pass. The commits below are on `master`:
 
 | Commit | What |
@@ -234,6 +249,8 @@ Each item has an owner, its paths, and how to verify it. Log progress in `apps/w
 ### R10 — Owner decisions (§8)
 Team-key rename behavior, PR-open status transitions, and the product name. "Velocity" is a working title; `BRANDING.md` lists every occurrence, so a rename is mechanical.
 
+**Decision 2026-10-05:** Preserve old issue IDs across team-key renames (migration 0006 reserves key history and lookup resolves aliases). Keep issue status unchanged on PR open. Keep the Velocity name for this release.
+
 **Suggested order:** R1 + R2 (highest risk) → R6 + R3 → R4 → R5 → R7 (needs the owner) → R8 → R9.
 
 ---
@@ -251,15 +268,15 @@ Team-key rename behavior, PR-open status transitions, and the product name. "Vel
   - backfill links PRs without notifications or auto-close;
   - commits link on any reference but never close issues.
 - **MCP** has 13 tool names (`get_project` and `list_projects` are separate).
-- **API surface:** GraphiQL disabled (no third-party JS); introspection on; persisted documents not implemented.
+- **API surface:** GraphiQL disabled (no third-party JS); introspection on. The web app sends generated persisted operation hashes; the public API still accepts full GraphQL documents.
 - **Behavior choices:** `is:blocked` counts unresolved blockers only; `DISABLE_SIGNUP=false` enables open signup; rate limits are per process.
 - **E2E** WebKit runs in Docker on non-Ubuntu hosts. Visual baselines are Chromium-only.
 
-## 8. Open questions for the owner
+## 8. Owner decisions
 
-- Should team-key renames keep old identifiers resolvable? Today a rename breaks old `ENG-123` references.
-- On PR open, should the issue move to In Progress? Only auto-close on merge is implemented (SPEC §6.5.2).
-- Product name: "Velocity" is a working title (SPEC §1.6).
+- Team-key renames preserve old issue identifiers. Migration 0006 backfills keys present at upgrade; keys renamed before that migration cannot be reconstructed.
+- PR open keeps the issue's current status. Merge close behavior remains as implemented.
+- The first release keeps the working name "Velocity" (SPEC §1.6).
 
 ---
 

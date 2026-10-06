@@ -203,7 +203,7 @@ export function Inbox() {
     (n: Notification) => {
       setFocusedId(n.id);
       if (!n.readAt) setRead(n.id, true);
-      if (n.issue) openIssue(n.issue.id, { identifier: n.issue.identifier });
+      if (n.issue) openIssue(n.issue.id, { identifier: n.issue.identifier, peek: true });
     },
     [openIssue, setRead],
   );
@@ -217,7 +217,7 @@ export function Inbox() {
     focusRow(next);
     const n = byId.get(next);
     // With the panel open, J/K walks the panel along (Linear parity).
-    if (panelIssueId && n?.issue && n.issue.id !== panelIssueId) openIssue(n.issue.id, { identifier: n.issue.identifier });
+    if (panelIssueId && n?.issue && n.issue.id !== panelIssueId) openIssue(n.issue.id, { identifier: n.issue.identifier, peek: true });
   };
 
   const focusedRow = (): HTMLElement | null => {

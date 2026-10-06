@@ -35,7 +35,7 @@ export async function handleGithubWebhook(services: Services, logger: Logger, re
 /** Post-install redirect from GitHub: hand off to the SPA, which completes the install with the owner's session. */
 export function handleGithubSetup(res: ServerResponse, url: URL): void {
   const installationId = url.searchParams.get('installation_id');
-  const target = installationId && /^\d+$/.test(installationId) ? `/settings/integrations/github?installation_id=${installationId}` : '/settings/integrations/github';
+  const target = installationId && /^\d+$/.test(installationId) ? `/settings/github?installation_id=${installationId}` : '/settings/github';
   res.writeHead(302, { location: target, 'cache-control': 'no-store' });
   res.end();
 }

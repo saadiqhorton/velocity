@@ -45,7 +45,7 @@ and session tokens are stored as hashes. Highlights:
 | `CADDY_DOMAIN` | enables automatic HTTPS |
 | `UPLOAD_DIR`, `MAX_UPLOAD_MB`, `EXPORT_DIR`, `BACKUP_DIR` | Docker defaults are under `app_data` (`/data`); `BACKUP_DIR` defaults to `/data/backups` in the image |
 | `DISABLE_SIGNUP` | default `true` |
-| `GITHUB_APP_*`, `GITHUB_WEBHOOK_SECRET` | optional GitHub integration (`GITHUB_APP_SECRET` is accepted as an alias of `GITHUB_APP_CLIENT_SECRET`) |
+| `GITHUB_APP_*`, `GITHUB_WEBHOOK_SECRET` | optional, advanced alternative to in-app setup (see [GitHub integration](#github-integration)); `GITHUB_APP_SECRET` is accepted as an alias of `GITHUB_APP_CLIENT_SECRET` |
 | `MCP_HTTP_ENABLED`, `MCP_HTTP_TOKEN` | optional HTTP transport for remote agents |
 | `TRUST_PROXY` | Compose sets this to `1` for Caddy; set it when running behind a trusted reverse proxy |
 | `METRICS_TOKEN` | optional Bearer token for `/metrics`; set one when scraping through a forwarded request |
@@ -55,6 +55,30 @@ and session tokens are stored as hashes. Highlights:
 | `VELOCITY_BACKUP_BEFORE_MIGRATE`, `BACKUP_DIR` | when enabled, runs `pg_dump` on every non-worker app startup before checking or applying migrations |
 
 After editing `.env`: `docker compose up -d` (containers are recreated when needed).
+
+## GitHub integration
+
+Recommended: set up the GitHub App from the UI. As the workspace owner, open Settings -> GitHub and
+choose "Set up GitHub" (personal account, or enter an organization name). Velocity submits an App
+manifest to GitHub, you approve it there, and Velocity stores the returned credentials. No `.env`
+edits or restart are needed. Then install the App on your repositories from the same page.
+
+- The App name defaults to `Velocity`. GitHub App names are globally unique, so if the name is taken,
+  rename it on GitHub's registration form before approving.
+- `APP_URL` must be reachable from github.com (webhooks are delivered to `APP_URL/api/github/webhook`).
+  On `localhost` the setup completes but no events arrive; use a public URL or a tunnel.
+- Requested permissions: issues write, pull requests read, metadata read. Events: pull_request,
+  pull_request_review, push, issues.
+- Credentials (private key, webhook secret, client secret) are encrypted at rest with a key derived
+  from `APP_SECRET`. If you rotate `APP_SECRET`, the stored credentials can no longer be decrypted:
+  Velocity logs a warning and falls back to the `GITHUB_*` env vars (or treats GitHub as not
+  configured if they are unset). Restore the old secret, or remove the App in Settings -> GitHub
+  and run setup again. The Settings UI does not yet show a notice for this state.
+- Precedence: an App created in-app overrides `GITHUB_*` env vars. "Remove" in Settings -> GitHub
+  deletes the stored App (installs on GitHub are not touched) and falls back to the env vars, if set.
+
+Advanced alternative: create the App yourself on GitHub and set `GITHUB_APP_ID`,
+`GITHUB_APP_PRIVATE_KEY`, `GITHUB_WEBHOOK_SECRET` (and optionally the client secret) in `.env`.
 
 ## HTTPS with Caddy
 

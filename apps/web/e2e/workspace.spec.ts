@@ -36,7 +36,9 @@ test.describe('workspace', () => {
     const result = page.locator('[data-result]').filter({ hasText: title });
     await expect(result).toBeVisible();
     await result.click();
-    await expect(page.getByTestId('detail-panel')).toBeVisible();
+    // Search results open the full issue page (U1).
+    await expect(page).toHaveURL(/\/issue\/[A-Z]+-\d+$/);
+    await expect(page.getByTestId('issue-title')).toHaveValue(title);
   });
 
   test('My Issues presets are their own filters and share by URL', async ({ page }) => {

@@ -20,6 +20,8 @@ import { describeError } from '@/lib/errors';
 import { formatDate, formatShortDate } from '@/lib/format';
 import { useUi } from '@/stores/ui';
 import { cycleProgress } from './TeamActive';
+import { teamUsesCycles, useFeatures } from '@/lib/features';
+import { FeatureOffNotice } from '@/components/common/FeatureOffNotice';
 import { m } from '@/i18n';
 
 type Cycle = CycleDetailFieldsFragment;
@@ -280,6 +282,7 @@ function ClosedArchive({ cycles, teamKey }: { cycles: Cycle[]; teamKey: string }
 export function TeamCycles() {
   const { key, cycleId } = useParams();
   const team = useTeamByKey(key);
+  const features = useFeatures();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const openCreate = useUi((s) => s.openCreate);
@@ -288,7 +291,7 @@ export function TeamCycles() {
   const closedView = params.get('view') === 'closed';
   const { data, loading, error, refetch } = useQuery(TeamCyclesDocument, {
     variables: { teamId: team?.id ?? '', includeClosed: true, first: 40 },
-    skip: !team?.cycleEnabled,
+    skip: !teamUsesCycles(features, team),
   });
   const [closeCycle, { loading: closing }] = useOptimisticMutation(CloseCycleDocument, {
     optimistic: { serverConfirmed: 'Closing snapshots stats, carries issues over and opens the next cycle on the server' },
@@ -307,6 +310,7 @@ export function TeamCycles() {
   const active = all.find((c) => c.isActive && !c.closedAt) ?? null;
 
   if (!team) return <NotFound message={m.team.notFound} />;
+  if (!features.cycles) return <FeatureOffNotice feature="cycles" />;
 
   const rotateButton = (
     <Button

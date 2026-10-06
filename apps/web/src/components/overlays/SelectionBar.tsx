@@ -4,10 +4,12 @@ import { useSelection } from '@/stores/selection';
 import { useUi } from '@/stores/ui';
 import type { PickerKind } from '@/stores/ui';
 import { useArchiveIssues } from '@/components/issues/actions';
+import { useFeatures } from '@/lib/features';
 import { m } from '@/i18n';
 
 /** Bottom selection action bar (SPEC §4.12): count + bulk status/assignee/priority/labels/project/cycle/archive/delete. */
 export function SelectionBar() {
+  const features = useFeatures();
   const selected = useSelection((s) => s.selected);
   const clear = useSelection((s) => s.clear);
   const openPicker = useUi((s) => s.openPicker);
@@ -46,9 +48,11 @@ export function SelectionBar() {
       <Button size="sm" variant="subtle" iconBefore={<Icon name="project" />} onClick={pick('project')}>
         {m.issue.project}
       </Button>
-      <Button size="sm" variant="subtle" iconBefore={<Icon name="cycle" />} onClick={pick('cycle')}>
-        {m.issue.cycle}
-      </Button>
+      {features.cycles ? (
+        <Button size="sm" variant="subtle" iconBefore={<Icon name="cycle" />} onClick={pick('cycle')}>
+          {m.issue.cycle}
+        </Button>
+      ) : null}
       <span className="mx-1 h-5 w-px bg-border" aria-hidden="true" />
       <IconButton label={m.common.archive} size="sm" icon={<Icon name="archive" />} onClick={() => void archive(ids)} />
       <IconButton label={m.common.delete} size="sm" icon={<Icon name="trash" />} onClick={() => askDelete(ids)} />

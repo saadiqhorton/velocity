@@ -14,6 +14,18 @@ query Viewer {
     theme
     locale
     timezone
+    preferences {
+      codingTools {
+        id
+        preset
+        name
+        kind
+        template
+        enabled
+        shortcut
+      }
+      promptInstructions
+    }
   }
 }
 
@@ -26,6 +38,9 @@ query Bootstrap {
     setupCompleted
     deletionRequestedAt
     deletionScheduledFor
+    features {
+      ...WorkspaceFeaturesFields
+    }
   }
   teams {
     ...TeamFields
@@ -115,6 +130,21 @@ mutation UpdateProfile($input: UpdateProfileInput!) {
     theme
     locale
     timezone
+  }
+}
+
+mutation UpdatePreferences($input: UpdatePreferencesInput!) {
+  updatePreferences(input: $input) {
+    codingTools {
+      id
+      preset
+      name
+      kind
+      template
+      enabled
+      shortcut
+    }
+    promptInstructions
   }
 }
 

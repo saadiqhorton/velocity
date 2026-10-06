@@ -11,6 +11,8 @@ import { VelocityBars } from '@/components/charts/VelocityBars';
 import { TeamIcon } from '@/components/common/EntityIcons';
 import { formatShortDate } from '@/lib/format';
 import { describeError } from '@/lib/errors';
+import { useFeatures } from '@/lib/features';
+import { FeatureOffNotice } from '@/components/common/FeatureOffNotice';
 import { m } from '@/i18n';
 
 /** Created vs completed links to the live list it summarizes: issues created in the same window. */
@@ -31,7 +33,13 @@ function Card({ title, help, action, children, testId }: { title: string; help: 
   );
 }
 
+/** Solo mode (U4): with Insights off, the route shows a notice instead of the charts. */
 export function Insights() {
+  const features = useFeatures();
+  return features.insights ? <InsightsScreen /> : <FeatureOffNotice feature="insights" />;
+}
+
+function InsightsScreen() {
   const ws = useWorkspace();
   const { data, loading, error, refetch } = useQuery(InsightsDocument, { variables: { weeks: 12, cycles: 6 } });
 

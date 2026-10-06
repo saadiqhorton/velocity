@@ -96,7 +96,8 @@ test.describe('planning', () => {
     await expect(modal).toBeHidden();
     const row = page.getByTestId('issue-row').filter({ hasText: title });
     await expect(row).toBeVisible();
-    await row.click();
+    // A click opens the full page now (U1): focus the row instead.
+    await row.focus();
     await expect(row).toBeFocused();
 
     const before = (await row.locator('.identifier').innerText()).trim();
@@ -106,8 +107,8 @@ test.describe('planning', () => {
     await page.keyboard.press('v');
     const menu = page.getByRole('menu', { name: 'Issue actions' });
     await expect(menu).toBeVisible();
-    await menu.getByRole('menuitem', { name: 'Move issue' }).hover();
-    const submenu = page.getByRole('menu', { name: 'Move issue' });
+    await menu.getByRole('menuitem', { name: 'Move to team' }).hover();
+    const submenu = page.getByRole('menu', { name: 'Move to team' });
     await expect(submenu).toBeVisible();
     await submenu.getByRole('menuitem', { name: 'Engineering' }).click();
 

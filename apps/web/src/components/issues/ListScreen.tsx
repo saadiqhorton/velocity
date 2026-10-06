@@ -1,6 +1,6 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import type { ReactNode } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useLocation, useSearchParams } from 'react-router-dom';
 import { Button, EmptyState, InlineMessage } from '@velocity/ui';
 import type { FilterField } from '@velocity/schema/filter-ast';
 import { useWorkspace } from '@/app/workspace';
@@ -11,6 +11,7 @@ import type { GroupBy } from '@/lib/grouping';
 import { chipsFromDsl, completedClause, composeFilter, dslFromChips, parseViewState, writeViewState } from '@/lib/viewState';
 import type { DisplayState, ViewState } from '@/lib/viewState';
 import { describeError, filterErrorCaret } from '@/lib/errors';
+import { listReturnPath, useListSources } from '@/lib/issueNav';
 import { ViewHeader } from '@/components/shell/ViewHeader';
 import { FilterBar } from '@/components/filters/FilterBar';
 import { DisplayOptions } from '@/components/filters/DisplayOptions';
@@ -18,11 +19,14 @@ import { IssueList } from './IssueList';
 import { IssueBoard } from './IssueBoard';
 import { useIssueList } from './useIssueList';
 import type { IssueListScope } from './useIssueList';
+import { useFeatures } from '@/lib/features';
 import { m } from '@/i18n';
 
 export interface ListScreenProps {
   listId: string;
   title: ReactNode;
+  /** Plain-text name for the issue page breadcrumb when `title` is not a string. */
+  navLabel?: string;
   icon?: ReactNode;
   scope: IssueListScope;
   defaults: ViewState;
@@ -72,9 +76,13 @@ export function ListScreen(props: ListScreenProps) {
   );
 
   const board = state.display.layout === 'board';
-  // Boards need columns: fall back to status when the list is ungrouped.
-  const grouping: GroupBy = board && state.display.grouping === 'none' ? 'status' : state.display.grouping;
-  const display: DisplayState = useMemo(() => ({ ...state.display, grouping }), [state.display, grouping]);
+  const features = useFeatures();
+  // Boards need columns: fall back to status when the list is ungrouped. A saved cycle grouping
+  // or estimate order falls back too while that feature is off (Solo mode, U4).
+  const grouping: GroupBy =
+    (board && state.display.grouping === 'none') || (!features.cycles && state.display.grouping === 'cycle') ? 'status' : state.display.grouping;
+  const ordering = !features.estimates && state.display.ordering === 'estimate' ? 'priority' : state.display.ordering;
+  const display: DisplayState = useMemo(() => ({ ...state.display, grouping, ordering }), [state.display, grouping, ordering]);
 
   const filter = useMemo(
     () => composeFilter(state.filter, [...(props.extraFilters ?? []), completedClause(display.showCompleted)].filter((x): x is string => Boolean(x))),
@@ -90,14 +98,26 @@ export function ListScreen(props: ListScreenProps) {
     return undefined;
   }, [grouping, scope.teamId, ws.teams]);
 
+  const eagerLimit = board ? 500 : undefined;
   const data = useIssueList({
     scope,
     filter,
     display,
     allGroupKeys,
     collapsed,
-    eagerLimit: board ? 500 : undefined,
+    eagerLimit,
   });
+
+  // Let the issue page rebuild this list's order (n / total, J/K) from the same query (U1).
+  const location = useLocation();
+  const register = useListSources((s) => s.register);
+  const unregister = useListSources((s) => s.unregister);
+  const navLabel = props.navLabel ?? (typeof props.title === 'string' ? props.title : m.list.issues);
+  const returnTo = listReturnPath(location.pathname, location.search);
+  useEffect(() => {
+    register({ listId, label: navLabel, returnTo, params: { scope, filter, display, allGroupKeys, collapsed: [...collapsed], eagerLimit } });
+  }, [register, listId, navLabel, returnTo, scope, filter, display, allGroupKeys, collapsed, eagerLimit]);
+  useEffect(() => () => unregister(listId), [unregister, listId]);
 
   useCommands(() => [
     {

@@ -8,10 +8,10 @@ test.describe('issue detail panel', () => {
     // Use backlog view since that's where new issues appear
     await gotoTeam(page, 'ENG', 'backlog');
 
-    // Create an issue and open the panel with Enter
+    // Create an issue and peek it in the panel with Space (U1: Enter opens the full page)
     const row = await createIssueViaKeyboard(page, title);
     await row.focus();
-    await page.keyboard.press('Enter');
+    await page.keyboard.press(' ');
     const panel = PANEL(page);
     await expect(panel).toBeVisible();
     await expect(page).toHaveURL(/[?&]issue=[0-9a-f-]{36}/);
@@ -47,7 +47,7 @@ test.describe('issue detail panel', () => {
     await gotoTeam(page, 'ENG', 'backlog');
     const row = await createIssueViaKeyboard(page, title);
     await row.focus();
-    await page.keyboard.press('Enter');
+    await page.keyboard.press(' ');
     const panel = PANEL(page);
     await expect(panel).toBeVisible();
 
@@ -69,7 +69,7 @@ test.describe('issue detail panel', () => {
     await gotoTeam(page, 'ENG', 'backlog');
     const row = await createIssueViaKeyboard(page, title);
     await row.focus();
-    await page.keyboard.press('Enter');
+    await page.keyboard.press(' ');
     const panel = PANEL(page);
     await expect(panel).toBeVisible();
 
@@ -142,7 +142,7 @@ test.describe('issue detail panel', () => {
     await gotoTeam(page, 'ENG', 'backlog');
     const row = await createIssueViaKeyboard(page, title);
     await row.focus();
-    await page.keyboard.press('Enter');
+    await page.keyboard.press(' ');
     const panel = PANEL(page);
     await expect(panel).toBeVisible();
 
@@ -203,7 +203,7 @@ test.describe('issue detail panel', () => {
     await gotoTeam(page, 'ENG', 'backlog');
     const row = await createIssueViaKeyboard(page, title);
     await row.focus();
-    await page.keyboard.press('Enter');
+    await page.keyboard.press(' ');
     const panel = PANEL(page);
     await expect(panel).toBeVisible();
 
@@ -241,7 +241,7 @@ test.describe('issue detail panel', () => {
     await createIssueViaKeyboard(page, targetTitle);
     const parent = await createIssueViaKeyboard(page, parentTitle);
     await parent.focus();
-    await page.keyboard.press('Enter');
+    await page.keyboard.press(' ');
     const panel = PANEL(page);
     await expect(panel).toBeVisible();
 
@@ -266,7 +266,7 @@ test.describe('issue detail panel', () => {
     await gotoTeam(page, 'ENG', 'backlog');
     const row = await createIssueViaKeyboard(page, title);
     await row.focus();
-    await page.keyboard.press('Enter');
+    await page.keyboard.press(' ');
     const panel = PANEL(page);
     await expect(panel.getByTestId('issue-title')).toHaveValue(title);
     const priority = panel.getByTestId('prop-priority');

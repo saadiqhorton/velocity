@@ -45,7 +45,7 @@ test.describe('accessibility screens', () => {
   test('active team list with issue panel', async ({ page }, testInfo) => {
     await openList(page);
     await page.keyboard.press('j');
-    await page.keyboard.press('Enter');
+    await page.keyboard.press(' ');
     await expect(page.getByTestId('issue-detail')).toBeVisible();
     await analyze(page, testInfo, 'team-active-panel');
   });

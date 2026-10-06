@@ -43,6 +43,14 @@ The DSL parser is also available to JavaScript/TypeScript consumers from `@veloc
 
 Use the schema for available queries, mutations, and subscriptions. Errors include an `extensions.code` such as `NOT_FOUND`, `FORBIDDEN`, `VALIDATION`, `CONFLICT`, `RATE_LIMITED`, or `UNAUTHENTICATED`. Mutations require a write-scoped API key or an authenticated session with permission for the operation.
 
+Workspace feature switches are available on `workspace { features { cycles estimates insights members solo } }`. `solo` is derived and is true only when all four switches are false. New workspaces start with all four off; workspaces that existed before migration 0004 have all four on. An owner can change one or more switches with `updateWorkspaceFeatures(input: WorkspaceFeaturesInput!)`; changes are audited. The switches control UI visibility only. The API continues to accept cycle and estimate fields, including through imports and agent clients.
+
+Coding tool settings are per member at `viewer { preferences { codingTools { id preset name kind template enabled shortcut } promptInstructions } }`. `preferences` is `null` until the member saves settings, so older browser settings can be migrated once. `updatePreferences(input: UpdatePreferencesInput!)` replaces the member’s settings and accepts an ordered `codingTools` array plus `promptInstructions`. Each template must contain `{prompt}`; deep links may use `http(s)://`, `codex://`, or `cursor://`. The mutation requires a write-scoped key or session and cannot change another member’s preferences. Other members’ `preferences` fields resolve to `null`.
+
+Issue identifiers retain old team prefixes after a team-key rename. For example, both `OLD-12` and `NEW-12` resolve to the same issue after renaming `OLD` to `NEW`; the issue’s displayed identifier uses `NEW-12`. Old prefixes remain reserved, including after a team is deleted.
+
+The built-in web app sends generated persisted-operation SHA-256 hashes for ordinary GraphQL requests. The server resolves these from the manifest shipped in the same image. Public API clients can continue to send full GraphQL documents; introspection remains enabled. Unknown hashes can be retried with a full document during an upgrade.
+
 Subscriptions use GraphQL over WebSocket at `/graphql` with the `graphql-ws` protocol. Available streams include `workspaceEvents`, `issueUpdated`, `issueCreated`, `notificationCreated`, and `importProgress`. For API-key connections, pass the key in `connectionParams`, for example `{ "authorization": "vel_…" }`. Cookie-authenticated sockets must use an origin matching `APP_URL`.
 
 ## Rate limits

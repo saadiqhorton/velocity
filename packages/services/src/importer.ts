@@ -10,6 +10,7 @@ import {
   projectTeams,
   projects,
   statuses,
+  teamKeyAliases,
   teams,
   users,
 } from '@velocity/schema';
@@ -416,13 +417,15 @@ export class ImporterService extends ServiceBase {
   }
 
   private async snapshot(): Promise<ImportWorkspaceSnapshot> {
-    const [teamRows, statusRows, userRows, labelRows] = await Promise.all([
+    const [teamRows, statusRows, userRows, labelRows, reservedTeamKeys] = await Promise.all([
       this.db.select().from(teams).where(and(isNull(teams.deletedAt), isNull(teams.archivedAt))).orderBy(asc(teams.sortOrder)),
       this.db.select().from(statuses).where(isNull(statuses.archivedAt)),
       this.db.select().from(users).where(isNull(users.deletedAt)),
       this.db.select().from(labels).where(isNull(labels.archivedAt)),
+      this.db.select({ key: teamKeyAliases.key }).from(teamKeyAliases),
     ]);
     return {
+      reservedTeamKeys: reservedTeamKeys.map((row) => row.key),
       teams: teamRows.map((t) => ({
         id: t.id,
         key: t.key,
@@ -468,7 +471,7 @@ export class ImporterService extends ServiceBase {
       if (found.length !== existingTeamIds.size) throw validation('One of the mapped teams doesn’t exist (or is archived).');
     }
     if (newKeys.size) {
-      const clash = await this.db.select({ key: teams.key }).from(teams).where(inArray(teams.key, [...newKeys]));
+      const clash = await this.db.select({ key: teamKeyAliases.key }).from(teamKeyAliases).where(inArray(teamKeyAliases.key, [...newKeys]));
       if (clash.length) throw validation(`A team with key ${clash[0]!.key} already exists.`, { field: 'key' });
     }
 

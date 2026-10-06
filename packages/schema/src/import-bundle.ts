@@ -137,6 +137,8 @@ export interface ImportMapping {
 /** Snapshot of the workspace the mapping suggester needs (passed in by the service — keeps importers pure). */
 export interface ImportWorkspaceSnapshot {
   teams: { id: string; key: string; name: string; statuses: { id: string; name: string; category: StatusCategory }[] }[];
+  /** Includes historical keys so suggested new mappings never reuse an old identifier prefix. */
+  reservedTeamKeys?: string[];
   users: { id: string; username: string; name: string; email: string | null }[];
   labels: { id: string; name: string }[];
 }

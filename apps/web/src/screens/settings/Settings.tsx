@@ -5,6 +5,8 @@ import { Icon, SideNav, SideNavItem } from '@velocity/ui';
 import { useWorkspace } from '@/app/workspace';
 import { ContentSkeleton } from '@/components/shell/ShellSkeleton';
 import { NotFound } from '@/screens/workspace/NotFound';
+import { FeatureOffNotice } from '@/components/common/FeatureOffNotice';
+import { useFeatures } from '@/lib/features';
 import { m } from '@/i18n';
 import { isSettingsSectionActive, settingsNavGroups } from './nav';
 
@@ -28,12 +30,14 @@ const WebhooksSettings = section(() => import('./integrations/WebhooksSettings')
 const ImportSettings = section(() => import('./data/ImportSettings'), 'ImportSettings');
 const ExportSettings = section(() => import('./data/ExportSettings'), 'ExportSettings');
 const AuditSettings = section(() => import('./data/AuditSettings'), 'AuditSettings');
+const CodingToolsSettings = section(() => import('./account/CodingToolsSettings'), 'CodingToolsSettings');
+const FeaturesSettings = section(() => import('./workspace/FeaturesSettings'), 'FeaturesSettings');
 
 /** Secondary settings navigation inside the content region (SPEC §4.11.9). */
 function SettingsNav() {
   const { viewer } = useWorkspace();
   const { pathname } = useLocation();
-  const groups = settingsNavGroups(viewer.isOwner);
+  const groups = settingsNavGroups(viewer.isOwner, useFeatures());
   return (
     <SideNav
       aria-label={m.settings.title}
@@ -68,6 +72,12 @@ function OwnerRoute({ children }: { children: React.ReactNode }) {
   return viewer.isOwner ? <>{children}</> : <Navigate to="/settings/profile" replace />;
 }
 
+/** Solo mode (U4): with Members off, member management is replaced by a notice. */
+function MembersRoute({ children }: { children: React.ReactNode }) {
+  const features = useFeatures();
+  return features.members ? <>{children}</> : <FeatureOffNotice feature="members" />;
+}
+
 export function Settings() {
   const { viewer } = useWorkspace();
   return (
@@ -79,8 +89,10 @@ export function Settings() {
           <Route path="profile" element={<ProfileSettings />} />
           <Route path="sessions" element={<SessionsSettings />} />
           <Route path="api-keys" element={<ApiKeysSettings />} />
+          <Route path="coding-tools" element={<CodingToolsSettings />} />
+          <Route path="features" element={<OwnerRoute><FeaturesSettings /></OwnerRoute>} />
           <Route path="general" element={<OwnerRoute><GeneralSettings /></OwnerRoute>} />
-          <Route path="members" element={<MembersSettings />} />
+          <Route path="members" element={<MembersRoute><MembersSettings /></MembersRoute>} />
           <Route path="teams" element={<TeamsSettings />} />
           <Route path="teams/new" element={<NewTeamSettings />} />
           <Route path="teams/:key/*" element={<TeamSettings />} />

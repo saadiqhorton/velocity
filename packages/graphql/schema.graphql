@@ -90,6 +90,31 @@ enum CarryOver {
   next_cycle
 }
 
+type CodingTool {
+  enabled: Boolean!
+  id: String!
+  kind: CodingToolKind!
+  name: String!
+  preset: String
+  shortcut: String
+  template: String!
+}
+
+input CodingToolInput {
+  enabled: Boolean!
+  id: String!
+  kind: CodingToolKind!
+  name: String!
+  preset: String
+  shortcut: String
+  template: String!
+}
+
+enum CodingToolKind {
+  command
+  deeplink
+}
+
 type Comment {
   author: User
 
@@ -103,6 +128,11 @@ type Comment {
   issueId: ID!
   reactions: [ReactionGroup!]!
   source: String!
+}
+
+input ConfirmGithubAppInput {
+  code: String!
+  state: String!
 }
 
 input CreateImportRunInput {
@@ -283,6 +313,16 @@ type FilterParseResult {
   ok: Boolean!
 }
 
+type GithubAppManifest {
+  """
+  URL to POST the manifest form to (github.com/settings/apps/new or the org equivalent).
+  """
+  action: String!
+
+  """The JSON-encoded App manifest to submit in the `manifest` form field."""
+  manifest: String!
+}
+
 type GithubInstall {
   accountLogin: String!
   accountType: String!
@@ -300,10 +340,20 @@ type GithubInstall {
 }
 
 type GithubIntegration {
-  """GitHub App credentials are present in the environment."""
+  """The registered App name when it was created in-app."""
+  appName: String
+
+  """
+  GitHub App credentials are present (in the database or the environment).
+  """
   configured: Boolean!
   installUrl: String
   installs: [GithubInstall!]!
+
+  """
+  Where the App credentials came from: an in-app manifest registration or the environment.
+  """
+  source: String
 }
 
 type GithubLink {
@@ -556,6 +606,7 @@ type Mutation {
   archiveIssues(archived: Boolean!, ids: [ID!]!): [Issue!]!
   archiveProject(archived: Boolean!, id: ID!): Project!
   archiveTeam(archived: Boolean!, id: ID!): Team!
+  beginGithubAppSetup(organization: String): GithubAppManifest!
   bulkUpdateIssues(ids: [ID!]!, input: UpdateIssueInput!): [Issue!]!
   cancelImport(id: ID!): ImportRun!
   cancelWorkspaceDeletion: Workspace!
@@ -565,6 +616,7 @@ type Mutation {
   closeCycle(id: ID!): Cycle!
   commitImport(id: ID!): ImportRun!
   completeSetup: Boolean!
+  confirmGithubAppSetup(input: ConfirmGithubAppInput!): Boolean!
   createApiKey(expiresInDays: Int, name: String!, scope: ApiKeyScope!): CreatedApiKey!
   createComment(bodyMd: String!, id: ID, issueId: ID!): Comment!
 
@@ -609,6 +661,7 @@ type Mutation {
   """Clear the profile image and delete the stored file."""
   removeAvatar: User!
   removeFavorite(id: ID!): Boolean!
+  removeGithubApp: Boolean!
 
   """
   Owner removes a member, or a member deletes their own account (history stays attributed to a “Former member” stub).
@@ -670,6 +723,11 @@ type Mutation {
   ): Issue!
   updateLabel(id: ID!, input: UpdateLabelInput!): Label!
   updateMilestone(id: ID!, input: MilestoneInput!): Milestone!
+
+  """
+  Replace the signed-in member’s coding tool settings. A first save can migrate local settings.
+  """
+  updatePreferences(input: UpdatePreferencesInput!): UserPreferences!
   updateProfile(input: UpdateProfileInput!): User!
   updateProject(id: ID!, input: ProjectInput!): Project!
   updateStatus(id: ID!, input: UpdateStatusInput!): WorkflowStatus!
@@ -677,6 +735,11 @@ type Mutation {
   updateView(id: ID!, input: ViewInput!): View!
   updateWebhook(id: ID!, input: WebhookInput!): Webhook!
   updateWorkspace(input: UpdateWorkspaceInput!): Workspace!
+
+  """
+  Owner-only UI feature switches. Existing cycle and estimate API fields remain available.
+  """
+  updateWorkspaceFeatures(input: WorkspaceFeaturesInput!): Workspace!
 
   """GraphQL multipart upload. Images are re-encoded to strip EXIF."""
   uploadAttachment(commentId: ID, file: File!, issueId: ID): Attachment!
@@ -1068,6 +1131,11 @@ input UpdateLabelInput {
   parentId: ID
 }
 
+input UpdatePreferencesInput {
+  codingTools: [CodingToolInput!]!
+  promptInstructions: String!
+}
+
 input UpdateProfileInput {
   email: String
   locale: String
@@ -1117,11 +1185,21 @@ type User {
   isOwner: Boolean!
   locale: String!
   name: String!
+
+  """
+  Your saved coding tools, or null until settings are saved. Hidden on other members.
+  """
+  preferences: UserPreferences
   removed: Boolean!
   suspended: Boolean!
   theme: Theme!
   timezone: String!
   username: String!
+}
+
+type UserPreferences {
+  codingTools: [CodingTool!]!
+  promptInstructions: String!
 }
 
 type Velocity {
@@ -1261,6 +1339,7 @@ type Workspace {
   createdAt: DateTime!
   deletionRequestedAt: DateTime
   deletionScheduledFor: DateTime
+  features: WorkspaceFeatures!
   locale: String!
   name: String!
   setupCompleted: Boolean!
@@ -1277,4 +1356,19 @@ type WorkspaceEvent {
   projectId: ID
   teamId: ID
   topic: String!
+}
+
+type WorkspaceFeatures {
+  cycles: Boolean!
+  estimates: Boolean!
+  insights: Boolean!
+  members: Boolean!
+  solo: Boolean!
+}
+
+input WorkspaceFeaturesInput {
+  cycles: Boolean
+  estimates: Boolean
+  insights: Boolean
+  members: Boolean
 }

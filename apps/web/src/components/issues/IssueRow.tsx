@@ -10,6 +10,7 @@ import { formatAge, formatShortDate } from '@/lib/format';
 import { LabelChips } from './LabelChips';
 import { useWorkspace } from '@/app/workspace';
 import { ProjectIcon } from '@/components/common/EntityIcons';
+import { useFeatures } from '@/lib/features';
 import { m } from '@/i18n';
 
 export const PRIORITY_KEYS: Record<number, Priority> = { 0: 'urgent', 1: 'high', 2: 'medium', 3: 'low', 4: 'none' };
@@ -29,6 +30,8 @@ export interface IssueRowProps {
   onRowClick: (issue: IssueRowFieldsFragment, e: MouseEvent<HTMLDivElement>) => void;
   onToggleSelect: (issue: IssueRowFieldsFragment, shift: boolean) => void;
   onFocusRow: (issue: IssueRowFieldsFragment) => void;
+  /** Right-click (and the Menu key): the issue context menu (U2). */
+  onContextMenu?: (issue: IssueRowFieldsFragment, e: MouseEvent<HTMLDivElement>) => void;
 }
 
 /**
@@ -48,10 +51,12 @@ export const IssueRow = memo(function IssueRow({
   onRowClick,
   onToggleSelect,
   onFocusRow,
+  onContextMenu,
 }: IssueRowProps) {
   const pulse = usePulse(issue.id);
   const { projectsById } = useWorkspace();
-  const has = (c: ColumnKey) => columns.includes(c);
+  const features = useFeatures();
+  const has = (c: ColumnKey) => columns.includes(c) && (c !== 'cycle' || features.cycles) && (c !== 'estimate' || features.estimates);
   const project = issue.projectId ? projectsById.get(issue.projectId) : undefined;
   const rollup = issue.subIssueRollup;
 
@@ -65,6 +70,7 @@ export const IssueRow = memo(function IssueRow({
       data-testid="issue-row"
       tabIndex={focused ? 0 : -1}
       onClick={(e) => onRowClick(issue, e)}
+      onContextMenu={onContextMenu ? (e) => onContextMenu(issue, e) : undefined}
       onFocus={() => {
         if (!focused) onFocusRow(issue);
       }}

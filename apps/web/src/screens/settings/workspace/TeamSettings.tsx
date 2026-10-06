@@ -10,16 +10,24 @@ import { TeamGeneralTab } from './TeamGeneralTab';
 import { TeamWorkflowTab } from './TeamWorkflowTab';
 import { TeamCyclesTab } from './TeamCyclesTab';
 import { TeamMembersTab } from './TeamMembersTab';
+import { useFeatures } from '@/lib/features';
 import { m } from '@/i18n';
 
 const TABS = ['general', 'workflow', 'cycles', 'members'] as const;
 type TabId = (typeof TABS)[number];
+const TAB_LABEL: Record<TabId, () => string> = {
+  general: () => m.settingsWorkspace.team.tabGeneral,
+  workflow: () => m.settingsWorkspace.team.tabWorkflow,
+  cycles: () => m.settingsWorkspace.team.tabCycles,
+  members: () => m.settingsWorkspace.team.tabMembers,
+};
 
 export function TeamSettings() {
   const t = m.settingsWorkspace.team;
   const { key, '*': rest } = useParams();
   const navigate = useNavigate();
   const { teamsByKey } = useWorkspace();
+  const features = useFeatures();
   const upper = key?.toUpperCase();
   const active = upper ? teamsByKey.get(upper) : undefined;
   // Archived teams are not in Bootstrap; look them up separately (only when the key is not active).
@@ -27,7 +35,9 @@ export function TeamSettings() {
   const team = active ?? adminData?.teams.find((x) => x.key === upper);
   if (!team) return loading ? <ContentSkeleton rows={8} /> : <NotFound message={t.notFound} />;
   const segment = (rest ?? '').split('/')[0] ?? '';
-  const current: TabId = (TABS as readonly string[]).includes(segment) ? (segment as TabId) : 'general';
+  // Solo mode (U4): the Cycles and Members tabs hide with their features.
+  const shown = TABS.filter((id) => (id !== 'cycles' || features.cycles) && (id !== 'members' || features.members));
+  const current: TabId = (shown as readonly string[]).includes(segment) ? (segment as TabId) : 'general';
   const go = (id: string) => navigate(id === 'general' ? `/settings/teams/${team.key}` : `/settings/teams/${team.key}/${id}`);
 
   const content =
@@ -51,12 +61,7 @@ export function TeamSettings() {
         aria-label={t.tabsLabel}
         value={current}
         onChange={go}
-        items={[
-          { id: 'general', label: t.tabGeneral, panel: current === 'general' ? <Panel>{content}</Panel> : undefined },
-          { id: 'workflow', label: t.tabWorkflow, panel: current === 'workflow' ? <Panel>{content}</Panel> : undefined },
-          { id: 'cycles', label: t.tabCycles, panel: current === 'cycles' ? <Panel>{content}</Panel> : undefined },
-          { id: 'members', label: t.tabMembers, panel: current === 'members' ? <Panel>{content}</Panel> : undefined },
-        ]}
+        items={shown.map((id) => ({ id, label: TAB_LABEL[id](), panel: current === id ? <Panel>{content}</Panel> : undefined }))}
       />
     </SettingsPage>
   );

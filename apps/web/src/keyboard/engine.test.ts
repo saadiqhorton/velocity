@@ -53,6 +53,20 @@ describe('eventToToken', () => {
     expect(eventToToken({ key: 'å', code: 'KeyA', altKey: true })).toBe('alt+a');
     expect(eventToToken({ key: '¡', code: 'Digit1', altKey: true })).toBe('alt+1');
   });
+  it('reads . and , physically under a modifier so shift is kept (U2 copy shortcuts)', () => {
+    expect(eventToToken({ key: '.', code: 'Period', ctrlKey: true })).toBe('mod+.');
+    expect(eventToToken({ key: '>', code: 'Period', ctrlKey: true, shiftKey: true })).toBe('mod+shift+.');
+    expect(eventToToken({ key: '<', code: 'Comma', metaKey: true, shiftKey: true })).toBe('mod+shift+,');
+    expect(eventToToken({ key: '≥', code: 'Period', metaKey: true, altKey: true })).toBe('mod+alt+.');
+    expect(eventToToken({ key: 'π', code: 'KeyP', metaKey: true, altKey: true })).toBe('mod+alt+p');
+    // Without a modifier the typed symbol still wins (">" stays ">").
+    expect(eventToToken({ key: '>', code: 'Period', shiftKey: true })).toBe('>');
+    expect(normalizeBinding('Mod+Shift+.')).toBe('mod+shift+.');
+    expect(normalizeBinding('mod+.')).toBe('mod+.');
+    expect(normalizeBinding('shift+f10')).toBe('shift+f10');
+    expect(eventToToken({ key: 'F10', shiftKey: true })).toBe('shift+f10');
+    expect(eventToToken({ key: 'ContextMenu' })).toBe('contextmenu');
+  });
   it('does not use code without alt', () => {
     expect(eventToToken({ key: 'q', code: 'KeyA' })).toBe('q');
   });
