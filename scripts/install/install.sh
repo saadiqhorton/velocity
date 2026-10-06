@@ -22,7 +22,9 @@ VELOCITY_REF="${VELOCITY_REF:-main}"
 VELOCITY_SOURCE="${VELOCITY_SOURCE:-}"
 VELOCITY_HTTP_PORT="${VELOCITY_HTTP_PORT:-80}"
 VELOCITY_HTTPS_PORT="${VELOCITY_HTTPS_PORT:-443}"
+BIN_DIR_GIVEN="${VELOCITY_BIN_DIR:-}"
 VELOCITY_BIN_DIR="${VELOCITY_BIN_DIR:-/usr/local/bin}"
+FIRST_INSTALL=0
 VELOCITY_WAIT_SECONDS="${VELOCITY_WAIT_SECONDS:-300}"
 DOMAIN="${VELOCITY_DOMAIN:-}"
 ASSUME_YES=0
@@ -236,6 +238,11 @@ Stop it, or pick other ports, for example:
   ok "Ports $VELOCITY_HTTP_PORT and $VELOCITY_HTTPS_PORT are free"
 }
 
+persist_bin_dir() { # remember a custom command location so `velocity update` finds it
+  [ "$VELOCITY_BIN_DIR" != /usr/local/bin ] || return 0
+  grep -q '^VELOCITY_BIN_DIR=' "$envf" || printf 'VELOCITY_BIN_DIR=%s\n' "$VELOCITY_BIN_DIR" >> "$envf"
+}
+
 write_env() {
   step "Configuring"
   envf="$VELOCITY_HOME/.env"
@@ -246,8 +253,10 @@ write_env() {
       printf 'VELOCITY_BACKUP_DIR=%s/backups\n' "$VELOCITY_HOME" >> "$envf"
       ok "Backups will now be stored in $VELOCITY_HOME/backups (older backups stay in the app_data Docker volume)"
     fi
+    persist_bin_dir
     return 0
   fi
+  FIRST_INSTALL=1
   valid_port "$VELOCITY_HTTP_PORT" || die "Invalid VELOCITY_HTTP_PORT: $VELOCITY_HTTP_PORT"
   valid_port "$VELOCITY_HTTPS_PORT" || die "Invalid VELOCITY_HTTPS_PORT: $VELOCITY_HTTPS_PORT"
   ip=$(public_ip || true)
@@ -287,6 +296,7 @@ HTTPS_PORT=$VELOCITY_HTTPS_PORT
 VELOCITY_BACKUP_DIR=$VELOCITY_HOME/backups
 EOF
   chmod 600 "$envf"
+  persist_bin_dir
   ok "Wrote $envf (private, mode 600)"
 }
 
@@ -344,6 +354,7 @@ install_cli() {
 
 main() {
   say "${B}Velocity installer${N}"
+  if [ -z "$BIN_DIR_GIVEN" ]; then saved=$(env_value VELOCITY_BIN_DIR); [ -z "$saved" ] || VELOCITY_BIN_DIR=$saved; fi
   step "Checking this server"
   detect_platform
   ensure_privileges
@@ -363,10 +374,14 @@ main() {
   wait_healthy
   url=$(env_value APP_URL)
   say ""
-  say "${G}${B}Velocity is running.${N}"
-  say ""
-  say "  Open:   ${B}${url:-http://localhost}${N}"
-  say "  Then create your account (the first account becomes the owner)."
+  if [ "$FIRST_INSTALL" = 1 ]; then
+    say "${G}${B}Velocity is running.${N}"
+    say ""
+    say "  Open:   ${B}${url:-http://localhost}${N}"
+    say "  Then create your account (the first account becomes the owner)."
+  else
+    say "${G}${B}Velocity is up to date at ${url:-http://localhost}${N}"
+  fi
   say ""
   say "  Manage your server with the 'velocity' command, e.g.  velocity status  /  velocity backup"
   say "  Run  velocity help  to see everything."

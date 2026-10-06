@@ -141,6 +141,38 @@ purge_keeps_backups() {
 }
 t "uninstall --purge keeps the backups folder and says how to delete it" purge_keeps_backups
 
+# --- real-user regressions: logging fake docker, start path enabled ---
+mkdir -p "$work/lbin"; cp "$work/bin/"* "$work/lbin/"
+cat > "$work/lbin/docker" <<'FAKE'
+#!/bin/sh
+echo "$*" >> "$FAKE_LOG"
+case "$*" in
+  *"admin-cli.js backup"*) if [ -n "${FAKE_EACCES:-}" ]; then echo "backup failed: EACCES: permission denied, open '/data/backups/x.dump'" >&2; exit 1; fi; echo x.dump ;;
+  *" ps -q"*) echo cid1 ;;
+  "inspect "*) echo healthy ;;
+esac
+exit 0
+FAKE
+chmod +x "$work/lbin/docker"
+lenv() { env FAKE_LOG="$work/docker.log" PATH="$work/lbin:$PATH" VELOCITY_HOME="$work/lhome" "$@"; }
+
+: > "$work/docker.log"
+lenv VELOCITY_SOURCE="$work/src" VELOCITY_BIN_DIR="$work/lbinout" VELOCITY_HTTP_PORT=18088 VELOCITY_HTTPS_PORT=18443 \
+  sh "$here/install.sh" --yes > "$work/first.out" 2>&1
+t "first install prints the create-account text" grep -q 'Then create your account' "$work/first.out"
+t "install runs 'compose up' exactly once" sh -c "[ \$(grep -c ' up -d' '$work/docker.log') -eq 1 ]"
+t "custom VELOCITY_BIN_DIR is saved in .env" grep -qx "VELOCITY_BIN_DIR=$work/lbinout" "$work/lhome/.env"
+t "default VELOCITY_BIN_DIR is not saved" sh -c "PATH='$work/lbin':\$PATH VELOCITY_HOME='$work/dhome' VELOCITY_SOURCE='$work/src' VELOCITY_BIN_DIR=/usr/local/bin VELOCITY_NO_START=1 sh '$here/install.sh' --yes >/dev/null 2>&1; [ -f '$work/dhome/.env' ] && ! grep -q '^VELOCITY_BIN_DIR=' '$work/dhome/.env'"
+
+rm -f "$work/lbinout/velocity"
+lenv "$here/velocity" update --yes > "$work/update.out" 2>&1 || cat "$work/update.out"
+t "update reuses the saved VELOCITY_BIN_DIR" test -x "$work/lbinout/velocity"
+t "update says up to date, not the first-install text" sh -c "grep -q 'up to date at' '$work/update.out' && ! grep -q 'Then create your account' '$work/update.out'"
+
+echo "VELOCITY_BACKUP_DIR=$work/lhome/backups" >> "$work/lhome/.env"; mkdir -p "$work/lhome/backups"
+t "backup: permission error gives the chown fix" sh -c "FAKE_EACCES=1 FAKE_LOG='$work/docker.log' PATH='$work/lbin':\$PATH VELOCITY_HOME='$work/lhome' '$here/velocity' backup 2>&1 | grep -q \"isn't writable by Velocity. Fix: sudo chown 10001:10001 $work/lhome/backups\""
+t "doctor: backups folder not owned by 10001 fails with the fix" sh -c "FAKE_LOG='$work/docker.log' PATH='$work/lbin':\$PATH VELOCITY_HOME='$work/lhome' '$here/velocity' doctor 2>&1 | grep -q 'Fix: sudo chown 10001:10001 $work/lhome/backups'"
+
 echo
 echo "$pass passed, $fail failed"
 [ "$fail" -eq 0 ]
