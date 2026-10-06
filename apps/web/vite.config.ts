@@ -29,6 +29,8 @@ export default defineConfig({
       '/files': { target: API },
       '/api': { target: API },
       '/avatars': { target: API },
+      // MCP: streamable HTTP endpoint and the served stdio client tarball.
+      '/mcp': { target: API },
     },
   },
   build: {
