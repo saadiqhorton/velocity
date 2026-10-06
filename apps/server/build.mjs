@@ -21,7 +21,7 @@ for (const p of pkgs) {
 
 rmSync(join(here, 'dist'), { recursive: true, force: true });
 await build({
-  entryPoints: { main: join(here, 'src/main.ts'), 'migrate-cli': join(here, 'src/migrate-cli.ts'), 'seed-cli': join(here, 'src/seed-cli.ts') },
+  entryPoints: { main: join(here, 'src/main.ts'), 'migrate-cli': join(here, 'src/migrate-cli.ts'), 'seed-cli': join(here, 'src/seed-cli.ts'), 'admin-cli': join(here, 'src/admin-cli.ts') },
   outdir: join(here, 'dist'),
   bundle: true,
   platform: 'node',

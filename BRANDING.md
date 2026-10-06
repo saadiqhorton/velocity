@@ -100,7 +100,7 @@ SPEC.md (product name used throughout the specification)
 | npm scope and package names | every `package.json`, `pnpm-lock.yaml`, `@velocity/*` imports, `eslint.config.js`, `Dockerfile`/CI filters | `@velocity/server`, `velocity-mcp` bin, `velocity-import` bin |
 | Env vars | `.env.example`, server config, compose, docs | `VELOCITY_ROLE`, `VELOCITY_BACKUP_BEFORE_MIGRATE`, `VELOCITY_URL`, `VELOCITY_API_KEY` (keep old names as aliases for one release) |
 | Database identifiers | `packages/schema/migrations/*.sql` (already applied, add a new migration instead of editing), Postgres user/db name in `docker-compose.yml` | `velocity_events` NOTIFY channel, `velocity_*` trigger functions, `velocity` db/user |
-| Container artefacts | `Dockerfile` labels, `docker-compose.yml` image name, `.github/workflows/release.yml` image path, `renovate.json` | `ghcr.io/velocity-app/velocity` |
+| Container artefacts | `Dockerfile` labels, `docker-compose.yml` image name, `.github/workflows/release.yml` image path, `renovate.json` | `ghcr.io/saadiqhorton/velocity` |
 | Docs and legal | `README.md`, `NOTICE`, `CONTRIBUTING.md`, `docs/*`, `SPEC.md`, `LICENSE` header notice | "Copyright (C) 2026 The Velocity Authors" |
 | Code identifiers / strings | importer CLI help and User-Agent, GraphQL client type names, log/metric prefixes, key-derivation context strings | `VelocityClient`, `velocity-importer` |
 | UI | web app title, logo, empty states | via the single constant described above |

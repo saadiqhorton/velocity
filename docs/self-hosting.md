@@ -12,6 +12,72 @@ phones home, there is no analytics and no version check unless you enable one.
 
 ## Install
 
+On a fresh Linux server, as root:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/saadiqhorton/velocity/main/scripts/install/install.sh | sudo sh
+```
+
+The installer:
+
+1. checks the OS, and installs Docker with Docker's official script if it is missing (it asks first);
+2. downloads Velocity into `/opt/velocity`;
+3. asks one question, "Domain name (leave blank to use http://your-server-ip)". With a domain it checks that DNS
+   points at this server and that ports 80/443 are free;
+4. generates `.env` once, with random passwords and secrets (mode 600; an existing `.env` is never overwritten);
+5. pulls the image (or builds it from source if no published image is available; this takes a few minutes),
+   starts everything and waits until it is healthy;
+6. installs the `velocity` command and prints the address to open.
+
+Open the address and create your account; the first account is the owner. Sign-up then closes
+(`DISABLE_SIGNUP=true`); invite members from settings. Re-running the installer upgrades in place.
+
+Non-interactive use and options:
+
+```sh
+curl -fsSL <url>/install.sh | sudo sh -s -- --domain tracker.example.com --yes
+```
+
+| Flag / variable | Meaning |
+|---|---|
+| `--domain <name>` / `VELOCITY_DOMAIN` | serve `https://<name>` with an automatic certificate |
+| `--yes` | never ask a question; accept defaults (installs Docker if missing) |
+| `--no-start` / `VELOCITY_NO_START` | prepare files and `.env`, do not start |
+| `VELOCITY_HOME` | install directory (default `/opt/velocity`) |
+| `VELOCITY_REPO`, `VELOCITY_REF` | GitHub `owner/repo` and branch/tag to download (default `saadiqhorton/velocity`, `main`) |
+| `VELOCITY_SOURCE` | copy from a local checkout instead of downloading (builds the image locally) |
+| `VELOCITY_HTTP_PORT`, `VELOCITY_HTTPS_PORT` | host ports (default 80 / 443) |
+| `VELOCITY_BIN_DIR` | where the `velocity` command is installed (default `/usr/local/bin`) |
+
+## Managing your server
+
+The installer adds a `velocity` command (run it as root or with `sudo`).
+
+| Command | What it does |
+|---|---|
+| `velocity status` | containers, health, URL and last backup |
+| `velocity url` | print the address the server is served at |
+| `velocity logs [service] [-f]` | show logs (`app`, `postgres`, `caddy`); `-f` follows |
+| `velocity start` / `stop` / `restart` | start, stop or restart everything |
+| `velocity update` | back up, fetch the newest release (keeping `.env`), upgrade, wait until healthy |
+| `velocity backup` | create a database backup now |
+| `velocity backups` | list backups (nightly backups, kept 14 days, in `/opt/velocity/backups`) |
+| `velocity restore <file\|latest>` | replace the database with a backup (asks first; saves a safety copy) |
+| `velocity domain <name\|none>` | switch domain (updates `CADDY_DOMAIN` and `APP_URL`) or back to plain HTTP |
+| `velocity reset-password <user>` | set a new password for a username or email and print it |
+| `velocity users` | list users |
+| `velocity doctor` | check Docker, containers, disk, DNS, ports, certificate and backup age |
+| `velocity config` | edit `.env` in `$EDITOR`, then apply it |
+| `velocity version` | installed release info |
+| `velocity uninstall [--purge]` | remove containers and the command; `--purge` also deletes all data (double confirmation) |
+
+Add `--yes` before a command to skip confirmations in scripts. `VELOCITY_HOME=<dir>` points the command
+at a non-default install directory.
+
+## Advanced / manual install
+
+Without the installer, with Docker Engine 25+ and the Compose plugin:
+
 ```sh
 git clone <repository-url> velocity && cd velocity
 cp .env.example .env
@@ -19,18 +85,18 @@ cp .env.example .env
 
 Edit `.env`:
 
-1. `POSTGRES_PASSWORD`: `openssl rand -hex 24`
-2. `APP_SECRET`: `openssl rand -hex 32` (at least 32 characters; keep it stable)
-3. `APP_URL`: `http://localhost` for a local trial, or `https://your.domain`
-4. `CADDY_DOMAIN`: your domain for automatic HTTPS (leave unset for plain HTTP on port 80)
+1. `POSTGRES_PASSWORD`: `openssl rand -hex 24` (the only required value)
+2. `APP_SECRET`: `openssl rand -hex 32` (optional; the server generates one into `/data/app-secret` if unset)
+3. `CADDY_DOMAIN`: your domain for automatic HTTPS (leave unset for plain HTTP on port 80)
+4. `APP_URL`: optional; derived from `CADDY_DOMAIN` (`https://domain`, else `http://localhost`) if unset
+5. `HTTP_PORT` / `HTTPS_PORT`: optional host ports (default 80 / 443)
 
 ```sh
 docker compose up -d
 docker compose ps          # wait for app to become "healthy"
 ```
 
-Open `APP_URL` and complete the first-run wizard. Sign-up is closed after the first user
-(`DISABLE_SIGNUP=true`); invite members from settings.
+Open `APP_URL` and complete the first-run wizard.
 
 ## Configuration
 
@@ -148,6 +214,23 @@ not a complete user-facing deployment. The default final Docker target includes 
 
 State lives in two volumes: `pg_data` (database) and `app_data` (attachments, exports, backups).
 
+With the installer, backups are plain files in `/opt/velocity/backups` on the host: one is taken nightly at
+03:00 UTC and kept 14 days; `velocity backup` makes one now, and `velocity restore <file|latest>` restores one.
+The folder is private (mode 700, owned by the container user) and survives `velocity uninstall --purge`
+(delete it yourself with `sudo rm -rf /opt/velocity/backups` if you want it gone).
+
+To keep a copy off the server, copy that folder, for example
+`rsync -a /opt/velocity/backups/ user@other:velocity-backups/`, or point any backup tool at it.
+
+Upgrading from an older installer: backups taken before this change stay in the `app_data` volume
+(`/data/backups`); new ones go to the host folder. Copy old ones out if you want them, e.g.
+`docker compose cp app:/data/backups/. /opt/velocity/backups/` (then `chown 10001:10001` them).
+Manual Compose users: set `VELOCITY_BACKUP_DIR` in `.env` to a host folder owned by uid 10001, or leave it
+unset to use the `backups_data` volume.
+
+Running `velocity reset-password` over `ssh` from a script or one-shot command needs `</dev/null`
+(e.g. `ssh host 'velocity reset-password alice </dev/null'`).
+
 Automatic startup dump: set `VELOCITY_BACKUP_BEFORE_MIGRATE=1` in `.env`. On every non-worker app
 startup, before checking or applying migrations, the app runs `pg_dump` into `BACKUP_DIR` (Docker
 default `/data/backups`, inside `app_data`). This can create a dump even when no migration is pending;
@@ -236,6 +319,29 @@ if users upload files that other people open, enable ClamAV.
 - Logs are structured JSON on stdout: `docker compose logs -f app`.
 
 ## Troubleshooting
+
+Start with `velocity doctor`; it checks the common causes below.
+
+**DNS not pointing at the server.** HTTPS never appears and `velocity doctor` reports the domain does not
+resolve or points elsewhere. Create an `A` record for the domain with your DNS provider pointing at the
+server's public IP, wait a few minutes, then `velocity restart`. Caddy retries automatically.
+
+**Ports 80/443 already in use.** The installer stops and names the port. Stop the other web server
+(`sudo systemctl stop nginx apache2`), or install with other ports
+(`VELOCITY_HTTP_PORT=8080 VELOCITY_HTTPS_PORT=8443`). Automatic HTTPS needs 80 and 443 reachable from the internet.
+
+**Forgot password.** `velocity users` lists accounts; `velocity reset-password <username-or-email>` prints a new one.
+
+**Restore from backup.** `velocity backups`, then `velocity restore latest` (or a file name). The current
+database is saved to `/opt/velocity/backups/` first. Restoring does not touch uploaded files.
+
+**Changing domain.** `velocity domain new.example.com` (or `velocity domain none` for plain HTTP). If you
+set up the GitHub integration, re-run its setup in Settings -> GitHub because the webhook/callback URLs change.
+
+**Updating.** `velocity update` backs up first. If the new version misbehaves, `velocity restore latest`
+and reinstall the previous release with `VELOCITY_REF=<tag>`.
+
+Manual-install symptoms:
 
 | Symptom | Check |
 |---|---|

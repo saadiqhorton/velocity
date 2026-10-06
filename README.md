@@ -6,19 +6,19 @@ Licensed under [AGPL-3.0-or-later](LICENSE).
 
 ## Quick start
 
-The supported self-hosting path is Docker Compose. Copy the example environment file, set a long random `APP_SECRET` (at least 32 characters), and set `CADDY_DOMAIN` to `localhost` for local use:
+On a fresh Linux server (a small VPS is enough), run one command as root:
 
 ```sh
-cp .env.example .env
+curl -fsSL https://raw.githubusercontent.com/saadiqhorton/velocity/main/scripts/install/install.sh | sudo sh
 ```
 
-Edit `.env`, then start the services:
+It installs Docker if needed, asks for an optional domain name (blank means plain HTTP on the server's IP), and starts Velocity.
 
-```sh
-docker compose up -d
-```
+1. Open the address it prints and create your account (the first account is the owner).
+2. Manage the server with the `velocity` command: `velocity status`, `velocity backup`, `velocity update`.
+3. Run `velocity help` for everything else, including `velocity reset-password`.
 
-Open `http://localhost` and complete first-run setup. For a public domain, point DNS at the host and set `CADDY_DOMAIN` to that hostname; Caddy provisions HTTPS. Keep `.env`, the PostgreSQL volume, and the uploads volume backed up. See [docs/self-hosting.md](docs/self-hosting.md) for configuration, upgrades, and backup details.
+Prefer to do it by hand? See the manual path in [docs/self-hosting.md](docs/self-hosting.md#advanced--manual-install).
 
 ## Documentation
 

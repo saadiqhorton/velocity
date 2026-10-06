@@ -10,6 +10,7 @@ async function main(): Promise<void> {
     process.exit(1);
   }
   const logger = createLogger(config.logLevel);
+  if (config.appSecretGenerated) logger.info('APP_SECRET was not set: generated a new secret and saved it to APP_SECRET_FILE (keep that file with your backups)');
   const app = await createApp(config, { logger });
   const { port } = await app.listen();
   logger.info({ port, role: config.role, appUrl: config.app.appUrl }, 'velocity is running');

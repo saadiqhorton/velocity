@@ -1,0 +1,447 @@
+#!/usr/bin/env bash
+# velocity - manage your self-hosted Velocity server. Run `velocity help`.
+set -euo pipefail
+
+DEFAULT_HOME="/opt/velocity"
+VELOCITY_HOME="${VELOCITY_HOME:-$DEFAULT_HOME}"
+VELOCITY_BIN_DIR="${VELOCITY_BIN_DIR:-/usr/local/bin}"
+ASSUME_YES=0
+
+if [ -t 1 ]; then B=$'\033[1m'; G=$'\033[32m'; Y=$'\033[33m'; R=$'\033[31m'; N=$'\033[0m'; else B=''; G=''; Y=''; R=''; N=''; fi
+say()  { printf '%s\n' "$*"; }
+ok()   { printf '  %s[ok]%s   %s\n' "$G" "$N" "$*"; }
+warn() { printf '  %s[warn]%s %s\n' "$Y" "$N" "$*" >&2; }
+bad()  { printf '  %s[fail]%s %s\n' "$R" "$N" "$*" >&2; }
+die()  { printf '%sError:%s %s\n' "$R" "$N" "$*" >&2; exit 1; }
+
+dc() { docker compose --project-directory "$VELOCITY_HOME" -f "$VELOCITY_HOME/docker-compose.yml" "$@"; }
+
+require_install() {
+  command -v docker >/dev/null 2>&1 || die "Docker is not installed. Run the installer first."
+  [ -f "$VELOCITY_HOME/docker-compose.yml" ] || die "No Velocity install found in $VELOCITY_HOME. Set VELOCITY_HOME, or run the installer."
+  docker info >/dev/null 2>&1 || die "Cannot talk to Docker. Is it running, and are you root? Try: sudo velocity $CMD"
+}
+
+env_get() { [ -f "$VELOCITY_HOME/.env" ] && sed -n "s/^$1=//p" "$VELOCITY_HOME/.env" | tail -n1 || true; }
+env_set() { # key value
+  local f="$VELOCITY_HOME/.env" tmp
+  [ -f "$f" ] || die "$f is missing."
+  tmp=$(mktemp "$f.XXXXXX")
+  if grep -q "^$1=" "$f"; then
+    awk -v k="$1" -v v="$2" 'BEGIN{FS=OFS="="} $1==k {print k "=" v; next} {print}' "$f" > "$tmp"
+  else
+    cat "$f" > "$tmp"; printf '%s=%s\n' "$1" "$2" >> "$tmp"
+  fi
+  chmod 600 "$tmp"; mv "$tmp" "$f"
+}
+
+confirm() { # question
+  [ "$ASSUME_YES" = 1 ] && return 0
+  local ans=''
+  if [ -t 0 ]; then read -r -p "$1 [y/N] " ans || true
+  elif [ -r /dev/tty ]; then printf '%s [y/N] ' "$1" >/dev/tty; read -r ans </dev/tty || true
+  else die "Need confirmation but there is no terminal. Re-run with --yes."; fi
+  [[ "$ans" =~ ^[Yy]([Ee][Ss])?$ ]]
+}
+
+admin() { dc exec -T app node dist/admin-cli.js "$@"; }
+
+app_health() {
+  local cid; cid=$(dc ps -q app 2>/dev/null || true)
+  [ -n "$cid" ] || { echo "not running"; return 0; }
+  docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$cid" 2>/dev/null || echo unknown
+}
+
+wait_healthy() {
+  local timeout="${VELOCITY_WAIT_SECONDS:-300}" waited=0
+  say "Waiting for Velocity to become healthy (up to ${timeout}s)..."
+  while [ "$waited" -lt "$timeout" ]; do
+    [ "$(app_health)" = healthy ] && { ok "Velocity is healthy"; return 0; }
+    sleep 3; waited=$((waited + 3))
+  done
+  dc logs --tail 40 app >&2 || true
+  bad "Velocity did not become healthy in ${timeout}s (last logs above). See: velocity doctor"
+  return 1
+}
+
+public_ip() {
+  local u ip
+  for u in https://api.ipify.org https://ifconfig.me/ip https://icanhazip.com; do
+    ip=$(curl -fsS --max-time 5 "$u" 2>/dev/null | tr -d ' \n\r') || ip=''
+    if [[ "$ip" =~ ^[0-9a-fA-F:.]+$ ]]; then printf '%s' "$ip"; return 0; fi
+  done
+  return 1
+}
+
+resolve_ipv4() {
+  if command -v getent >/dev/null; then getent ahostsv4 "$1" 2>/dev/null | awk 'NR==1{print $1}'
+  elif command -v dig >/dev/null; then dig +short A "$1" 2>/dev/null | head -n1
+  fi
+}
+
+backup_dir() { env_get VELOCITY_BACKUP_DIR; }
+backup_path() { # file name -> host path when backups are a host folder
+  local d; d=$(backup_dir)
+  if [ -n "$d" ]; then printf '%s/%s' "$d" "${1##*/}"; else printf '%s' "$1"; fi
+}
+
+latest_backup_line() { # prints "<file>\t<bytes>\t<mtime>" of newest, or nothing
+  admin backups 2>/dev/null | sort -t$'\t' -k3 | tail -n1 || true
+}
+
+# --- commands ----------------------------------------------------------------
+cmd_status() {
+  require_install
+  say "${B}Velocity status${N}"
+  dc ps
+  local h; h=$(app_health)
+  say ""
+  if [ "$h" = healthy ]; then ok "App is healthy"; else bad "App state: $h (try: velocity logs)"; fi
+  say "  URL:         $(env_get APP_URL)"
+  local last; last=$(latest_backup_line || true)
+  if [ -n "$last" ]; then say "  Last backup: $(backup_path "$(printf '%s' "$last" | cut -f1)") ($(printf '%s' "$last" | cut -f3))"
+  else say "  Last backup: none yet (run: velocity backup)"; fi
+  [ "$h" = healthy ]
+}
+
+cmd_url() { require_install; env_get APP_URL; }
+
+cmd_logs() {
+  require_install
+  local args=() svc=()
+  for a in "$@"; do case "$a" in -f|--follow) args+=(-f) ;; *) svc+=("$a") ;; esac; done
+  dc logs --tail 100 ${args[@]+"${args[@]}"} ${svc[@]+"${svc[@]}"}
+}
+
+cmd_start()   { require_install; dc up -d; wait_healthy; }
+cmd_stop()    { require_install; dc stop; ok "Stopped. Your data is untouched. Start again with: velocity start"; }
+cmd_restart() { require_install; dc restart; wait_healthy; }
+
+cmd_backup() {
+  require_install
+  say "Creating a backup..."
+  local out; out=$(admin backup) || die "Backup failed. Is the app running? (velocity status)"
+  ok "Backup created: $(backup_path "$out")"
+}
+
+cmd_backups() {
+  require_install
+  local out; out=$(admin backups) || die "Could not list backups. Is the app running? (velocity status)"
+  if [ -z "$out" ]; then say "No backups yet. Create one with: velocity backup"; return 0; fi
+  local d; d=$(backup_dir)
+  [ -z "$d" ] || say "Backups folder: $d"
+  printf '%-44s %12s  %s\n' FILE SIZE MODIFIED
+  printf '%s\n' "$out" | sort -t$'\t' -k3 -r | awk -F'\t' '{printf "%-44s %12s  %s\n", $1, $2, $3}'
+}
+
+cmd_restore() {
+  require_install
+  [ $# -ge 1 ] || die "Usage: velocity restore <file|latest>   (see: velocity backups)"
+  local file="$1" list
+  list=$(admin backups) || die "Could not list backups; the app must be running to find them."
+  if [ "$file" = latest ]; then
+    file=$(printf '%s\n' "$list" | sort -t$'\t' -k3 | tail -n1 | cut -f1)
+    [ -n "$file" ] || die "There are no backups to restore."
+  fi
+  file="${file##*/}"
+  printf '%s\n' "$list" | cut -f1 | grep -Fxq "$file" || die "No backup named '$file'. See: velocity backups"
+  say "This will REPLACE the current database with the backup '$file'."
+  say "Changes made since that backup will be lost. (A safety copy of the current database is saved first.)"
+  confirm "Restore now?" || die "Cancelled."
+  local sname="pre-restore-$(date -u +%Y%m%dT%H%M%SZ).dump" safety
+  safety="/data/backups/$sname"
+  say "Saving a safety copy to $(backup_path "$sname") ..."
+  # Written through the app container (the folder belongs to uid 10001), owner-only: the dump holds password hashes and tokens.
+  if ! { set -o pipefail; dc exec -T postgres pg_dump -U velocity -Fc velocity | dc exec -T app sh -c "umask 077; cat > $safety"; }; then
+    dc exec -T app rm -f "$safety" >/dev/null 2>&1 || true
+    die "Could not save the safety copy; nothing was changed."
+  fi
+  say "Stopping the app..."
+  dc stop app >/dev/null
+  say "Restoring..."
+  # Recreate the database (pg_restore --clean cannot drop pg-boss's partitioned tables), then load the dump.
+  fresh_db() {
+    dc exec -T postgres dropdb -U velocity --if-exists --force velocity \
+      && dc exec -T postgres createdb -U velocity velocity
+  }
+  if ! { fresh_db && dc run --rm --no-deps -T --entrypoint cat app "/data/backups/$file" \
+      | dc exec -T postgres pg_restore -U velocity -d velocity --no-owner --single-transaction --exit-on-error; }; then
+    warn "Restore failed; putting the previous database back from the safety copy..."
+    if fresh_db && dc run --rm --no-deps -T --entrypoint cat app "$safety" \
+         | dc exec -T postgres pg_restore -U velocity -d velocity --no-owner --single-transaction --exit-on-error; then
+      dc up -d app >/dev/null 2>&1 || true
+      die "Restore failed; your previous database was put back (safety copy: $(backup_path "$sname"))."
+    fi
+    die "Restore failed AND automatic recovery failed. Your data is in $(backup_path "$sname") (restore it with pg_restore)."
+  fi
+  dc up -d app >/dev/null
+  wait_healthy
+  ok "Restored from $file"
+}
+
+cmd_domain() {
+  require_install
+  [ $# -eq 1 ] || die "Usage: velocity domain <name>   (or 'velocity domain none' for plain HTTP on this server's IP)"
+  local d https_port port url
+  d=$(printf '%s' "$1" | tr 'A-Z' 'a-z' | sed 's#^https\{0,1\}://##; s#/.*$##')
+  https_port=$(env_get HTTPS_PORT); https_port="${https_port:-443}"
+  port=$(env_get HTTP_PORT); port="${port:-80}"
+  if [ "$d" = none ]; then
+    local ip; ip=$(public_ip || echo localhost)
+    url="http://$ip"; [ "$port" = 80 ] || url="$url:$port"
+    d=''
+  else
+    [[ "$d" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?\.[a-z0-9.-]+$ ]] || die "'$1' does not look like a domain name (example: tracker.example.com)."
+    local ip res; ip=$(public_ip || true); res=$(resolve_ipv4 "$d" || true)
+    if [ -z "$res" ]; then warn "$d does not resolve yet. Point a DNS A record at ${ip:-this server}, or HTTPS will not work."
+    elif [ -n "$ip" ] && [ "$res" != "$ip" ]; then warn "$d points to $res, but this server is $ip. HTTPS will fail until DNS is fixed."
+    else ok "$d points at this server"; fi
+    url="https://$d"; [ "$https_port" = 443 ] || url="$url:$https_port"
+  fi
+  env_set CADDY_DOMAIN "$d"
+  env_set APP_URL "$url"
+  dc up -d --force-recreate app caddy
+  wait_healthy
+  ok "Now served at $url"
+  warn "If you set up the GitHub integration, its URLs (webhook/callback) changed. Re-run the GitHub setup in Settings -> GitHub."
+}
+
+cmd_reset_password() {
+  require_install
+  [ $# -eq 1 ] || die "Usage: velocity reset-password <username-or-email>"
+  local rc=0
+  if [ -t 0 ]; then
+    # Interactive: the server generates a password and prints it.
+    dc exec app node dist/admin-cli.js reset-password "$1" || rc=$?
+  elif [ -p /dev/stdin ] || [ -f /dev/stdin ]; then
+    # A password was piped in: forward it.
+    dc exec -T app node dist/admin-cli.js reset-password "$1" || rc=$?
+  else
+    dc exec -T app node dist/admin-cli.js reset-password "$1" </dev/null || rc=$?
+  fi
+  [ "$rc" -eq 0 ] || die "Could not reset the password (unknown user or weak password). Check the name with: velocity users"
+}
+
+cmd_users() { require_install; admin list-users || die "Could not list users. Is the app running? (velocity status)"; }
+
+cmd_doctor() {
+  local fails=0 warns=0 CMD=doctor
+  say "${B}Velocity doctor${N}"
+  command -v docker >/dev/null 2>&1 && ok "Docker is installed" || { bad "Docker is not installed"; exit 1; }
+  docker info >/dev/null 2>&1 && ok "Docker daemon is running" || { bad "Docker daemon is not reachable (sudo systemctl start docker, or run with sudo)"; exit 1; }
+  [ -f "$VELOCITY_HOME/docker-compose.yml" ] && ok "Install found in $VELOCITY_HOME" || { bad "No install in $VELOCITY_HOME"; exit 1; }
+
+  # .env sanity
+  local f="$VELOCITY_HOME/.env"
+  if [ ! -f "$f" ]; then bad ".env is missing"; fails=$((fails+1))
+  else
+    local mode; mode=$(stat -c %a "$f" 2>/dev/null || echo '?')
+    [ "$mode" = 600 ] && ok ".env permissions are private (600)" || { warn ".env permissions are $mode; run: chmod 600 $f"; warns=$((warns+1)); }
+    [ -n "$(env_get POSTGRES_PASSWORD)" ] && ok "POSTGRES_PASSWORD is set" || { bad "POSTGRES_PASSWORD is empty"; fails=$((fails+1)); }
+    local sec; sec=$(env_get APP_SECRET)
+    if [ -n "$sec" ] && [ "${#sec}" -lt 32 ]; then bad "APP_SECRET is shorter than 32 characters"; fails=$((fails+1)); fi
+    case "$(env_get APP_URL)" in
+      http://*|https://*) ok "APP_URL is $(env_get APP_URL)" ;;
+      '') ok "APP_URL not set (the server derives it from CADDY_DOMAIN)" ;;
+      *) bad "APP_URL must start with http:// or https://"; fails=$((fails+1)) ;;
+    esac
+  fi
+
+  # containers
+  local svc cid state
+  for svc in postgres app caddy; do
+    cid=$(dc ps -q "$svc" 2>/dev/null || true)
+    if [ -z "$cid" ]; then bad "$svc is not running (try: velocity start)"; fails=$((fails+1)); continue; fi
+    state=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$cid" 2>/dev/null || echo unknown)
+    case "$state" in
+      healthy|running) ok "$svc is $state" ;;
+      *) bad "$svc is $state (see: velocity logs $svc)"; fails=$((fails+1)) ;;
+    esac
+  done
+
+  # disk
+  local avail; avail=$(df -Pk "$VELOCITY_HOME" | awk 'NR==2{print int($4/1024)}')
+  if [ "${avail:-0}" -lt 1024 ]; then bad "Only ${avail} MB of disk free"; fails=$((fails+1))
+  elif [ "${avail:-0}" -lt 5120 ]; then warn "${avail} MB of disk free (getting low)"; warns=$((warns+1))
+  else ok "Disk space: ${avail} MB free"; fi
+
+  # DNS, ports, TLS
+  local domain; domain=$(env_get CADDY_DOMAIN)
+  if [ -n "$domain" ]; then
+    local ip res; ip=$(public_ip || true); res=$(resolve_ipv4 "$domain" || true)
+    if [ -z "$res" ]; then bad "$domain does not resolve in DNS; add an A record pointing to ${ip:-this server}"; fails=$((fails+1))
+    elif [ -n "$ip" ] && [ "$res" != "$ip" ]; then bad "$domain points to $res but this server is $ip"; fails=$((fails+1))
+    else ok "DNS: $domain -> $res"; fi
+    local tlog; tlog=$(dc logs --tail 300 caddy 2>/dev/null || true)
+    if printf '%s' "$tlog" | grep -qi 'certificate obtained successfully'; then ok "TLS certificate obtained"
+    elif printf '%s' "$tlog" | grep -qiE 'obtaining certificate.*(error|fail)|unable to obtain|challenge failed'; then bad "Caddy could not get a certificate (usually DNS or blocked ports 80/443). See: velocity logs caddy"; fails=$((fails+1))
+    elif printf '%s' "$tlog" | grep -qi 'certificate'; then ok "TLS certificate present or in progress"
+    else warn "No certificate activity in Caddy logs yet"; warns=$((warns+1)); fi
+  else
+    ok "No domain configured (plain HTTP; run 'velocity domain <name>' to enable HTTPS)"
+  fi
+  local hp; hp=$(env_get HTTP_PORT); hp="${hp:-80}"
+  if curl -fsS --max-time 5 "http://127.0.0.1:$hp/healthz" >/dev/null 2>&1 || curl -fsS --max-time 5 -H "Host: $domain" "http://127.0.0.1:$hp/healthz" >/dev/null 2>&1 \
+     || curl -fsSL --max-time 5 -k "https://127.0.0.1:$(env_get HTTPS_PORT)/healthz" -H "Host: ${domain:-localhost}" >/dev/null 2>&1; then
+    ok "Web server answers on port $hp"
+  else warn "Nothing answered on 127.0.0.1:$hp/healthz"; warns=$((warns+1)); fi
+
+  # backups
+  if [ "$(app_health)" = healthy ]; then
+    local last mt age
+    last=$(latest_backup_line || true)
+    if [ -z "$last" ]; then warn "No backups found (run: velocity backup)"; warns=$((warns+1))
+    else
+      mt=$(printf '%s' "$last" | cut -f3)
+      age=$(( ( $(date +%s) - $(date -d "$mt" +%s 2>/dev/null || echo 0) ) / 3600 ))
+      if [ "$age" -gt 48 ]; then warn "Newest backup is ${age}h old ($mt)"; warns=$((warns+1)); else ok "Newest backup: $mt ($(backup_path "$(printf '%s' "$last" | cut -f1)"))"; fi
+    fi
+  fi
+
+  say ""
+  if [ "$fails" -gt 0 ]; then bad "$fails problem(s), $warns warning(s)"; exit 1; fi
+  ok "All good ($warns warning(s))"
+}
+
+cmd_config() {
+  require_install
+  [ -f "$VELOCITY_HOME/.env" ] || die "$VELOCITY_HOME/.env is missing."
+  local ed="${VISUAL:-${EDITOR:-}}"
+  if [ -z "$ed" ]; then for c in nano vim vi; do command -v "$c" >/dev/null && { ed="$c"; break; }; done; fi
+  [ -n "$ed" ] || die "No editor found. Set EDITOR, e.g. EDITOR=nano velocity config"
+  local before; before=$(cksum < "$VELOCITY_HOME/.env")
+  $ed "$VELOCITY_HOME/.env"
+  if [ "$before" = "$(cksum < "$VELOCITY_HOME/.env")" ]; then say "No changes made."; return 0; fi
+  say "Applying changes (restarting Velocity)..."
+  dc up -d
+  wait_healthy
+}
+
+cmd_update() {
+  require_install
+  local installer="$VELOCITY_HOME/scripts/install/install.sh"
+  [ -f "$installer" ] || die "$installer is missing; re-run the installer instead."
+  say "Backing up before updating..."
+  if [ "$(app_health)" = healthy ]; then
+    admin backup >/dev/null && ok "Backup created" || die "Backup failed; not updating. Fix that first (velocity doctor)."
+  else
+    warn "App is not running, so no pre-update backup was taken."
+    confirm "Continue updating anyway?" || die "Cancelled."
+  fi
+  local rel="$VELOCITY_HOME/.velocity-release" repo ref
+  repo=$(sed -n 's/^repo=//p' "$rel" 2>/dev/null || true); ref=$(sed -n 's/^ref=//p' "$rel" 2>/dev/null || true)
+  local src=''
+  case "$repo" in local:*) src="${repo#local:}"; repo='' ;; esac
+  say "Fetching the new release and restarting..."
+  if ! VELOCITY_HOME="$VELOCITY_HOME" VELOCITY_BIN_DIR="$VELOCITY_BIN_DIR" VELOCITY_REPO="${VELOCITY_REPO:-${repo:-saadiqhorton/velocity}}" \
+       VELOCITY_REF="${VELOCITY_REF:-${ref:-main}}" VELOCITY_SOURCE="${VELOCITY_SOURCE:-$src}" sh "$installer" --yes; then
+    bad "The update did not complete."
+    say "  Your data and .env are untouched, and the backup above is safe. To roll back:"
+    say "    velocity restore latest        (restore the database)"
+    say "    VELOCITY_REF=<previous version tag> sh $installer --yes     (reinstall an older release)"
+    exit 1
+  fi
+}
+
+cmd_version() {
+  say "Velocity (installed in $VELOCITY_HOME)"
+  local rel="$VELOCITY_HOME/.velocity-release"
+  if [ -f "$rel" ]; then sed 's/^/  /' "$rel"; else say "  (no release info)"; fi
+  if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1 && [ -f "$VELOCITY_HOME/docker-compose.yml" ]; then
+    local cid; cid=$(dc ps -q app 2>/dev/null || true)
+    [ -z "$cid" ] || say "  image=$(docker inspect -f '{{.Config.Image}} ({{.Image}})' "$cid" 2>/dev/null | cut -c1-90)"
+  fi
+}
+
+cmd_uninstall() {
+  require_install
+  local purge=0
+  for a in "$@"; do [ "$a" = --purge ] && purge=1; done
+  if [ "$purge" = 1 ]; then
+    say "${R}${B}--purge deletes ALL your data${N}: database, uploads, certificates and configuration (backup files in the backups folder are kept)."
+    confirm "Really remove Velocity and delete all data?" || die "Cancelled."
+    local typed=''
+    if [ "$ASSUME_YES" != 1 ]; then
+      if [ -t 0 ]; then read -r -p "Type 'delete my data' to confirm: " typed || true
+      elif [ -r /dev/tty ]; then printf "Type 'delete my data' to confirm: " >/dev/tty; read -r typed </dev/tty || true; fi
+      [ "$typed" = "delete my data" ] || die "Cancelled."
+    fi
+    dc down -v --remove-orphans
+    rm -f "$VELOCITY_BIN_DIR/velocity"
+    local bdir; bdir=$(backup_dir); bdir="${bdir:-$VELOCITY_HOME/backups}"
+    # Keep the backups folder: it is the one thing that can still save you.
+    if [ -d "$bdir" ]; then
+      case "$bdir/" in
+        "$VELOCITY_HOME"/*) find "$VELOCITY_HOME" -mindepth 1 -maxdepth 1 ! -name "${bdir#"$VELOCITY_HOME"/}" -exec rm -rf {} + ;;
+        *) rm -rf "$VELOCITY_HOME" ;;
+      esac
+      ok "Velocity and its data have been removed."
+      say "  Your backups were NOT deleted: $bdir"
+      say "  To delete them too: sudo rm -rf $bdir"
+    else
+      rm -rf "$VELOCITY_HOME"
+      ok "Velocity and all its data have been removed."
+    fi
+  else
+    say "This stops and removes the Velocity containers and the 'velocity' command."
+    say "Your data (Docker volumes) and $VELOCITY_HOME/.env are kept; reinstalling picks them up again."
+    confirm "Uninstall?" || die "Cancelled."
+    dc down --remove-orphans
+    rm -f "$VELOCITY_BIN_DIR/velocity"
+    ok "Uninstalled. Data kept. To delete everything later, re-run the installer and then: velocity uninstall --purge"
+  fi
+}
+
+cmd_help() {
+  cat <<EOF
+${B}velocity${N} - manage your Velocity server
+
+Usage: velocity [--yes] <command>
+
+  status                 Show containers, health, URL and last backup
+  url                    Print the address your server is served at
+  logs [service] [-f]    Show logs (services: app, postgres, caddy); -f follows
+  start | stop | restart Start, stop or restart everything
+  update                 Back up, fetch the newest release, upgrade in place
+  backup                 Create a database backup now
+  backups                List backups
+  restore <file|latest>  Restore the database from a backup
+  domain <name|none>     Switch to a domain name (automatic HTTPS), or back to plain HTTP
+  reset-password <user>  Set a new password for a username or email
+  users                  List users
+  doctor                 Check for common problems
+  config                 Edit settings (.env), then apply them
+  version                Show installed version info
+  uninstall [--purge]    Remove containers (and with --purge, all data)
+  help                   Show this help
+
+Install location: $VELOCITY_HOME (override with VELOCITY_HOME=...)
+EOF
+}
+
+# --- dispatch ----------------------------------------------------------------
+args=()
+for a in "$@"; do case "$a" in -y|--yes) ASSUME_YES=1 ;; *) args+=("$a") ;; esac; done
+set -- ${args[@]+"${args[@]}"}
+CMD="${1:-help}"; [ $# -gt 0 ] && shift
+case "$CMD" in
+  status) cmd_status "$@" ;;
+  url) cmd_url "$@" ;;
+  logs) cmd_logs "$@" ;;
+  start) cmd_start "$@" ;;
+  stop) cmd_stop "$@" ;;
+  restart) cmd_restart "$@" ;;
+  update|upgrade) cmd_update "$@" ;;
+  backup) cmd_backup "$@" ;;
+  backups) cmd_backups "$@" ;;
+  restore) cmd_restore "$@" ;;
+  domain) cmd_domain "$@" ;;
+  reset-password) cmd_reset_password "$@" ;;
+  users) cmd_users "$@" ;;
+  doctor) cmd_doctor "$@" ;;
+  config) cmd_config "$@" ;;
+  version|--version) cmd_version "$@" ;;
+  uninstall) cmd_uninstall "$@" ;;
+  help|-h|--help) cmd_help ;;
+  *) printf '%sUnknown command: %s%s\n\n' "$R" "$CMD" "$N" >&2; cmd_help >&2; exit 2 ;;
+esac

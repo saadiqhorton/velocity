@@ -1,8 +1,6 @@
-import { spawn } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
 import { createServer } from 'node:http';
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
-import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 import type { PgBoss } from 'pg-boss';
@@ -14,6 +12,7 @@ import { runMigrations } from '@velocity/schema/migrate';
 import { LocalDiskDriver, MemoryJobQueue, createDb, createServices } from '@velocity/services';
 import type { JobQueue, Services } from '@velocity/services';
 import type { OutboxListener } from '@velocity/events';
+import { backupDatabase, registerBackupSchedule } from './backup';
 import type { ServerConfig } from './config';
 import { createGraphQLServer } from './graphql-server';
 import type { GraphQLServer } from './graphql-server';
@@ -67,19 +66,6 @@ function migrationsFolder(): string | undefined {
   return undefined;
 }
 
-async function backupDatabase(config: ServerConfig, logger: Logger): Promise<void> {
-  mkdirSync(config.backupDir, { recursive: true });
-  const file = join(config.backupDir, `velocity-${new Date().toISOString().replace(/[:.]/g, '-')}.dump`);
-  logger.info({ file }, 'backing up database before migrating');
-  await new Promise<void>((resolve, reject) => {
-    const p = spawn('pg_dump', ['--format=custom', `--file=${file}`, `--dbname=${config.databaseUrl}`], { stdio: ['ignore', 'ignore', 'pipe'] });
-    let err = '';
-    p.stderr.on('data', (d) => (err += String(d)));
-    p.on('error', reject);
-    p.on('exit', (code) => (code === 0 ? resolve() : reject(new Error(`pg_dump failed (${code}): ${err.slice(0, 500)}`))));
-  });
-}
-
 function routeLabel(pathname: string): string {
   if (pathname === '/graphql') return '/graphql';
   if (pathname.startsWith('/files/')) return '/files/:id';
@@ -96,7 +82,7 @@ export async function createApp(config: ServerConfig, opts: { logger?: Logger; i
   pool.on('error', (err) => logger.error({ err }, 'postgres pool error'));
 
   if (config.role !== 'worker') {
-    if (config.backupBeforeMigrate) await backupDatabase(config, logger);
+    if (config.backupBeforeMigrate) await backupDatabase(config, logger, 'before migrate');
     await runMigrations(pool, migrationsFolder());
     logger.info('migrations up to date');
   }
@@ -137,7 +123,10 @@ export async function createApp(config: ServerConfig, opts: { logger?: Logger; i
   const listener: OutboxListener = await startRealtime(pool, pubsub, logger, scheduleDrain);
   const drainInterval = runsJobs ? setInterval(scheduleDrain, 5000) : null;
   drainInterval?.unref();
-  if (boss && runsJobs) await startWorkers(boss, services, logger, { auditRetentionDays: config.auditRetentionDays });
+  if (boss && runsJobs) {
+    await startWorkers(boss, services, logger, { auditRetentionDays: config.auditRetentionDays });
+    if (await registerBackupSchedule(boss, config, logger)) logger.info({ schedule: config.backup.schedule, retentionDays: config.backup.retentionDays, dir: config.backupDir }, 'nightly backups scheduled');
+  }
 
   const staticHandler = config.role === 'worker' ? null : createStaticHandler(config.webDistDir);
   const mcpHandler = config.app.mcp.httpEnabled && config.app.mcp.httpToken ? createMcpHandler({ gql, token: config.app.mcp.httpToken, logger }) : null;

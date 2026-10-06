@@ -3,14 +3,15 @@
 #   Workers:   + worker (profile "scale")        docker compose --profile scale up -d
 #   Antivirus: + clamav (profile "clamav")       docker compose --profile clamav up -d
 #              and set CLAMAV_HOST=clamav in .env (see docs/self-hosting.md)
-# Copy .env.example to .env first.
+# Easiest: scripts/install/install.sh (see docs/self-hosting.md). Manual: copy .env.example to .env first.
+# Only POSTGRES_PASSWORD is required; APP_SECRET and APP_URL are derived by the server when omitted.
 
 x-app-common: &app-common
   build:
     context: .
     args:
       VERSION: ${VELOCITY_VERSION:-dev}
-  image: ${VELOCITY_IMAGE:-ghcr.io/velocity-app/velocity:latest}
+  image: ${VELOCITY_IMAGE:-ghcr.io/saadiqhorton/velocity:latest}
   env_file: .env
   user: "10001:10001"
   read_only: true
@@ -23,15 +24,17 @@ x-app-common: &app-common
   restart: unless-stopped
   volumes:
     - app_data:/data
+    # Backups. The installer sets VELOCITY_BACKUP_DIR to a host folder; otherwise a named volume.
+    - ${VELOCITY_BACKUP_DIR:-backups_data}:/data/backups
 
 services:
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
     ports:
-      - "80:80"
-      - "443:443"
-      - "443:443/udp"
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+      - "${HTTPS_PORT:-443}:443/udp"
     environment:
       CADDY_DOMAIN: ${CADDY_DOMAIN:-:80}
     volumes:
@@ -49,6 +52,8 @@ services:
       # Set DATABASE_URL in .env to point at an external Postgres instead.
       DATABASE_URL: ${DATABASE_URL:-postgres://velocity:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/velocity}
       VELOCITY_ROLE: ${VELOCITY_ROLE:-all}
+      # Lets the server derive APP_URL (and generate APP_SECRET) when .env omits them.
+      CADDY_DOMAIN: ${CADDY_DOMAIN:-}
       TRUST_PROXY: "1"
     depends_on:
       postgres:
@@ -116,6 +121,7 @@ services:
 
 volumes:
   app_data:
+  backups_data:
   pg_data:
   caddy_data:
   caddy_config:

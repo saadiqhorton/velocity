@@ -12,3 +12,8 @@ apps/web/playwright-report/
 apps/web/e2e/.auth/
 *.tsbuildinfo
 .DS_Store
+
+# Local agent session transcripts and tool state
+session-*.md
+codex-session-*.md
+.opencode/
