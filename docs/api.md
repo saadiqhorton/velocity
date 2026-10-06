@@ -89,4 +89,5 @@ Deliveries time out after 10 seconds. Failed deliveries retry after 1, 5, 15, 30
 - `GET /files/:id`: attachment download with an authenticated session/API key or a time-limited signed URL.
 - `GET /avatars/:id`: member-authenticated avatar image. Upload or replace your profile image with the `uploadAvatar(file: File!)` GraphQL mutation. PNG, JPEG, GIF, and WebP inputs are decoded and re-encoded as metadata-free WebP, cropped to at most 256×256 pixels. The upload size is capped by `MAX_UPLOAD_MB` (25 MB by default).
 - `GET /api/exports/:id/download`: authenticated export download.
-- `POST /mcp`: optional Streamable HTTP MCP transport; disabled by default and protected by `MCP_HTTP_TOKEN` when enabled.
+- `POST /mcp`: Streamable HTTP MCP transport, on by default; authenticate with `X-Api-Key` or `Authorization: Bearer vel_…` (plus `MCP_HTTP_TOKEN` as the Bearer when configured).
+- `GET /mcp/client-<hash>.tgz`: public tarball of the stdio client (`npx -y <url>`).

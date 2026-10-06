@@ -808,7 +808,7 @@ Deliberately minimal — solo-first simplicity is architectural, not cosmetic:
    + Caddy (reverse proxy, auto-TLS)
 
 Docker Compose: caddy + app + postgres  (3 containers)
-MCP stdio: `npx @velocity/mcp` (separate process, talks to app over HTTP)
+MCP stdio: `npx -y <server>/mcp/client-<hash>.tgz` (separate process, talks to app over HTTP; served by the app, not npm)
 ```
 
 **Key decisions (ADR summaries):**
@@ -928,7 +928,7 @@ Environment (`.env.example` canonical; no secrets in DB, except the encrypted in
 - `DATABASE_URL`, `APP_URL`, `APP_SECRET` (≥ 32 chars), `CADDY_DOMAIN`
 - `UPLOAD_DIR` (default `/data/uploads`), `MAX_UPLOAD_MB`
 - `GITHUB_APP_ID / GITHUB_APP_PRIVATE_KEY / GITHUB_APP_SECRET / GITHUB_WEBHOOK_SECRET` (optional — GitHub off when unset and no in-app App exists; an App created in-app (§6.5.4) is stored encrypted in the DB and takes precedence)
-- `MCP_HTTP_ENABLED`, `MCP_HTTP_TOKEN` (optional HTTP transport for remote agents)
+- `MCP_HTTP_ENABLED` (default on), `MCP_HTTP_TOKEN` (optional extra bearer for the HTTP transport)
 - `DISABLE_SIGNUP` (default true after first user; invite-link flow for members)
 - `LOG_LEVEL`, `SENTRY_DSN` (optional)
 
@@ -1117,7 +1117,7 @@ An owner can create the GitHub App from the UI instead of setting `GITHUB_*` env
 
 ## 6.6 MCP Server
 
-The distinctive agent surface: MCP server (`apps/mcp`) exposing 12 tools via `@modelcontextprotocol/sdk` — **stdio** (`npx @velocity/mcp` for Claude Desktop/Cursor) always; **streamable HTTP** (`/mcp` behind `MCP_HTTP_TOKEN`) opt-in for remote agents.
+The distinctive agent surface: MCP server (`apps/mcp`) exposing 12 tools via `@modelcontextprotocol/sdk` — **stdio** (client tarball served by the app, for Claude Desktop) always; **streamable HTTP** (`/mcp`, API-key auth) on by default, `MCP_HTTP_ENABLED=0` opts out.
 
 ### 6.6.1 Tool list (v1.1)
 

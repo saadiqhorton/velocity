@@ -35,7 +35,17 @@ test.describe('settings', () => {
     await page.goto('/settings/mcp');
     await expect(page.getByTestId('settings-mcp')).toBeVisible();
     await expect(page.getByTestId('mcp-tools').locator('li').first()).toBeVisible();
-    await page.getByRole('link', { name: 'API keys' }).last().click();
+    // Tabs: Claude Code is first, then Claude Desktop, Cursor and Other.
+    await expect(page.getByTestId('mcp-claude-code')).toContainText('claude mcp add --transport http velocity');
+    await expect(page.getByTestId('mcp-claude-code')).toContainText('X-Api-Key: vel_your_api_key');
+    await page.getByRole('tab', { name: 'Claude Desktop' }).click();
+    await expect(page.getByTestId('mcp-claude-desktop')).toContainText('/mcp/client-');
+    await page.getByRole('tab', { name: 'Cursor' }).click();
+    await expect(page.getByTestId('mcp-cursor')).toContainText('"url"');
+    await page.getByRole('tab', { name: 'Other' }).click();
+    await expect(page.getByTestId('mcp-http')).toContainText('/mcp');
+    await expect(page.getByTestId('mcp-stdio')).toContainText('npx -y');
+    await page.getByRole('link', { name: 'Settings → API keys' }).click();
     await expect(page).toHaveURL(/\/settings\/api-keys/);
   });
 

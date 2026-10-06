@@ -1,9 +1,11 @@
+import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@apollo/client';
-import { Button, InlineMessage, Skeleton } from '@velocity/ui';
+import { Button, InlineMessage, Skeleton, Tabs } from '@velocity/ui';
 import { IntegrationsDocument } from '@/gql/graphql';
 import { describeError } from '@/lib/errors';
 import { m } from '@/i18n';
+import { claudeCodeCommand, claudeDesktopConfig, cursorConfig, npxCommand } from '@/lib/mcpSnippets';
 import { SectionBody, SettingsPage, SettingsSection } from '../common';
 import { CodeBlock, CopyField } from './shared';
 
@@ -24,21 +26,21 @@ const TOOL_NAMES = [
   'list_projects',
 ] as const;
 
-export function clientConfig(stdioCommand: string, serverUrl: string): string {
-  const [command = 'npx', ...args] = stdioCommand.trim().split(/\s+/);
-  const json = JSON.stringify(
-    { mcpServers: { velocity: { command, args, env: { VELOCITY_URL: serverUrl, VELOCITY_API_KEY: 'vel_your_api_key' } } } },
-    null,
-    2,
-  );
-  // Keep the args array on one line, the way client docs print it.
-  return json.replace(/\[\s+("[^\]]*?)\s+\]/g, (_m, inner: string) => `[${inner.replace(/\s*\n\s*/g, ' ')}]`);
-}
-
 export function McpSettings() {
   const t = m.settingsIntegrations.mcp;
   const { data, loading, error, refetch } = useQuery(IntegrationsDocument);
   const info = data?.mcpInfo;
+  const endpoint = info?.httpEnabled ? (info.httpEndpoint ?? null) : null;
+  const pkg = info?.clientPackageUrl ?? null;
+  const httpPanel = (help: string, block: ReactNode) =>
+    endpoint ? (
+      <div className="flex flex-col gap-3">
+        <p className="text-sm text-fg-subtle">{help}</p>
+        {block}
+      </div>
+    ) : (
+      <p className="text-sm text-fg-subtle">{t.httpDisabled}</p>
+    );
   return (
     <SettingsPage title={m.settings.sections.mcp} description={t.description} testId="settings-mcp">
       {loading && !info ? (
@@ -55,33 +57,63 @@ export function McpSettings() {
         <>
           <SettingsSection title={t.connect} description={t.connectHelp}>
             <SectionBody className="flex flex-col gap-4">
-              <div className="flex flex-col gap-1">
-                <span className="text-sm font-medium text-fg">{t.stdio}</span>
-                <CopyField value={info.stdioCommand} what={t.stdio} testId="mcp-stdio" />
-              </div>
-              <div className="flex flex-col gap-1">
-                <span className="text-sm font-medium text-fg">{t.http}</span>
-                {info.httpEnabled && info.httpEndpoint ? (
-                  <>
-                    <CopyField value={info.httpEndpoint} what={t.http} testId="mcp-http" />
-                    <p className="text-sm text-fg-subtle">{t.httpAuth}</p>
-                  </>
-                ) : (
-                  <p className="text-sm text-fg-subtle">{t.httpDisabled}</p>
-                )}
-              </div>
-            </SectionBody>
-          </SettingsSection>
-
-          <SettingsSection title={t.clientConfig} description={t.clientConfigHelp}>
-            <SectionBody className="flex flex-col gap-3">
-              <CodeBlock code={clientConfig(info.stdioCommand, info.serverUrl)} what={t.clientConfig} label={t.clientConfig} testId="mcp-config" />
               <InlineMessage appearance="info">
                 {t.apiKeyHint}{' '}
                 <Link to="/settings/api-keys" className="text-link underline">
                   {t.apiKeyLink}
                 </Link>
               </InlineMessage>
+              <Tabs
+                aria-label={t.connect}
+                items={[
+                  {
+                    id: 'claude-code',
+                    label: t.tabs.claudeCode,
+                    panel: httpPanel(t.claudeCodeHelp, endpoint && <CodeBlock code={claudeCodeCommand(endpoint)} what={t.tabs.claudeCode} label={t.tabs.claudeCode} testId="mcp-claude-code" />),
+                  },
+                  {
+                    id: 'claude-desktop',
+                    label: t.tabs.claudeDesktop,
+                    panel: pkg ? (
+                      <div className="flex flex-col gap-3">
+                        <p className="text-sm text-fg-subtle">{t.claudeDesktopHelp}</p>
+                        <CodeBlock code={claudeDesktopConfig(info.serverUrl, pkg)} what={t.tabs.claudeDesktop} label={t.tabs.claudeDesktop} testId="mcp-claude-desktop" />
+                      </div>
+                    ) : (
+                      <p className="text-sm text-fg-subtle">{t.clientUnavailable}</p>
+                    ),
+                  },
+                  {
+                    id: 'cursor',
+                    label: t.tabs.cursor,
+                    panel: httpPanel(t.cursorHelp, endpoint && <CodeBlock code={cursorConfig(endpoint)} what={t.tabs.cursor} label={t.tabs.cursor} testId="mcp-cursor" />),
+                  },
+                  {
+                    id: 'other',
+                    label: t.tabs.other,
+                    panel: (
+                      <div className="flex flex-col gap-4">
+                        {endpoint ? (
+                          <div className="flex flex-col gap-1">
+                            <span className="text-sm font-medium text-fg">{t.http}</span>
+                            <CopyField value={endpoint} what={t.http} testId="mcp-http" />
+                            <p className="text-sm text-fg-subtle">{t.httpAuth}</p>
+                          </div>
+                        ) : (
+                          <p className="text-sm text-fg-subtle">{t.httpDisabled}</p>
+                        )}
+                        {pkg ? (
+                          <div className="flex flex-col gap-1">
+                            <span className="text-sm font-medium text-fg">{t.stdio}</span>
+                            <CopyField value={npxCommand(pkg)} what={t.stdio} testId="mcp-stdio" />
+                            <p className="text-sm text-fg-subtle">{t.stdioHelp}</p>
+                          </div>
+                        ) : null}
+                      </div>
+                    ),
+                  },
+                ]}
+              />
             </SectionBody>
           </SettingsSection>
 

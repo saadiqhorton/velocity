@@ -1,7 +1,8 @@
 // Production bundle (SPEC §5.9): workspace packages are bundled; npm dependencies stay external
 // and are installed in the image via `pnpm deploy --prod`. SQL migrations ship next to main.js.
 import { build } from 'esbuild';
-import { cpSync, readFileSync, rmSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -35,4 +36,14 @@ await build({
   logLevel: 'info',
 });
 cpSync(join(root, 'packages/schema/migrations'), join(here, 'dist/migrations'), { recursive: true });
-console.log(`bundled with ${external.size} external dependencies; migrations copied`);
+
+// The stdio MCP client is served by the server at /mcp/client-<hash>.tgz (apps/mcp builds it;
+// turbo orders that first, and a direct `pnpm --filter @velocity/server build` builds it on demand).
+const mcpDist = join(root, 'apps/mcp/dist');
+const packed = () => (existsSync(mcpDist) ? readdirSync(mcpDist).filter((f) => /^client-.+\.tgz$/.test(f)) : []);
+if (packed().length === 0) execFileSync(process.execPath, ['build.mjs'], { cwd: join(root, 'apps/mcp'), stdio: 'inherit' });
+const [tgz] = packed();
+if (!tgz) throw new Error('apps/mcp did not produce dist/client-<hash>.tgz');
+mkdirSync(join(here, 'dist/mcp'), { recursive: true });
+cpSync(join(mcpDist, tgz), join(here, 'dist/mcp', tgz));
+console.log(`bundled with ${external.size} external dependencies; migrations and ${tgz} copied`);

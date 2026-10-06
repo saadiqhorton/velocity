@@ -277,7 +277,7 @@ query Integrations {
     httpEnabled
     httpEndpoint
     serverUrl
-    stdioCommand
+    clientPackageUrl
   }
 }
 

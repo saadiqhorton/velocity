@@ -21,7 +21,8 @@ export interface AppConfig {
     clientSecret: string | null;
     appSlug: string | null;
   };
-  mcp: { httpEnabled: boolean; httpToken: string | null };
+  /** `clientHash`: content hash (12 hex) of the stdio client tarball the server serves (null when not built). */
+  mcp: { httpEnabled: boolean; httpToken: string | null; clientHash?: string | null };
   /** Optional ClamAV daemon for upload scanning (SPEC §7.1.3). */
   clamav: { host: string; port: number } | null;
 }

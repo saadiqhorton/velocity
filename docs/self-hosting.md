@@ -119,7 +119,7 @@ and session tokens are stored as hashes. Highlights:
 | `UPLOAD_DIR`, `MAX_UPLOAD_MB`, `EXPORT_DIR`, `BACKUP_DIR` | Docker defaults are under `app_data` (`/data`); `BACKUP_DIR` defaults to `/data/backups` in the image |
 | `DISABLE_SIGNUP` | default `true` |
 | `GITHUB_APP_*`, `GITHUB_WEBHOOK_SECRET` | optional, advanced alternative to in-app setup (see [GitHub integration](#github-integration)); `GITHUB_APP_SECRET` is accepted as an alias of `GITHUB_APP_CLIENT_SECRET` |
-| `MCP_HTTP_ENABLED`, `MCP_HTTP_TOKEN` | optional HTTP transport for remote agents |
+| `MCP_HTTP_ENABLED`, `MCP_HTTP_TOKEN` | `/mcp` HTTP transport is on by default (API key via `X-Api-Key` or `Bearer vel_…`); `MCP_HTTP_ENABLED=0` disables it; `MCP_HTTP_TOKEN` (24+ chars) optionally adds a required bearer token |
 | `TRUST_PROXY` | Compose sets this to `1` for Caddy; set it when running behind a trusted reverse proxy |
 | `METRICS_TOKEN` | optional Bearer token for `/metrics`; set one when scraping through a forwarded request |
 | `ALLOW_PRIVATE_WEBHOOK_TARGETS` | default `0` (SSRF protection) |

@@ -71,26 +71,3 @@ jobs:
           gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1 || \
             gh release create "${GITHUB_REF_NAME}" --verify-tag --generate-notes
           gh release upload "${GITHUB_REF_NAME}" sbom.spdx.json --clobber
-
-  npm:
-    needs: image
-    # Opt-in: set the repository variable PUBLISH_NPM=true and the NPM_TOKEN secret to publish @velocity/mcp.
-    if: vars.PUBLISH_NPM == 'true'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write      # npm provenance
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-          registry-url: https://registry.npmjs.org
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @velocity/mcp build
-      - name: Publish @velocity/mcp
-        run: pnpm --filter @velocity/mcp publish --access public --no-git-checks --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

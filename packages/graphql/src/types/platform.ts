@@ -297,12 +297,12 @@ AuditEntryRef.implement({
 const AuditPageRef = builder.objectRef<{ entries: AuditShape[]; totalCount: number }>('AuditPage');
 AuditPageRef.implement({ fields: (t) => ({ nodes: t.field({ type: [AuditEntryRef], resolve: (p) => p.entries }), totalCount: t.exposeInt('totalCount') }) });
 
-const McpInfoRef = builder.objectRef<{ httpEnabled: boolean; httpEndpoint: string | null; stdioCommand: string; serverUrl: string }>('McpInfo');
+const McpInfoRef = builder.objectRef<{ httpEnabled: boolean; httpEndpoint: string | null; clientPackageUrl: string | null; serverUrl: string }>('McpInfo');
 McpInfoRef.implement({
   fields: (t) => ({
     httpEnabled: t.exposeBoolean('httpEnabled'),
     httpEndpoint: t.exposeString('httpEndpoint', { nullable: true }),
-    stdioCommand: t.exposeString('stdioCommand'),
+    clientPackageUrl: t.exposeString('clientPackageUrl', { nullable: true, description: 'Content-addressed tarball of the stdio client served by this server; run with `npx -y <url>`.' }),
     serverUrl: t.exposeString('serverUrl'),
   }),
 });
@@ -388,7 +388,12 @@ builder.queryFields((t) => ({
       requireActor(ctx);
       const cfg = ctx.services.deps.config;
       const base = cfg.appUrl.replace(/\/$/, '');
-      return { httpEnabled: cfg.mcp.httpEnabled, httpEndpoint: cfg.mcp.httpEnabled ? `${base}/mcp` : null, stdioCommand: 'npx -y @velocity/mcp', serverUrl: base };
+      return {
+        httpEnabled: cfg.mcp.httpEnabled,
+        httpEndpoint: cfg.mcp.httpEnabled ? `${base}/mcp` : null,
+        clientPackageUrl: cfg.mcp.clientHash ? `${base}/mcp/client-${cfg.mcp.clientHash}.tgz` : null,
+        serverUrl: base,
+      };
     },
   }),
 }));

@@ -568,10 +568,13 @@ input LoginInput {
 }
 
 type McpInfo {
+  """
+  Versioned tarball of the stdio client served by this server; run with `npx -y <url>`.
+  """
+  clientPackageUrl: String
   httpEnabled: Boolean!
   httpEndpoint: String
   serverUrl: String!
-  stdioCommand: String!
 }
 
 type Milestone {

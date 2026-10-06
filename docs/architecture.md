@@ -48,7 +48,7 @@ The dependency direction is `schema ← events ← services ← graphql ← apps
 - Jobs run in the app process by default. `VELOCITY_ROLE=worker` supports a separate worker profile when scaling.
 - The app uses local disk for attachments and export files. Persist the configured data directories with backups.
 - Rate limiting and realtime process state are in memory / per process. Multiple app instances therefore have independent rate limit buckets.
-- `MCP_HTTP_ENABLED` is off by default. MCP stdio clients communicate with the server API.
+- `MCP_HTTP_ENABLED` is on by default (`=0` opts out). The server also serves the bundled stdio client at `/mcp/client-<hash>.tgz`; there is no npm package.
 - The Docker Compose configuration sets `TRUST_PROXY=1` behind Caddy, and Caddy blocks `/metrics` from public requests. Direct deployments should set proxy trust only when the app is behind a trusted reverse proxy.
 - Security and deployment configuration are documented in [.env.example](../.env.example) and [self-hosting.md](self-hosting.md).
 

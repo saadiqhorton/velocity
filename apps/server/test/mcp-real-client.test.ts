@@ -1,4 +1,7 @@
-import { fileURLToPath } from 'node:url';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterEach, expect, it } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
@@ -6,6 +9,7 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { setupOwner, testConfig } from '../../../packages/services/test/helpers/harness';
 import { boot } from './helpers';
 import type { RunningApp } from './helpers';
+import { findMcpClient } from '../src/http/mcp-client';
 
 let running: RunningApp | undefined;
 afterEach(async () => { await running?.close(); running = undefined; });
@@ -36,20 +40,26 @@ async function exerciseWorkflow(client: Client, prefix: string): Promise<void> {
   expect(issue.comments).toEqual(expect.arrayContaining([expect.objectContaining({ bodyMd: `Comment from ${prefix}` })]));
 }
 
-it('creates, comments and closes through the stdio and HTTP MCP client transports', async () => {
-  const token = 'mcp-real-client-test-token-1234567890';
-  const app = testConfig({ mcp: { httpEnabled: true, httpToken: token } });
+it('creates, comments and closes through the served stdio client tarball and the HTTP transport', async () => {
+  const app = testConfig({ mcp: { httpEnabled: true, httpToken: null } });
   running = await boot({ app });
   const owner = await setupOwner(running.h);
   await running.app.services.teams.create(owner, { key: 'MCP', name: 'MCP smoke' });
   const key = await running.app.services.apiKeys.create(owner, { name: 'mcp-real-client', scope: 'write' });
 
-  const entry = fileURLToPath(new URL('../../mcp/src/index.ts', import.meta.url));
+  // Run the client exactly as a user would: download the served tarball, unpack, run its bin.
+  const hash = findMcpClient(new URL('../src/config.ts', import.meta.url).href)!.hash;
+  const download = await fetch(`${running.base}/mcp/client-${hash}.tgz`);
+  expect(download.status).toBe(200);
+  const dir = mkdtempSync(join(tmpdir(), 'velocity-mcp-client-'));
+  writeFileSync(join(dir, 'client.tgz'), Buffer.from(await download.arrayBuffer()));
+  execFileSync('tar', ['-xzf', 'client.tgz'], { cwd: dir });
+  const entry = join(dir, 'package/index.js');
   const env = Object.fromEntries(Object.entries(process.env).filter((pair): pair is [string, string] => typeof pair[1] === 'string'));
   const stdioTransport = new StdioClientTransport({
     command: process.execPath,
-    args: ['--import', 'tsx', entry],
-    cwd: fileURLToPath(new URL('../../mcp/', import.meta.url)),
+    args: [entry],
+    cwd: dir,
     env: { ...env, VELOCITY_URL: running.base, VELOCITY_API_KEY: key.plaintext },
     stderr: 'pipe',
   });
@@ -62,7 +72,7 @@ it('creates, comments and closes through the stdio and HTTP MCP client transport
   }
 
   const httpTransport = new StreamableHTTPClientTransport(new URL(`${running.base}/mcp`), {
-    requestInit: { headers: { authorization: `Bearer ${token}`, 'x-api-key': key.plaintext } },
+    requestInit: { headers: { authorization: `Bearer ${key.plaintext}` } },
   });
   const httpClient = new Client({ name: 'mcp-http-smoke', version: '1' });
   try {

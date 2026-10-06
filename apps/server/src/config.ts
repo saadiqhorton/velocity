@@ -4,6 +4,7 @@ import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import type { AppConfig } from '@velocity/services';
+import { findMcpClient } from './http/mcp-client';
 
 const bool = (def: boolean) =>
   z
@@ -33,7 +34,7 @@ const EnvSchema = z.object({
   GITHUB_APP_CLIENT_SECRET: z.string().optional(),
   GITHUB_APP_SECRET: z.string().optional(),
   GITHUB_WEBHOOK_SECRET: z.string().optional(),
-  MCP_HTTP_ENABLED: bool(false),
+  MCP_HTTP_ENABLED: bool(true),
   MCP_HTTP_TOKEN: z.string().optional(),
   CLAMAV_HOST: z.string().optional(),
   CLAMAV_PORT: z.coerce.number().int().default(3310),
@@ -69,6 +70,8 @@ export interface ServerConfig {
   production: boolean;
   secureCookies: boolean;
   trustProxy: boolean;
+  /** Absolute path of the packed stdio client served at /mcp/client-<hash>.tgz, if built. */
+  mcpClientFile: string | null;
 }
 
 /** Private keys in env often arrive with literal `\n` — normalize to real newlines. */
@@ -145,11 +148,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, fs: SecretFs = 
     throw new Error(`Invalid configuration:\n${msg}${hint}\nSee .env.example for every option.`);
   }
   const e = parsed.data;
-  if (e.MCP_HTTP_ENABLED && (!e.MCP_HTTP_TOKEN || e.MCP_HTTP_TOKEN.length < 24)) {
-    throw new Error('MCP_HTTP_ENABLED=1 requires MCP_HTTP_TOKEN (at least 24 characters).');
+  if (e.MCP_HTTP_TOKEN && e.MCP_HTTP_TOKEN.length < 24) {
+    throw new Error('MCP_HTTP_TOKEN must be at least 24 characters (try: openssl rand -hex 32).');
   }
   const here = fileURLToPath(new URL('.', import.meta.url));
   const appUrl = e.APP_URL.replace(/\/$/, '');
+  const mcpClient = findMcpClient(import.meta.url);
   return {
     app: {
       appUrl,
@@ -166,7 +170,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, fs: SecretFs = 
         clientSecret: e.GITHUB_APP_CLIENT_SECRET || e.GITHUB_APP_SECRET || null,
         appSlug: e.GITHUB_APP_SLUG || null,
       },
-      mcp: { httpEnabled: e.MCP_HTTP_ENABLED, httpToken: e.MCP_HTTP_TOKEN || null },
+      mcp: { httpEnabled: e.MCP_HTTP_ENABLED, httpToken: e.MCP_HTTP_TOKEN || null, clientHash: mcpClient?.hash ?? null },
       clamav: e.CLAMAV_HOST ? { host: e.CLAMAV_HOST, port: e.CLAMAV_PORT } : null,
     },
     databaseUrl: e.DATABASE_URL,
@@ -190,5 +194,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, fs: SecretFs = 
     production: e.NODE_ENV === 'production',
     secureCookies: appUrl.startsWith('https://'),
     trustProxy: e.TRUST_PROXY,
+    mcpClientFile: mcpClient?.file ?? null,
   };
 }

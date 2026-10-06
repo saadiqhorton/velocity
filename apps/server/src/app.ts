@@ -19,6 +19,7 @@ import type { GraphQLServer } from './graphql-server';
 import { handleAvatar, handleExportDownload, handleFile } from './http/files';
 import { handleGithubSetup, handleGithubWebhook } from './http/github';
 import { createMcpHandler } from './http/mcp';
+import { createMcpClientHandler, MCP_CLIENT_PATH } from './http/mcp-client';
 import { createStaticHandler } from './http/static';
 import { SECURITY_HEADERS, clientIp, sendJson, sendText } from './http/util';
 import { PgBossJobQueue, startBoss, startWorkers } from './jobs';
@@ -67,6 +68,7 @@ function routeLabel(pathname: string): string {
   if (pathname.startsWith('/api/')) return pathname.split('/').slice(0, 3).join('/');
   if (pathname.startsWith('/assets/')) return '/assets/*';
   if (['/healthz', '/readyz', '/metrics', '/mcp'].includes(pathname)) return pathname;
+  if (MCP_CLIENT_PATH.test(pathname)) return '/mcp/client';
   return 'spa';
 }
 
@@ -123,7 +125,8 @@ export async function createApp(config: ServerConfig, opts: { logger?: Logger; i
   }
 
   const staticHandler = config.role === 'worker' ? null : createStaticHandler(config.webDistDir);
-  const mcpHandler = config.app.mcp.httpEnabled && config.app.mcp.httpToken ? createMcpHandler({ gql, token: config.app.mcp.httpToken, logger }) : null;
+  const mcpHandler = config.app.mcp.httpEnabled ? createMcpHandler({ gql, token: config.app.mcp.httpToken, logger }) : null;
+  const mcpClientHandler = createMcpClientHandler(config.mcpClientFile);
 
   const handle = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const url = new URL(req.url ?? '/', 'http://local');
@@ -167,9 +170,11 @@ export async function createApp(config: ServerConfig, opts: { logger?: Logger; i
     if (pathname === '/api/github/webhook') return handleGithubWebhook(services, logger, req, res);
     if (pathname === '/api/github/setup') return handleGithubSetup(res, url);
     if (pathname === '/mcp') {
-      if (!mcpHandler) return sendJson(res, 404, { error: 'The MCP HTTP transport is disabled. Set MCP_HTTP_ENABLED=1 and MCP_HTTP_TOKEN.' });
+      if (!mcpHandler) return sendJson(res, 404, { error: 'The MCP HTTP transport is disabled on this server (MCP_HTTP_ENABLED=0).' });
       return mcpHandler(req, res, ip);
     }
+    const clientMatch = MCP_CLIENT_PATH.exec(pathname);
+    if (clientMatch) return mcpClientHandler(req, res, clientMatch[1]!);
     if (pathname.startsWith('/api/')) return sendJson(res, 404, { error: 'Not found' });
     staticHandler!(req, res, pathname);
   };

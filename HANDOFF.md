@@ -227,13 +227,13 @@ Each item has an owner, its paths, and how to verify it. Log progress in `apps/w
 
 ### R7 — Real-world integrations · **repo owner** + Codex
 - **GitHub App:** the owner creates the app (permissions per SPEC §6.5.3) and sets the `GITHUB_*` env. Then install it, run backfill, and check the §6.5.2 matrix against a real repo.
-- **MCP:** connect Claude Desktop and Cursor via `npx @velocity/mcp` (`apps/mcp/README.md`). Run create, comment and close through a real client, and the HTTP transport too.
+- **MCP:** connect Claude Code/Cursor over HTTP and Claude Desktop via the served stdio client (`apps/mcp/README.md`). Run create, comment and close through a real client, and the HTTP transport too.
 - **Verify:** a short checklist in `docs/agents.md`, plus any fixes found.
 
 **Status 2026-10-05:** The real stdio process and Streamable HTTP transport passed a local create→comment→Done→readback test; `docs/agents.md` has the live-client checklist. Claude Desktop, Cursor and a real GitHub App/repository check need the owner's clients and credentials.
 
 ### R8 — Release pipeline · Codex + owner credentials · SPEC §7.1.5
-- Dry-run `.github/workflows/release.yml`: multi-arch buildx, syft SBOM, cosign signing, and the `@velocity/mcp` npm publish (check that it's `--dry-run`-able).
+- Dry-run `.github/workflows/release.yml`: multi-arch buildx, syft SBOM, cosign signing.
 - `act` or a fork works for the first test. The owner provides the registry and npm credentials when publishing for real.
 - **Verify:** a dry-run produces images, an SBOM and signatures.
 

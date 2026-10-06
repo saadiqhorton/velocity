@@ -21,11 +21,10 @@ function safeEqual(a: string, b: string): boolean {
 }
 
 /**
- * Optional MCP streamable-HTTP transport at /mcp (SPEC §6.6): requires explicit enablement,
- * the dedicated MCP_HTTP_TOKEN (Bearer) AND a personal API key (X-Api-Key) that becomes
- * the actor. Tools run through the same GraphQL pipeline (auth, limits, audit) in-process.
+ * MCP streamable-HTTP transport at /mcp (SPEC §6.6), on by default (MCP_HTTP_ENABLED=0 opts out):
+ * a personal API key that becomes the actor, optionally behind the MCP_HTTP_TOKEN bearer. Tools run through the same GraphQL pipeline (auth, limits, audit) in-process.
  */
-export function createMcpHandler(opts: { gql: GraphQLServer; token: string; logger: Logger }) {
+export function createMcpHandler(opts: { gql: GraphQLServer; token: string | null; logger: Logger }) {
   const sessions = new Map<string, McpSession>();
   const sweep = setInterval(() => {
     const cutoff = Date.now() - 60 * 60 * 1000;
@@ -40,13 +39,20 @@ export function createMcpHandler(opts: { gql: GraphQLServer; token: string; logg
 
   return async (req: IncomingMessage, res: ServerResponse, ip: string | null): Promise<void> => {
     const headers = headerGetter(req);
+    // Auth: the personal API key alone (X-Api-Key or `Authorization: Bearer vel_…`). When the
+    // operator also set MCP_HTTP_TOKEN, that token must arrive as the Bearer and the key as X-Api-Key.
     const bearer = (headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '');
-    if (!bearer || !safeEqual(bearer, opts.token)) {
-      return sendJson(res, 401, { jsonrpc: '2.0', error: { code: -32001, message: 'Missing or invalid MCP_HTTP_TOKEN bearer token.' }, id: null });
+    let apiKey: string | null;
+    if (opts.token) {
+      if (!bearer || !safeEqual(bearer, opts.token)) {
+        return sendJson(res, 401, { jsonrpc: '2.0', error: { code: -32001, message: 'Missing or invalid MCP_HTTP_TOKEN bearer token.' }, id: null });
+      }
+      apiKey = headers.get('x-api-key');
+    } else {
+      apiKey = headers.get('x-api-key') ?? (bearer.startsWith('vel_') ? bearer : null);
     }
-    const apiKey = headers.get('x-api-key');
     if (!apiKey || !apiKey.startsWith('vel_')) {
-      return sendJson(res, 401, { jsonrpc: '2.0', error: { code: -32001, message: 'Send a Velocity API key in the X-Api-Key header.' }, id: null });
+      return sendJson(res, 401, { jsonrpc: '2.0', error: { code: -32001, message: 'Send a Velocity API key in the X-Api-Key header or as an Authorization: Bearer token.' }, id: null });
     }
     const sessionId = headers.get('mcp-session-id');
     let body: unknown;

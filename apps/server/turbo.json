@@ -1,0 +1,9 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    "build": { "dependsOn": ["^build", "@velocity/mcp#build"] },
+    "test": { "dependsOn": ["^build", "@velocity/mcp#build"] },
+    "typecheck": { "dependsOn": ["^build"] }
+  }
+}
