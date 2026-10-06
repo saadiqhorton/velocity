@@ -5,7 +5,7 @@ import { Button, InlineMessage, Skeleton, Tabs } from '@velocity/ui';
 import { IntegrationsDocument } from '@/gql/graphql';
 import { describeError } from '@/lib/errors';
 import { m } from '@/i18n';
-import { claudeCodeCommand, claudeDesktopConfig, cursorConfig, npxCommand } from '@/lib/mcpSnippets';
+import { claudeCodeCommand, claudeDesktopConfig, codexConfig, cursorConfig, npxCommand, vscodeConfig } from '@/lib/mcpSnippets';
 import { SectionBody, SettingsPage, SettingsSection } from '../common';
 import { CodeBlock, CopyField } from './shared';
 
@@ -84,9 +84,19 @@ export function McpSettings() {
                     ),
                   },
                   {
+                    id: 'codex',
+                    label: t.tabs.codex,
+                    panel: httpPanel(t.codexHelp, endpoint && <CodeBlock code={codexConfig(endpoint)} what={t.tabs.codex} label={t.tabs.codex} testId="mcp-codex" />),
+                  },
+                  {
                     id: 'cursor',
                     label: t.tabs.cursor,
                     panel: httpPanel(t.cursorHelp, endpoint && <CodeBlock code={cursorConfig(endpoint)} what={t.tabs.cursor} label={t.tabs.cursor} testId="mcp-cursor" />),
+                  },
+                  {
+                    id: 'vscode',
+                    label: t.tabs.vscode,
+                    panel: httpPanel(t.vscodeHelp, endpoint && <CodeBlock code={vscodeConfig(endpoint)} what={t.tabs.vscode} label={t.tabs.vscode} testId="mcp-vscode" />),
                   },
                   {
                     id: 'other',

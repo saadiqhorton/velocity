@@ -34,6 +34,27 @@ export function cursorConfig(httpEndpoint: string): string {
   return JSON.stringify({ mcpServers: { velocity: { url: httpEndpoint, headers: { 'X-Api-Key': MCP_KEY_PLACEHOLDER } } } }, null, 2);
 }
 
+/** Codex CLI / IDE: ~/.codex/config.toml, streamable HTTP with a static header. */
+export function codexConfig(httpEndpoint: string): string {
+  return [
+    '[mcp_servers.velocity]',
+    `url = "${httpEndpoint}"`,
+    `http_headers = { "X-Api-Key" = "${MCP_KEY_PLACEHOLDER}" }`,
+  ].join('\n');
+}
+
+/** VS Code (GitHub Copilot agent mode): the key is prompted for once, so it never lands in the file. */
+export function vscodeConfig(httpEndpoint: string): string {
+  return JSON.stringify(
+    {
+      inputs: [{ type: 'promptString', id: 'velocity-api-key', description: 'Velocity API key', password: true }],
+      servers: { velocity: { type: 'http', url: httpEndpoint, headers: { 'X-Api-Key': '${input:velocity-api-key}' } } },
+    },
+    null,
+    2,
+  );
+}
+
 export function npxCommand(clientPackageUrl: string): string {
   return `npx -y ${clientPackageUrl}`;
 }

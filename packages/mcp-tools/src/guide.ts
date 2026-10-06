@@ -14,7 +14,7 @@ export const AGENT_GUIDE: string = [
   "",
   "The repository smoke test (`vitest run apps/server/test/mcp-real-client.test.ts`) exercises the real stdio process and streamable HTTP transport against an isolated local server. Each transport creates an issue, adds a comment, sets a Done status and reads the result back. To check a deployed instance with actual clients:",
   "",
-  "- [ ] Create a write-scoped API key in Settings > API keys. Configure Claude Code, Claude Desktop or Cursor with the snippets in Settings > MCP ([setup guide](../apps/mcp/README.md)). Restart the client and confirm it lists the `velocity` tools.",
+  "- [ ] Create a write-scoped API key in Settings > API keys. Configure Claude Code, Claude Desktop, Codex, Cursor or VS Code with the snippets in Settings > MCP ([setup guide](../apps/mcp/README.md)). Restart the client and confirm it lists the `velocity` tools.",
   "- [ ] In that client, call `list_teams`, then `create_issue`, `add_comment`, `set_status` to a Done status and `get_issue`. Confirm the identifier, comment and Done status in the Velocity UI.",
   "- [ ] For an HTTP MCP client (on by default; `MCP_HTTP_ENABLED=0` disables it), connect to `<server>/mcp` with `X-Api-Key: <write-scoped API key>` or `Authorization: Bearer <key>`. If the operator set `MCP_HTTP_TOKEN`, also send it as the Bearer and keep the key in `X-Api-Key`. Repeat the create, comment, close and read sequence.",
   "- [ ] Check Settings > Audit log for the MCP session and mutations. Revoke any key created solely for verification.",

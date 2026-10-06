@@ -6,7 +6,7 @@ MCP (Model Context Protocol) stdio client for [Velocity](../../README.md). It le
 
 In Velocity open Settings > API keys. Use a **read** key for read-only agents and a **write** key for agents that create or change issues.
 
-## Streamable HTTP (Claude Code, Cursor, most clients)
+## Streamable HTTP (Claude Code, Codex, Cursor, VS Code, most clients)
 
 Every Velocity server exposes the tools at `<server>/mcp`, on by default. Authenticate with your API key alone: `X-Api-Key: vel_...` or `Authorization: Bearer vel_...`. (Operators can set `MCP_HTTP_ENABLED=0` to turn it off, or `MCP_HTTP_TOKEN` to additionally require that token as the Bearer, in which case the key goes in `X-Api-Key`.)
 
@@ -24,6 +24,31 @@ Cursor (`.cursor/mcp.json` or `~/.cursor/mcp.json`):
     "velocity": {
       "url": "https://velocity.example.com/mcp",
       "headers": { "X-Api-Key": "vel_your_api_key" }
+    }
+  }
+}
+```
+
+Codex (CLI and IDE; `~/.codex/config.toml`, or `.codex/config.toml` in a trusted project):
+
+```toml
+[mcp_servers.velocity]
+url = "https://velocity.example.com/mcp"
+http_headers = { "X-Api-Key" = "vel_your_api_key" }
+```
+
+VS Code (GitHub Copilot agent mode; `.vscode/mcp.json`, or "MCP: Open User Configuration"). VS Code prompts for the key on first start, so it is not stored in the file:
+
+```json
+{
+  "inputs": [
+    { "type": "promptString", "id": "velocity-api-key", "description": "Velocity API key", "password": true }
+  ],
+  "servers": {
+    "velocity": {
+      "type": "http",
+      "url": "https://velocity.example.com/mcp",
+      "headers": { "X-Api-Key": "${input:velocity-api-key}" }
     }
   }
 }

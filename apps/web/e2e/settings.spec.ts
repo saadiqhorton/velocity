@@ -35,13 +35,19 @@ test.describe('settings', () => {
     await page.goto('/settings/mcp');
     await expect(page.getByTestId('settings-mcp')).toBeVisible();
     await expect(page.getByTestId('mcp-tools').locator('li').first()).toBeVisible();
-    // Tabs: Claude Code is first, then Claude Desktop, Cursor and Other.
+    // Tabs: Claude Code is first, then Claude Desktop, Codex, Cursor, VS Code and Other.
     await expect(page.getByTestId('mcp-claude-code')).toContainText('claude mcp add --transport http velocity');
     await expect(page.getByTestId('mcp-claude-code')).toContainText('X-Api-Key: vel_your_api_key');
     await page.getByRole('tab', { name: 'Claude Desktop' }).click();
     await expect(page.getByTestId('mcp-claude-desktop')).toContainText('/mcp/client-');
+    await page.getByRole('tab', { name: 'Codex' }).click();
+    await expect(page.getByTestId('mcp-codex')).toContainText('[mcp_servers.velocity]');
+    await expect(page.getByTestId('mcp-codex')).toContainText('"X-Api-Key" = "vel_your_api_key"');
     await page.getByRole('tab', { name: 'Cursor' }).click();
     await expect(page.getByTestId('mcp-cursor')).toContainText('"url"');
+    await page.getByRole('tab', { name: 'VS Code' }).click();
+    await expect(page.getByTestId('mcp-vscode')).toContainText('"servers"');
+    await expect(page.getByTestId('mcp-vscode')).toContainText('${input:velocity-api-key}');
     await page.getByRole('tab', { name: 'Other' }).click();
     await expect(page.getByTestId('mcp-http')).toContainText('/mcp');
     await expect(page.getByTestId('mcp-stdio')).toContainText('npx -y');
