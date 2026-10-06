@@ -17,3 +17,6 @@ apps/web/e2e/.auth/
 session-*.md
 codex-session-*.md
 .opencode/
+
+# Local dev data (generated app secret, uploads, exports)
+apps/server/data/
