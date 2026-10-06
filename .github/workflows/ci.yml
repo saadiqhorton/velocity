@@ -8,7 +8,8 @@ on:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # Never cancel a tag run: it may be mid-release.
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
 permissions:
   contents: read
@@ -17,8 +18,37 @@ env:
   NODE_VERSION: 22
 
 jobs:
+  # On a tag push, detect whether this exact commit already passed this workflow on main.
+  # Always succeeds; on branches and PRs it simply outputs verified=false.
+  gate:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+    outputs:
+      verified: ${{ steps.check.outputs.verified }}
+    steps:
+      - id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+          IS_TAG: ${{ startsWith(github.ref, 'refs/tags/v') }}
+        run: |
+          verified=false
+          if [ "$IS_TAG" = "true" ]; then
+            count=$(gh api -X GET "repos/${REPO}/actions/workflows/ci.yml/runs" \
+              -f head_sha="$SHA" -f event=push -f branch=main -f status=success \
+              --jq '[.workflow_runs[] | select(.conclusion == "success" and .head_sha == "'"$SHA"'" and .event == "push" and .head_branch == "main")] | length' \
+              || echo 0)
+            if [ "${count:-0}" -gt 0 ]; then verified=true; fi
+          fi
+          echo "verified=${verified}" >> "$GITHUB_OUTPUT"
+          echo "verified=${verified}"
+
   lint:
     runs-on: ubuntu-latest
+    needs: [gate]
+    if: needs.gate.outputs.verified != 'true'
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -32,6 +62,8 @@ jobs:
 
   typecheck:
     runs-on: ubuntu-latest
+    needs: [gate]
+    if: needs.gate.outputs.verified != 'true'
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -44,6 +76,8 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
+    needs: [gate]
+    if: needs.gate.outputs.verified != 'true'
     services:
       postgres:
         image: postgres:16
@@ -72,7 +106,8 @@ jobs:
 
   e2e:
     runs-on: ubuntu-latest
-    needs: [lint, typecheck]
+    needs: [gate, lint, typecheck]
+    if: needs.gate.outputs.verified != 'true'
     services:
       postgres:
         image: postgres:16
@@ -119,7 +154,8 @@ jobs:
   # Keep the tag in step with @playwright/test in apps/web/package.json.
   visual:
     runs-on: ubuntu-latest
-    needs: [lint, typecheck]
+    needs: [gate, lint, typecheck]
+    if: needs.gate.outputs.verified != 'true'
     container:
       image: mcr.microsoft.com/playwright:v1.63.0-noble
     services:
@@ -162,6 +198,8 @@ jobs:
 
   audit:
     runs-on: ubuntu-latest
+    needs: [gate]
+    if: needs.gate.outputs.verified != 'true'
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -174,7 +212,8 @@ jobs:
 
   docker:
     runs-on: ubuntu-latest
-    needs: [lint, typecheck, test, e2e, visual, audit]
+    needs: [gate, lint, typecheck, test, e2e, visual, audit]
+    if: needs.gate.outputs.verified != 'true'
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
@@ -213,7 +252,7 @@ jobs:
           trap cleanup EXIT
           "${compose[@]}" up -d --no-build postgres app caddy
           ready=0
-          for attempt in {1..90}; do
+          for _ in {1..90}; do
             if curl -fsS http://127.0.0.1:8089/readyz >/dev/null 2>&1; then ready=1; break; fi
             sleep 2
           done
@@ -221,8 +260,14 @@ jobs:
           node scripts/deploy/smoke.mjs
 
   release:
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: [lint, typecheck, test, e2e, visual, audit, docker]
+    if: >-
+      always() && !cancelled() && startsWith(github.ref, 'refs/tags/v') &&
+      (needs.gate.outputs.verified == 'true' ||
+      (needs.lint.result == 'success' && needs.typecheck.result == 'success' &&
+      needs.test.result == 'success' && needs.e2e.result == 'success' &&
+      needs.visual.result == 'success' && needs.audit.result == 'success' &&
+      needs.docker.result == 'success'))
+    needs: [gate, lint, typecheck, test, e2e, visual, audit, docker]
     permissions:
       contents: write
       packages: write
