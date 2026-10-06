@@ -1,7 +1,6 @@
 import { mkdirSync } from 'node:fs';
 import { createServer } from 'node:http';
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
-import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 import type { PgBoss } from 'pg-boss';
 import pino from 'pino';
@@ -13,6 +12,7 @@ import { LocalDiskDriver, MemoryJobQueue, createDb, createServices } from '@velo
 import type { JobQueue, Services } from '@velocity/services';
 import type { OutboxListener } from '@velocity/events';
 import { backupDatabase, registerBackupSchedule } from './backup';
+import { migrationsFolder } from './migrations-folder';
 import type { ServerConfig } from './config';
 import { createGraphQLServer } from './graphql-server';
 import type { GraphQLServer } from './graphql-server';
@@ -58,12 +58,6 @@ export function createLogger(level: string): Logger {
       censor: '[redacted]',
     },
   });
-}
-
-function migrationsFolder(): string | undefined {
-  // Bundled build ships SQL next to dist/main.js; in dev the schema package resolves its own.
-  if (fileURLToPath(import.meta.url).endsWith('main.js')) return fileURLToPath(new URL('./migrations', import.meta.url));
-  return undefined;
 }
 
 function routeLabel(pathname: string): string {

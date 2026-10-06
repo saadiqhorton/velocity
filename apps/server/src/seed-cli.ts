@@ -11,6 +11,7 @@ import pg from 'pg';
 import pino from 'pino';
 import { v7 as uuidv7 } from 'uuid';
 import { runMigrations } from '@velocity/schema/migrate';
+import { migrationsFolder } from './migrations-folder';
 import { LocalDiskDriver, MemoryJobQueue, createDb, createServices, memberActor } from '@velocity/services';
 import type { ServiceActor } from '@velocity/services';
 import { loadConfig } from './config';
@@ -43,7 +44,7 @@ const random = values.deterministic
   : Math.random;
 const config = loadConfig();
 const pool = new pg.Pool({ connectionString: config.databaseUrl, max: 5 });
-await runMigrations(pool);
+await runMigrations(pool, migrationsFolder());
 const services = createServices({
   db: createDb(pool),
   pool,

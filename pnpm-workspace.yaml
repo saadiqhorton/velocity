@@ -8,6 +8,9 @@ allowBuilds:
 audit:
   ignore:
     - GHSA-vfj7-8cjw-p6xm
+# GHSA-7mx3-vvmw-hjmv: force the patched utils (docs/security-review.md).
+overrides:
+  '@graphql-tools/utils': '^12.0.3'
 minimumReleaseAgeExclude:
   - '@atlaskit/tokens@20.2.0'
   - '@modelcontextprotocol/sdk@1.32.0'

@@ -44,6 +44,9 @@ export function CodingToolsSync({ viewer, children }: { viewer: Viewer; children
 
   useLayoutEffect(() => {
     if (ownerId === viewer.id) return;
+    // Server preferences exist: they win, and any browser copy is already migrated (or its save
+    // response was lost to a navigation after the server stored it), so drop the stale copy.
+    if (viewer.preferences) clearLegacyConfig();
     const legacy = viewer.preferences ? null : readLegacyConfig();
     const config = viewer.preferences ? fromServer(viewer.preferences) : legacy ?? defaultConfig();
     confirmed.current = config;

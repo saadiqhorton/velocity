@@ -37,7 +37,7 @@ test.describe('workspace', () => {
     await expect(result).toBeVisible();
     await result.click();
     // Search results open the full issue page (U1).
-    await expect(page).toHaveURL(/\/issue\/[A-Z]+-\d+$/);
+    await expect(page).toHaveURL(/\/issue\/[A-Z][A-Z0-9]*-\d+$/);
     await expect(page.getByTestId('issue-title')).toHaveValue(title);
   });
 

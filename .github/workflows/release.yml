@@ -74,6 +74,8 @@ jobs:
 
   npm:
     needs: image
+    # Opt-in: set the repository variable PUBLISH_NPM=true and the NPM_TOKEN secret to publish @velocity/mcp.
+    if: vars.PUBLISH_NPM == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read

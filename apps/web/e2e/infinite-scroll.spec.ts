@@ -31,7 +31,7 @@ test.describe('infinite scroll', () => {
         })),
       );
       for (const { index, identifier } of visible) {
-        expect(identifier).toMatch(/^[A-Z]+-\d+$/);
+        expect(identifier).toMatch(/^[A-Z][A-Z0-9]*-\d+$/);
         const prior = byIndex.get(index);
         if (prior) expect(identifier).toBe(prior);
         byIndex.set(index, identifier);

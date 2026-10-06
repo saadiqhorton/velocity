@@ -249,27 +249,35 @@ test.describe('open in coding tools (U3)', () => {
     await page.reload();
     await expect(page.getByTestId('settings-coding-tools').getByTestId('coding-tool')).toHaveCount(7);
 
+    // The one-time legacy migration only runs for a member who has never saved server preferences.
+    // The shared seed users accumulate them (this suite's own cleanup writes defaults), so a fresh
+    // member keeps the test independent of run order and repeats.
+    const invite = await graphqlAs(page, 'mutation { createInvite(name: "Legacy member") { url } }');
+    const inviteUrl = new URL((invite.createInvite as { url: string }).url);
+    const username = `legacy${Date.now().toString(36).slice(-8)}`;
     const otherContext = await browser.newContext({ storageState: { cookies: [], origins: [] } });
+    let memberId = '';
     try {
       const other = await otherContext.newPage();
-      await other.goto('/login');
-      await other.evaluate((config) => window.localStorage.setItem('velocity.codingTools.v1', JSON.stringify(config)), { ...defaultConfig(), instructions: 'Legacy setting for Alex' });
-      await other.getByRole('textbox', { name: 'Username or email' }).fill('alex');
+      await other.goto(inviteUrl.pathname);
+      await other.evaluate((config) => window.localStorage.setItem('velocity.codingTools.v1', JSON.stringify(config)), { ...defaultConfig(), instructions: 'Legacy setting for the new member' });
+      await other.getByRole('textbox', { name: 'Username' }).fill(username);
       await other.getByRole('textbox', { name: 'Password' }).fill('correct-horse-battery-staple');
-      await other.getByRole('button', { name: 'Log in' }).click();
+      await other.getByRole('button', { name: 'Create account' }).click();
       await expect(other).toHaveURL(/\/team\//);
       await other.goto('/settings/coding-tools');
       await expect(other.getByRole('list', { name: 'Tools' }).getByRole('listitem')).toHaveCount(6);
-      await expect(other.getByRole('textbox', { name: 'Custom instructions' })).toHaveValue('Legacy setting for Alex');
+      await expect(other.getByRole('textbox', { name: 'Custom instructions' })).toHaveValue('Legacy setting for the new member');
       await expect.poll(async () => {
         const data = await graphqlAs(other, 'query { viewer { preferences { promptInstructions } } }');
         return (data.viewer as { preferences?: { promptInstructions: string } }).preferences?.promptInstructions;
-      }).toBe('Legacy setting for Alex');
-      expect(await other.evaluate(() => window.localStorage.getItem('velocity.codingTools.v1'))).toBeNull();
-      const defaults = defaultConfig();
-      await graphqlAs(other, 'mutation ResetPreferences($input: UpdatePreferencesInput!) { updatePreferences(input: $input) { promptInstructions } }', { input: { codingTools: defaults.tools, promptInstructions: defaults.instructions } });
+      }).toBe('Legacy setting for the new member');
+      // The client clears the legacy copy only after the server confirms, so it trails the poll above.
+      await expect.poll(() => other.evaluate(() => window.localStorage.getItem('velocity.codingTools.v1'))).toBeNull();
+      memberId = ((await graphqlAs(other, 'query { viewer { id } }')).viewer as { id: string }).id;
     } finally {
       await otherContext.close();
+      if (memberId) await graphqlAs(page, 'mutation ($id: ID!) { removeMember(userId: $id) }', { id: memberId });
     }
 
     await gotoTeam(page, 'ENG', 'backlog');

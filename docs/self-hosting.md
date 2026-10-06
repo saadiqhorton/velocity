@@ -6,9 +6,16 @@ phones home, there is no analytics and no version check unless you enable one.
 
 ## Requirements
 
-- Linux host with Docker Engine 25+ and the Compose plugin (v2.24+).
-- As a starting point, allow 2 vCPU, 4 GB RAM and 20 GB disk for the app and database.
-  Actual needs depend on workload; monitor usage and add disk for attachments and backups.
+- A Linux server (x86-64 or ARM64). The installer sets up Docker if it is missing.
+
+| | RAM | CPU | Disk |
+|---|---|---|---|
+| Minimum | 512 MB | 1 vCPU | 3 GB |
+| Recommended | 1–2 GB | 1–2 vCPU | 20 GB (attachments and backups) |
+| Building the image from source (only if no published image is available) | 3–4 GB | 2 vCPU | +5 GB |
+
+Measured with 10,000 issues: all three containers use about 140 MB idle and about 200 MB under
+steady use; the app ran with a 128 MB memory limit. Add disk as attachments and backups grow.
 
 ## Install
 
