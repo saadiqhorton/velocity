@@ -1,7 +1,7 @@
 # Web app progress (WP1 · WP2 · WP7a · WP9)
 
 Owner: Claude (web/UI/design). This file is how the next agent picks up. Keep it current after every chunk of work.
-Rules, contracts and environment: `HANDOFF.md` §0–§5 (your rows: §1 "Web app", §6 WP1/WP2/WP7a/WP9, §9). Backend status: `HANDOFF.CODEX.md`. Spec: `SPEC.md` (§4 binding).
+Rules, contracts and environment: `HANDOFF.md` §0–§5 (your rows: §1 "Web app", §6 WP1/WP2/WP7a/WP9, §9). Backend status: `../../docs/archive/HANDOFF.CODEX.md`. Spec: `SPEC.md` (§4 binding).
 
 ## Handover log
 - **Lead / integrated v1.2 verification (2026-10-06).** Ran the whole-repo gates on the combined tree and fixed the blockers they surfaced:
@@ -10,7 +10,7 @@ Rules, contracts and environment: `HANDOFF.md` §0–§5 (your rows: §1 "Web ap
   - The Docker visual gallery capture flaked (first `fullPage` screenshot ~4px short for a 5270px page). `e2e/0-visual.spec.ts` now waits for `document.fonts.ready` and takes warm-up full-page captures until the height stabilizes; the 4 gallery baselines are unchanged (baseline == final capture, AE 0).
   - `Attachments` shows the existing `noAttachments` copy when empty; the prompt relation sort is stable for unknown types.
   - **Gates:** whole-repo `turbo typecheck --force` 13/13; `pnpm test` 13/13; `pnpm build` 5/5 (web 186.1 KB gzip); `eslint .` + `check-hex` + `check-legal` + `node --test scripts/*.test.mjs` 8/8; host Chromium E2E `--grep-invert @visual` 87/87; Docker WebKit 87 passed / 8 visual skips; Docker visual 11/11; fresh `docker build` + Compose smoke; upgrade smoke from `b622999`.
-- **Claude / Roadmap v1.2 U1–U4 (2026-10-05, slot 5; own API :3150 on `velocity_dev_v12`, Vite :5180).** Status lines are in `ROADMAP_SOLO_AI.md`.
+- **Claude / Roadmap v1.2 U1–U4 (2026-10-05, slot 5; own API :3150 on `velocity_dev_v12`, Vite :5180).** Status lines are in `../../docs/archive/ROADMAP_SOLO_AI.md`.
   - **U1 full issue page.** `lib/navigation.ts` `useOpenIssue` defaults to `/issue/:id`; `peek: true` opens the panel (`Space`, inbox), `peek: false` forces the page (palette, search). Lists pass `fromList`: the source (`ListScreen` registers its `useIssueList` params in `lib/issueNav.ts`) goes into `history.state.issueNav`, and the list's scroll + focused row are remembered (read purely in render, forgotten in the effect; the effect re-arms under StrictMode). `components/issue-detail/useIssueStepper.ts` rebuilds the list from the same query (cache hit) for `n / total` and J/K (replace navigation), falling back to the team's Active list. `IssuePageHeader.tsx` = breadcrumb, favorite, ⋯ (`IssueMenuItems`), copy toolbar, `PromptSplitButton`, stepper, and the page's Esc/⌫. `IssueDetail` page mode: 720px column (`ActivityTimeline` merges comments and history; `Attachments` new) + 300px grouped `IssueProperties grouped`; the panel keeps its tabs.
   - **U2 copy + menu.** `lib/prompt.ts` (canonical template, strings in `m.prompt`), `components/issues/useIssueAi.ts` (copy/launch with flags; `lib/clipboard.ts` hands Safari a promised `ClipboardItem` inside the gesture). `IssueCommands` adds the copy keys, `Shift+F10`/Menu and per-tool commands. `keyboard/engine.ts` reads `.`/`,` by `event.code` under a modifier. Right-click via `components/issues/rowActions.ts` (pointer anchor `#context-anchor`); `IssueContextMenu` now closes on Esc.
   - **U3 coding tools.** `stores/codingTools.ts` (versioned localStorage, presets with doc sources), `lib/launch.ts`, `screens/settings/account/CodingToolsSettings.tsx`.
@@ -67,7 +67,7 @@ Rules, contracts and environment: `HANDOFF.md` §0–§5 (your rows: §1 "Web ap
   - T7: production-mode pass, 0 CSP/console/page errors on Chromium and WebKit (see Current state).
   - T8: HANDOFF §9 row 6 decided (CI keeps the fresh bundle). The Codex profiler servers (PIDs 3674456 on :3017, 4034497 on :3019) are still running, awaiting the owner's OK.
   - T9: every gate is green (see Current state); WP6 docker build + compose verified.
-  - T10: docs updated (this file, `HANDOFF.md` §1/§5/§6/§9, `HANDOFF.CODEX.md` §5–§6, `CODEX_WEB_QA.md`).
+  - T10: docs updated (this file, `HANDOFF.md` §1/§5/§6/§9, `../../docs/archive/HANDOFF.CODEX.md` §5–§6, `../../docs/archive/CODEX_WEB_QA.md`).
   - **Rerun:**
     - `pnpm --filter @velocity/web build`
     - `cd apps/web && E2E_SLOT=8 npx playwright test --project=chromium`
@@ -85,7 +85,7 @@ Rules, contracts and environment: `HANDOFF.md` §0–§5 (your rows: §1 "Web ap
   - Gates (slot 7, 2026-10-04 ~16:00): web typecheck clean; whole-repo ESLint clean; check-hex/check-legal ok; scripts 8/8; web vitest 483/483; `packages/ui` typecheck + 32/32; build OK, initial JS 176.4 KB gzip; E2E Chromium **80 passed, 0 skipped** (visual now runs against approved baselines); WebKit Docker **72 passed, 8 skipped** (visual is Chromium-only). Dev servers stopped. Leftover: DB `velocity_e2e_web_7`, scratch `/tmp/vel-design/`.
   - Open for the owner: (1) the shell baseline masks seeded content, because the E2E seed is random and specs share one DB; a deterministic seed (`seed-cli` `--seed`) would let it pin real rows. (2) `ChunkBoundary` reuses `m.shell.loadError` ("Could not load this page…") inside the editor/panel; a part-specific sentence needs a catalog key plus the `ChunkBoundary.test.tsx` text. (3) Settings secondary nav is hidden below 768 with no in-page replacement (sections reachable from the sidebar Settings index only).
 
-## Coordination (Codex QA lanes + Claude design; see `HANDOFF.md` §0 and `CODEX_WEB_QA.md`)
+## Coordination (Codex QA lanes + Claude design; see `HANDOFF.md` §0 and `../../docs/archive/CODEX_WEB_QA.md`)
 
 ### Active claims
 Add a row before editing a file under `apps/web/src`; remove it when done. Never edit a file someone else has claimed.
@@ -159,7 +159,7 @@ Bugs they found, all fixed:
 
 ## Pickup checklist (historical; do not follow)
 
-> **Superseded on 2026-10-04.** Items 1–5, 7 and 8 are now split into Codex lanes A–F in `CODEX_WEB_QA.md`. Item 6 (design pass) stays with Claude. Kept below for reference.
+> **Superseded on 2026-10-04.** Items 1–5, 7 and 8 are now split into Codex lanes A–F in `../../docs/archive/CODEX_WEB_QA.md`. Item 6 (design pass) stays with Claude. Kept below for reference.
 
 1. **Environment**
    - Start the dev servers: `apps/web/.dev-data/start-api.sh` starts the API on :3100 against DB `velocity_dev_web` with `APP_URL=http://localhost:5173`. `start-vite.sh` starts Vite on :5173. `stop.sh` stops both.

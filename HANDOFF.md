@@ -34,9 +34,9 @@ Last committed checkpoint: 2026-10-04 (evening), after the design pass. The comm
 
 Deeper context:
 - `apps/web/WEB_PROGRESS.md`: web architecture map, QA findings F1–F10, the design queue.
-- `DIAGNOSIS.md`: why the WebKit runs stalled, and what fixed them.
-- `CODEX_WEB_QA.md`: QA lanes A–F, all done.
-- `HANDOFF.CODEX.md`: backend performance work.
+- `docs/archive/DIAGNOSIS.md`: why the WebKit runs stalled, and what fixed them.
+- `docs/archive/CODEX_WEB_QA.md`: QA lanes A–F, all done.
+- `docs/archive/HANDOFF.CODEX.md`: backend performance work.
 
 ---
 
@@ -195,7 +195,7 @@ Each item has an owner, its paths, and how to verify it. Log progress in `apps/w
 
 ### R3 — Load test re-run · Codex · SPEC §4.16, §7.3
 - Re-run `scripts/perf/mutation-storm.js` (k6) against a 10k-issue DB (`velocity_perf_codex` has one; login `demo` / `correct-horse-battery-staple`) after the perf fixes, plus `issues-list.js` with 25 VUs.
-- Interleave runs; laptop clock state skews results (see `HANDOFF.CODEX.md` §1).
+- Interleave runs; laptop clock state skews results (see `docs/archive/HANDOFF.CODEX.md` §1).
 - **Verify:** budgets met or regressions fixed; numbers recorded in `scripts/perf/README.md`.
 
 **Status 2026-10-05:** Both 25-VU, three-minute k6 workloads passed their thresholds against 10,000 issues. The uncontended list rerun was p95 143.17 ms; mutation storm made 15,834 updates with zero errors. A list run during concurrent image builds was p95 188.16 ms. All values and conditions are recorded in `scripts/perf/README.md`.

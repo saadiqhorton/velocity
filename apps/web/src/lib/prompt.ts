@@ -90,7 +90,7 @@ function quote(author: string, when: string, body: string): string {
   return [`> **${author}** (${when}): ${first}`.trimEnd(), ...rest.map((l) => `> ${l}`.trimEnd())].join('\n');
 }
 
-/** The canonical Markdown prompt for an issue (ROADMAP_SOLO_AI.md U2). Empty sections are skipped. */
+/** The canonical Markdown prompt for an issue (docs/archive/ROADMAP_SOLO_AI.md U2). Empty sections are skipped. */
 export function buildIssuePrompt(issue: PromptIssue, opts: PromptOptions): string {
   const t = m.prompt;
   const out: string[] = [];
