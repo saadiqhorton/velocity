@@ -5,7 +5,7 @@
   "license": "AGPL-3.0-or-later",
   "type": "module",
   "scripts": {
-    "dev": "tsx watch --clear-screen=false src/main.ts",
+    "dev": "tsx watch --clear-screen=false --env-file-if-exists=.env.development --env-file-if-exists=.env.local src/main.ts",
     "build": "node build.mjs",
     "start": "node dist/main.js",
     "migrate": "tsx src/migrate-cli.ts",

@@ -18,8 +18,8 @@ docker run -d --name velocity-pg -p 54320:5432 \
 
 # 2. Install and configure
 pnpm install
-cp .env.example .env     # set DATABASE_URL=postgres://velocity:velocity@localhost:54320/velocity
-                         # and APP_SECRET (openssl rand -hex 32)
+# No env setup needed: `pnpm dev` loads apps/server/.env.development (dev defaults for the
+# container above). Override values in a git-ignored apps/server/.env.local.
 
 # 3. Migrate, seed, run
 pnpm db:migrate
