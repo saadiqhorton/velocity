@@ -20,6 +20,8 @@ Velocity is a pnpm/Turbo TypeScript monorepo (Node 22) for a self-hostable Linea
 
 ## Core commands
 
+TesterArmy semantic E2E tests live in `apps/web/agent-e2e/`. Before writing or running them, read `apps/web/.agents/skills/e2e/SKILL.md` and the topic references it requires.
+
 ```sh
 pnpm install          # pnpm 11 via corepack; only one at a time (shared lockfile)
 pnpm dev              # @velocity/server + @velocity/web in watch mode

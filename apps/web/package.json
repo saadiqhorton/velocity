@@ -11,7 +11,8 @@
     "codegen": "graphql-codegen --config codegen.ts && node scripts/sync-persisted.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run --passWithNoTests",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:agent-e2e": "e2e run"
   },
   "dependencies": {
     "@velocity/ui": "workspace:*",
@@ -53,6 +54,11 @@
     "jsdom": "^26.1.0",
     "@testing-library/react": "^16.3.0",
     "@testing-library/dom": "^10.4.0",
-    "@graphql-typed-document-node/core": "^3.2.0"
+    "@graphql-typed-document-node/core": "^3.2.0",
+    "e2e": "^0.17.0",
+    "@e2e-dev/web": "^0.12.0",
+    "ai": "^7.0.0",
+    "zod": "^4.1.8",
+    "@ai-sdk/openai": "^4.0.0"
   }
 }

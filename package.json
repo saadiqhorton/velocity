@@ -15,6 +15,7 @@
     "lint": "eslint . && node scripts/check-hex.mjs && node scripts/check-legal.mjs",
     "test": "turbo run test",
     "test:e2e": "pnpm --filter @velocity/web test:e2e",
+    "test:agent-e2e": "pnpm --filter @velocity/web test:agent-e2e",
     "codegen": "pnpm --filter @velocity/graphql print-schema && pnpm --filter @velocity/web codegen",
     "db:generate": "pnpm --filter @velocity/schema db:generate",
     "db:migrate": "pnpm --filter @velocity/server migrate",
