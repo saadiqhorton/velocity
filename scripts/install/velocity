@@ -349,13 +349,16 @@ cmd_update() {
     warn "App is not running, so no pre-update backup was taken."
     confirm "Continue updating anyway?" || die "Cancelled."
   fi
-  local rel="$VELOCITY_HOME/.velocity-release" repo ref
-  repo=$(sed -n 's/^repo=//p' "$rel" 2>/dev/null || true); ref=$(sed -n 's/^ref=//p' "$rel" 2>/dev/null || true)
+  local rel="$VELOCITY_HOME/.velocity-release" repo
+  repo=$(sed -n 's/^repo=//p' "$rel" 2>/dev/null || true)
   local src=''
   case "$repo" in local:*) src="${repo#local:}"; repo='' ;; esac
   say "Fetching the new release and restarting..."
+  # Update installs the NEWEST published release. The ref recorded in .velocity-release is
+  # deliberately not forwarded: passing it back would reinstall the installed tag forever. Set
+  # VELOCITY_REF=<tag> to pin a release or to roll back to an earlier one.
   if ! VELOCITY_HOME="$VELOCITY_HOME" VELOCITY_BIN_DIR="$VELOCITY_BIN_DIR" VELOCITY_REPO="${VELOCITY_REPO:-${repo:-saadiqhorton/velocity}}" \
-       VELOCITY_REF="${VELOCITY_REF:-${ref:-main}}" VELOCITY_SOURCE="${VELOCITY_SOURCE:-$src}" sh "$installer" --yes; then
+       VELOCITY_REF="${VELOCITY_REF:-}" VELOCITY_SOURCE="${VELOCITY_SOURCE:-$src}" sh "$installer" --yes; then
     bad "The update did not complete."
     say "  Your data and .env are untouched, and the backup above is safe. To roll back:"
     say "    velocity restore latest        (restore the database)"

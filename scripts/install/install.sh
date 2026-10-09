@@ -50,6 +50,28 @@ usage() {
   sed -n '2,15p' "$0" 2>/dev/null | sed 's/^# \{0,1\}//' || true
 }
 
+# --- privilege re-exec -------------------------------------------------------
+# --help is answered here so it keeps working without privileges.
+for _arg in "$@"; do
+  case "$_arg" in --help|-h) usage; exit 0 ;; esac
+done
+
+# Run before the arguments are parsed: the re-exec starts a fresh shell, so its "$@" must still hold
+# the original arguments. Parsing first consumes them, and POSIX sh cannot re-quote them afterwards.
+if [ "${VELOCITY_INSTALL_SOURCED:-}" != 1 ] && [ "$(id -u)" != 0 ]; then
+  # Non-root is fine when Docker is usable and the install directory is writable (this is also the
+  # path the hermetic tests take).
+  if ! { command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1 \
+         && mkdir -p "$VELOCITY_HOME" 2>/dev/null && [ -w "$VELOCITY_HOME" ]; }; then
+    if command -v sudo >/dev/null 2>&1 && [ -f "$0" ] && [ "${0##*/}" != sh ]; then
+      say "Velocity needs administrator rights; re-running with sudo..."
+      exec sudo -E sh "$0" "$@"
+    fi
+    die "This installer needs root. Re-run it as root, for example:
+    curl -fsSL <installer-url> | sudo sh"
+  fi
+fi
+
 # --- argument parsing --------------------------------------------------------
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -200,9 +222,23 @@ write_image_pin() {
          return 0 ;;
     esac
   fi
-  grep -v '^VELOCITY_IMAGE=' "$envf" > "$envf.pin.tmp" 2>/dev/null || : > "$envf.pin.tmp"
-  printf 'VELOCITY_IMAGE=%s\n' "$ref" >> "$envf.pin.tmp"
-  chmod 600 "$envf.pin.tmp" && mv -f "$envf.pin.tmp" "$envf"
+  # Rewrite through a temporary file. An unreadable .env must never be treated as "no matches":
+  # that would replace the whole file with this single line.
+  if ! sed '/^VELOCITY_IMAGE=/d' "$envf" > "$envf.pin.tmp" 2>/dev/null; then
+    rm -f "$envf.pin.tmp"
+    warn "Could not read $envf; leaving VELOCITY_IMAGE unset (the compose default applies)."
+    return 0
+  fi
+  if ! printf 'VELOCITY_IMAGE=%s\n' "$ref" >> "$envf.pin.tmp"; then
+    rm -f "$envf.pin.tmp"
+    warn "Could not write $envf.pin.tmp; leaving VELOCITY_IMAGE unset."
+    return 0
+  fi
+  if ! chmod 600 "$envf.pin.tmp" || ! mv -f "$envf.pin.tmp" "$envf"; then
+    rm -f "$envf.pin.tmp"
+    warn "Could not replace $envf; leaving VELOCITY_IMAGE unset."
+    return 0
+  fi
 }
 
 env_value() { # key -> value from .env
@@ -211,19 +247,8 @@ env_value() { # key -> value from .env
 }
 
 # --- steps -------------------------------------------------------------------
-ensure_privileges() {
-  [ "$(id -u)" = 0 ] && return 0
-  # Non-root is fine when Docker is usable and the install dir is writable (e.g. testing).
-  if have docker && docker info >/dev/null 2>&1 \
-     && mkdir -p "$VELOCITY_HOME" 2>/dev/null && [ -w "$VELOCITY_HOME" ]; then
-    return 0
-  fi
-  if have sudo && [ -f "$0" ] && [ "${0##*/}" != sh ]; then
-    say "Velocity needs administrator rights; re-running with sudo..."
-    exec sudo -E sh "$0" "$@"
-  fi
-  die "This installer needs root. Re-run it as root, for example:
-    curl -fsSL <installer-url> | sudo sh"
+ensure_privileges() { # the sudo re-exec already happened, before the arguments were parsed
+  return 0
 }
 
 detect_platform() {

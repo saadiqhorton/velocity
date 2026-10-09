@@ -76,6 +76,63 @@ pin_image_helper() (
 )
 t "image pin: floating latest is replaced, an explicit image is kept" pin_image_helper
 
+pin_keeps_unreadable_env() (
+  [ "$(id -u)" = 0 ] && return 0   # root reads anything, so the case cannot be reproduced
+  mkdir -p "$work/unread"
+  printf 'POSTGRES_PASSWORD=secret\nAPP_SECRET=secret2\nVELOCITY_IMAGE=ghcr.io/saadiqhorton/velocity:latest\n' > "$work/unread/.env"
+  chmod 000 "$work/unread/.env"
+  VELOCITY_INSTALL_SOURCED=1; export VELOCITY_INSTALL_SOURCED
+  . "$here/install.sh"
+  VELOCITY_HOME="$work/unread"; export VELOCITY_HOME
+  envf="$work/unread/.env"; export envf
+  VELOCITY_REPO=saadiqhorton/velocity VELOCITY_REF=v1.2.2 VELOCITY_PIN_DIGEST=0 write_image_pin >/dev/null 2>&1
+  chmod 600 "$work/unread/.env"
+  grep -qx 'POSTGRES_PASSWORD=secret' "$work/unread/.env"
+)
+t "image pin never replaces an unreadable .env" pin_keeps_unreadable_env
+
+sudo_forwards_args() (
+  mkdir -p "$work/sbin"
+  printf '#!/bin/sh\nexit 1\n' > "$work/sbin/docker"   # unusable Docker, so the installer must re-exec
+  cat > "$work/sbin/sudo" <<EOF
+#!/bin/sh
+printf '%s\n' "\$@" > "$work/sudo-args"
+exit 0
+EOF
+  chmod +x "$work/sbin/docker" "$work/sbin/sudo"
+  PATH="$work/sbin:/usr/bin:/bin" VELOCITY_HOME="$work/sudohome" VELOCITY_BIN_DIR="$work/sudobin" \
+    sh "$here/install.sh" --yes --domain example.com --no-start >/dev/null 2>&1
+  grep -qx -- '--yes' "$work/sudo-args" \
+    && grep -qx -- '--domain' "$work/sudo-args" \
+    && grep -qx -- 'example.com' "$work/sudo-args" \
+    && grep -qx -- '--no-start' "$work/sudo-args"
+)
+t "sudo re-exec forwards the original arguments" sudo_forwards_args
+
+update_resolves_newest() (
+  mkdir -p "$work/upbin" "$work/uphome/scripts/install"
+  cat > "$work/upbin/docker" <<'FAKE'
+#!/bin/sh
+case "$*" in
+  *" ps -q"*) echo cid1 ;;
+  "inspect "*) echo healthy ;;
+esac
+exit 0
+FAKE
+  cat > "$work/uphome/scripts/install/install.sh" <<EOF
+#!/bin/sh
+printf 'VELOCITY_REF=[%s]\n' "\${VELOCITY_REF-UNSET}" > "$work/up-ref"
+exit 0
+EOF
+  chmod +x "$work/upbin/docker" "$work/uphome/scripts/install/install.sh"
+  echo 'services: {}' > "$work/uphome/docker-compose.yml"
+  printf 'repo=saadiqhorton/velocity\nref=v1.2.1\nversion=1.2.1\n' > "$work/uphome/.velocity-release"
+  env FAKE_LOG="$work/docker.log" PATH="$work/upbin:$PATH" VELOCITY_HOME="$work/uphome" \
+    VELOCITY_BIN_DIR="$work/upbin" "$here/velocity" update --yes </dev/null >/dev/null 2>&1 || return 1
+  grep -qxF 'VELOCITY_REF=[]' "$work/up-ref"
+)
+t "update installs the newest release, not the installed ref" update_resolves_newest
+
 run_install() { # extra args...
   env PATH="$work/bin:$PATH" VELOCITY_HOME="$work/home" VELOCITY_SOURCE="$work/src" VELOCITY_BIN_DIR="$work/binout" \
     VELOCITY_NO_START=1 VELOCITY_HTTP_PORT=8088 VELOCITY_HTTPS_PORT=8443 sh "$here/install.sh" "$@"
