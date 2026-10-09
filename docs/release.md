@@ -9,7 +9,7 @@ Pushing a `v*` tag starts [CI](../.github/workflows/ci.yml). Its first job, `gat
 Before pushing a release tag, run the upgrade and restore check from a clean checkout with full Git history and Docker access:
 
 ```sh
-OLD_REF=b62299922fe2721dc74ac01a5e2907853c0209b5 scripts/deploy/upgrade-smoke.sh
+OLD_REF=9cf440d50d657b79cf1ebf26d56cb1925c0950bc scripts/deploy/upgrade-smoke.sh
 ```
 
 The script builds the pinned baseline and current images, verifies an existing issue survives migration, checks the pre-migration dump, restores it into a separate database, and boots the current image against that restore. It reads the expected migration counts from each checkout's migration journal. This remains a manual gate because the historical checkout's dependency resolution and two image builds have not been verified on a clean CI runner.

@@ -4,7 +4,7 @@
 set -euo pipefail
 
 repo=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
-old_ref=${OLD_REF:-b62299922fe2721dc74ac01a5e2907853c0209b5}
+old_ref=${OLD_REF:-9cf440d50d657b79cf1ebf26d56cb1925c0950bc}
 port=${UPGRADE_PORT:-$((20000 + $$ % 20000))}
 project="velocity-upgrade-$$"
 work=$(mktemp -d "${TMPDIR:-/tmp}/velocity-upgrade.XXXXXX")
