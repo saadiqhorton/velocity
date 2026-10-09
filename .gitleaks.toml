@@ -6,3 +6,9 @@ description = "Documented nonsecret API key placeholder in the curl example"
 condition = "AND"
 paths = ['^docs/api\.md$']
 regexes = ['vel_your_api_key']
+
+[[allowlists]]
+description = "Test fixtures that trip the default generic-api-key rule. Each entry is keyed to the exact literal, so a real secret in either file is still reported."
+condition = "AND"
+paths = ['^apps/server/test/admin\.test\.ts$', '^packages/services/test/db/github-app-manifest\.test\.ts$']
+regexes = ['a-long-piped-passphrase-42', 'rotated-secret-rotated-secret-0123456789']
