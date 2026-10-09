@@ -26,7 +26,8 @@ Prefer to do it by hand? See the manual path in [docs/self-hosting.md](docs/self
 - [Import guide](docs/import.md): CSV and API import options
 - [Architecture](docs/architecture.md): runtime, packages, and implementation deviations
 - [Self-hosting](docs/self-hosting.md): deployment and operations
-- [Release verification](docs/release.md): image, SBOM, signing, and npm dry run
+- [Release verification](docs/release.md): image, SBOM, signing, and attestation
+- [Security policy](SECURITY.md): reporting a vulnerability, supported versions, operator hardening
 - [Agent guide](docs/agents.md): MCP tools and agent usage
 - [Specification](SPEC.md): product and engineering requirements
 

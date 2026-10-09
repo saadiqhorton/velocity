@@ -19,7 +19,7 @@ Scope: SPEC §7.1, the production HTTP and WebSocket entry points, authenticatio
 - **Uploads:** The allowlist, size cap, magic-byte checks for images/PDF/ZIP, image re-encoding for PNG/JPEG/WebP, and optional ClamAV path were inspected. The scanner fails uploads closed when configured and unavailable. GIF and video are not re-encoded; ClamAV remains optional, so deployments without it do not have malware scanning.
 - **Markdown:** Server sanitization escapes raw HTML and neutralizes unsafe destinations. Browser rendering also uses DOMPurify. The SPA CSP allows same-origin scripts, nonce-bearing styles, and no object embedding or framing.
 - **GitHub intake:** The receiver checks HMAC-SHA256 against the raw body before parsing or enqueueing, limits body size, and deduplicates delivery IDs. GitHub app credentials are read from the environment; installation tokens are minted per call. Outbound webhook secrets are encrypted using AES-256-GCM under an app-secret-derived key.
-- **MCP HTTP:** The route is disabled by default. When enabled, it requires a dedicated bearer token and a personal API key, binds sessions to that key, and executes tools through the GraphQL auth and service-permission path.
+- **MCP HTTP:** The route is enabled by default (`MCP_HTTP_ENABLED=0` disables it) and requires a personal API key. When `MCP_HTTP_TOKEN` is set it is also required as the bearer token. Sessions bind to that key and tools execute through the GraphQL auth and service-permission path.
 
 ## Commands run
 

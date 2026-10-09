@@ -51,7 +51,7 @@ curl -fsSL <url>/install.sh | sudo sh -s -- --domain tracker.example.com --yes
 | `--yes` | never ask a question; accept defaults (installs Docker if missing) |
 | `--no-start` / `VELOCITY_NO_START` | prepare files and `.env`, do not start |
 | `VELOCITY_HOME` | install directory (default `/opt/velocity`) |
-| `VELOCITY_REPO`, `VELOCITY_REF` | GitHub `owner/repo` and branch/tag to download (default `saadiqhorton/velocity`, `main`) |
+| `VELOCITY_REPO`, `VELOCITY_REF` | GitHub `owner/repo` and branch/tag to download (default `saadiqhorton/velocity`, the newest published release tag) |
 | `VELOCITY_SOURCE` | copy from a local checkout instead of downloading (builds the image locally) |
 | `VELOCITY_HTTP_PORT`, `VELOCITY_HTTPS_PORT` | host ports (default 80 / 443) |
 | `VELOCITY_BIN_DIR` | where the `velocity` command is installed (default `/usr/local/bin`) |

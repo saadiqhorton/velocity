@@ -11,7 +11,7 @@ x-app-common: &app-common
     context: .
     args:
       VERSION: ${VELOCITY_VERSION:-dev}
-  image: ${VELOCITY_IMAGE:-ghcr.io/saadiqhorton/velocity:latest}
+  image: ${VELOCITY_IMAGE:-ghcr.io/saadiqhorton/velocity:1.2.2}
   env_file: .env
   user: "10001:10001"
   read_only: true
@@ -107,7 +107,7 @@ services:
   # Upload virus scanning. Also set CLAMAV_HOST=clamav (and optionally
   # CLAMAV_PORT=3310) in .env, then restart `app`.
   clamav:
-    image: clamav/clamav:stable
+    image: clamav/clamav:1.5.4
     profiles: ["clamav"]
     restart: unless-stopped
     volumes:

@@ -8,9 +8,13 @@
 #           --no-start        prepare everything but do not start containers
 #           --help
 # Environment: VELOCITY_DOMAIN, VELOCITY_HOME (/opt/velocity), VELOCITY_REPO (saadiqhorton/velocity),
-#   VELOCITY_REF (main), VELOCITY_SOURCE (local checkout to copy instead of downloading),
-#   VELOCITY_HTTP_PORT (80), VELOCITY_HTTPS_PORT (443), VELOCITY_NO_START, VELOCITY_BIN_DIR (/usr/local/bin),
-#   VELOCITY_WAIT_SECONDS (300).
+#   VELOCITY_REF (newest published release tag), VELOCITY_SOURCE (local checkout to copy instead of
+#   downloading), VELOCITY_HTTP_PORT (80), VELOCITY_HTTPS_PORT (443), VELOCITY_NO_START,
+#   VELOCITY_BIN_DIR (/usr/local/bin), VELOCITY_WAIT_SECONDS (300), VELOCITY_PIN_DIGEST (1).
+#
+# Integrity: the release is taken from a published release tag rather than a moving branch, and the
+# app image is pinned to the SHA-256 digest of that release's signed image. VELOCITY_PIN_DIGEST=0
+# skips the digest pin; VELOCITY_REF=<tag|branch> overrides what is installed.
 #
 # Safe to re-run: it upgrades in place and never overwrites an existing .env.
 
@@ -18,8 +22,9 @@ set -eu
 
 VELOCITY_HOME="${VELOCITY_HOME:-/opt/velocity}"
 VELOCITY_REPO="${VELOCITY_REPO:-saadiqhorton/velocity}"
-VELOCITY_REF="${VELOCITY_REF:-main}"
+VELOCITY_REF="${VELOCITY_REF:-}"   # empty: resolve the newest published release tag
 VELOCITY_SOURCE="${VELOCITY_SOURCE:-}"
+VELOCITY_PIN_DIGEST="${VELOCITY_PIN_DIGEST:-1}"
 VELOCITY_HTTP_PORT="${VELOCITY_HTTP_PORT:-80}"
 VELOCITY_HTTPS_PORT="${VELOCITY_HTTPS_PORT:-443}"
 BIN_DIR_GIVEN="${VELOCITY_BIN_DIR:-}"
@@ -29,7 +34,6 @@ VELOCITY_WAIT_SECONDS="${VELOCITY_WAIT_SECONDS:-300}"
 DOMAIN="${VELOCITY_DOMAIN:-}"
 ASSUME_YES=0
 NO_START="${VELOCITY_NO_START:-}"
-ORIG_ARGS="$*"
 
 if [ -t 1 ]; then
   B='\033[1m'; G='\033[32m'; Y='\033[33m'; R='\033[31m'; N='\033[0m'
@@ -128,6 +132,79 @@ port_in_use() {
 
 dc() { docker compose --project-directory "$VELOCITY_HOME" -f "$VELOCITY_HOME/docker-compose.yml" "$@"; }
 
+# Newest published release tag, so an install (and `velocity update`) lands on a tag rather than a
+# moving branch. Falls back to main, with a warning, when the GitHub API is unreachable.
+latest_release_ref() {
+  tag=$(curl -fsSL --max-time 15 "https://api.github.com/repos/$VELOCITY_REPO/releases/latest" 2>/dev/null \
+        | sed -n 's/.*"tag_name" *: *"\([^"]*\)".*/\1/p' | head -n1 || true)
+  if [ -z "$tag" ]; then
+    warn "Could not read the newest release from the GitHub API; installing from 'main' instead."
+    printf 'main'
+  else
+    printf '%s' "$tag"
+  fi
+}
+
+# Image tag for a release ref: v1.2.2 -> 1.2.2. Empty when the ref is not a version (a branch).
+image_tag_for_ref() {
+  case "$1" in
+    v[0-9]*.[0-9]*) printf '%s' "${1#v}" ;;
+    [0-9]*.[0-9]*)  printf '%s' "$1" ;;
+    *)              printf '' ;;
+  esac
+}
+
+# Digest of a published image ref, or empty. Best effort: a miss falls back to the version tag.
+resolve_image_digest() { # ghcr.io/<owner>/<repo>:<tag>
+  spec=$1
+  tag=${spec##*:}
+  repo_path=${spec%:*}
+  case "$repo_path" in ghcr.io/*) ;; *) return 0 ;; esac
+  path=${repo_path#ghcr.io/}
+  token=$(curl -fsSL --max-time 15 \
+    "https://ghcr.io/token?scope=repository:$path:pull&service=ghcr.io" 2>/dev/null \
+    | sed -n 's/.*"token":"\([^"]*\)".*/\1/p' | head -n1 || true)
+  if [ -z "$token" ]; then return 0; fi
+  curl -fsSLI --max-time 15 -H "Authorization: Bearer $token" \
+    -H "Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json" \
+    "https://ghcr.io/v2/$path/manifests/$tag" 2>/dev/null \
+    | tr -d '\r' | sed -n 's/^[Dd]ocker-[Cc]ontent-[Dd]igest: *//p' | head -n1 || true
+}
+
+# Pin the app image in .env for a release install. A local-source install builds from this checkout
+# and needs no pin. An explicit value of your own is never overwritten; the floating :latest default
+# is.
+write_image_pin() {
+  if [ -n "$VELOCITY_SOURCE" ]; then return 0; fi
+  tag=$(image_tag_for_ref "$VELOCITY_REF")
+  if [ -z "$tag" ]; then
+    warn "VELOCITY_REF=$VELOCITY_REF is not a release tag; the app image is not pinned to a version."
+    return 0
+  fi
+  ref="ghcr.io/$VELOCITY_REPO:$tag"
+  if [ "$VELOCITY_PIN_DIGEST" = 1 ]; then
+    digest=$(resolve_image_digest "$ref" || true)
+    if [ -n "$digest" ]; then
+      ref="ghcr.io/$VELOCITY_REPO@$digest"
+      ok "Pinned the app image to $digest"
+    else
+      warn "Could not read the image digest for $tag; pinning the version tag instead."
+    fi
+  fi
+  current=$(env_value VELOCITY_IMAGE)
+  if [ "$current" = "$ref" ]; then return 0; fi
+  if [ -n "$current" ]; then
+    case "$current" in
+      *:latest) warn "Replacing VELOCITY_IMAGE=$current with the pinned $ref" ;;
+      *) say "  Keeping your VELOCITY_IMAGE=$current (delete the line to let the installer pin it)."
+         return 0 ;;
+    esac
+  fi
+  grep -v '^VELOCITY_IMAGE=' "$envf" > "$envf.pin.tmp" 2>/dev/null || : > "$envf.pin.tmp"
+  printf 'VELOCITY_IMAGE=%s\n' "$ref" >> "$envf.pin.tmp"
+  chmod 600 "$envf.pin.tmp" && mv -f "$envf.pin.tmp" "$envf"
+}
+
 env_value() { # key -> value from .env
   [ -f "$VELOCITY_HOME/.env" ] || return 0
   sed -n "s/^$1=//p" "$VELOCITY_HOME/.env" | tail -n1
@@ -143,7 +220,7 @@ ensure_privileges() {
   fi
   if have sudo && [ -f "$0" ] && [ "${0##*/}" != sh ]; then
     say "Velocity needs administrator rights; re-running with sudo..."
-    exec sudo -E sh "$0" $ORIG_ARGS
+    exec sudo -E sh "$0" "$@"
   fi
   die "This installer needs root. Re-run it as root, for example:
     curl -fsSL <installer-url> | sudo sh"
@@ -198,8 +275,16 @@ fetch_release() {
     ok "Copied files from $VELOCITY_SOURCE"
   else
     url="https://codeload.github.com/$VELOCITY_REPO/tar.gz/$VELOCITY_REF"
-    curl -fsSL "$url" | tar -xz -C "$stage" --strip-components=1 \
-      || die "Could not download $url. Check the server's internet access, and that VELOCITY_REPO ($VELOCITY_REPO) and VELOCITY_REF ($VELOCITY_REF) exist."
+    archive=$(mktemp)
+    if ! curl -fsSL "$url" -o "$archive"; then
+      rm -f "$archive"
+      die "Could not download $url. Check the server's internet access, and that VELOCITY_REPO ($VELOCITY_REPO) and VELOCITY_REF ($VELOCITY_REF) exist."
+    fi
+    if ! tar -xzf "$archive" -C "$stage" --strip-components=1; then
+      rm -f "$archive"
+      die "The archive downloaded from $url could not be extracted."
+    fi
+    rm -f "$archive"
     ok "Downloaded $VELOCITY_REPO@$VELOCITY_REF"
   fi
   [ -f "$stage/docker-compose.yml" ] || die "The downloaded release has no docker-compose.yml."
@@ -254,6 +339,7 @@ write_env() {
       ok "Backups will now be stored in $VELOCITY_HOME/backups (older backups stay in the app_data Docker volume)"
     fi
     persist_bin_dir
+    write_image_pin
     return 0
   fi
   FIRST_INSTALL=1
@@ -298,6 +384,7 @@ EOF
   chmod 600 "$envf"
   persist_bin_dir
   ok "Wrote $envf (private, mode 600)"
+  write_image_pin
 }
 
 make_backup_dir() { # plain-file backups on the host, owned by the container user (10001)
@@ -359,6 +446,10 @@ main() {
   detect_platform
   ensure_privileges
   ensure_docker
+  if [ -z "$VELOCITY_REF" ] && [ -z "$VELOCITY_SOURCE" ]; then
+    VELOCITY_REF=$(latest_release_ref)
+    ok "Release to install: $VELOCITY_REF"
+  fi
   fetch_release
   [ -n "$NO_START" ] || check_ports
   write_env

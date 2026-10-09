@@ -57,6 +57,25 @@ check_helpers() (
 )
 t "helpers: domain/port validation and random_hex" check_helpers
 
+pin_image_helper() (
+  VELOCITY_INSTALL_SOURCED=1; export VELOCITY_INSTALL_SOURCED
+  . "$here/install.sh"
+  [ "$(image_tag_for_ref v1.2.2)" = "1.2.2" ] || exit 1
+  [ "$(image_tag_for_ref 1.2.2)" = "1.2.2" ] || exit 1
+  [ -z "$(image_tag_for_ref main)" ] || exit 1
+  VELOCITY_HOME="$work/pinhome"; export VELOCITY_HOME
+  mkdir -p "$VELOCITY_HOME"
+  envf="$VELOCITY_HOME/.env"; export envf
+  printf 'POSTGRES_PASSWORD=x\nVELOCITY_IMAGE=ghcr.io/saadiqhorton/velocity:latest\n' > "$envf"
+  VELOCITY_REPO=saadiqhorton/velocity VELOCITY_REF=v1.2.2 VELOCITY_PIN_DIGEST=0 write_image_pin >/dev/null 2>&1 || exit 1
+  grep -qx 'VELOCITY_IMAGE=ghcr.io/saadiqhorton/velocity:1.2.2' "$envf" || exit 1
+  [ "$(stat -c %a "$envf")" = 600 ] || exit 1
+  printf 'VELOCITY_IMAGE=ghcr.io/example/custom:9\n' > "$envf"
+  VELOCITY_REPO=saadiqhorton/velocity VELOCITY_REF=v1.2.2 VELOCITY_PIN_DIGEST=0 write_image_pin >/dev/null 2>&1 || exit 1
+  grep -qx 'VELOCITY_IMAGE=ghcr.io/example/custom:9' "$envf"
+)
+t "image pin: floating latest is replaced, an explicit image is kept" pin_image_helper
+
 run_install() { # extra args...
   env PATH="$work/bin:$PATH" VELOCITY_HOME="$work/home" VELOCITY_SOURCE="$work/src" VELOCITY_BIN_DIR="$work/binout" \
     VELOCITY_NO_START=1 VELOCITY_HTTP_PORT=8088 VELOCITY_HTTPS_PORT=8443 sh "$here/install.sh" "$@"
