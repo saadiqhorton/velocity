@@ -4,7 +4,7 @@
 
 ## Live continuation checkpoint — 2026-10-06
 
-This section records the v1.2 follow-up, **committed in `3d5696e`** (2026-10-05) after the v1.2 audit. The older status and checklists below describe earlier checkpoints; use this section first. Do not commit without an explicit owner request (§0).
+This section records the v1.2 follow-up, **committed in `1f4ee40`** (2026-10-05) after the v1.2 audit. The older status and checklists below describe earlier checkpoints; use this section first. Do not commit without an explicit owner request (§0).
 
 - **Owner decisions:** Keep the working name Velocity for this release. A linked PR opening leaves issue status unchanged. Old issue identifiers must continue to resolve after a team-key rename.
 - **Source of truth while working:** verify behavior against the current code, generated schema, migrations and focused tests before editing. Historical roadmap and handoff claims are context, not proof; do not infer that a path is complete or broken solely from those notes.
@@ -12,19 +12,19 @@ This section records the v1.2 follow-up, **committed in `3d5696e`** (2026-10-05)
 - **S2 contract:** `viewer.preferences` is nullable until a user saves; it contains `codingTools` and `promptInstructions`. `updatePreferences(input)` saves both for the viewer. The web app migrates the legacy `velocity.codingTools.v1` browser value once, then uses the server value and prevents one account's settings from leaking to another on the same browser.
 - **Integration follow-up (2026-10-06):** (1) the generated `packages/mcp-tools/src/guide.ts` was stale against `docs/agents.md` (its sync test failed on the integrated tree) — regenerated with `node packages/mcp-tools/scripts/sync-guide.mjs`. (2) `apps/server` imported `apps/web/src/gql/persisted-documents.json`, breaking the "apps never import apps" rule and the Docker server-build stage. The manifest now lives in the shared `@velocity/graphql` package and is copied there by `apps/web/scripts/sync-persisted.mjs` (run by web `codegen` and `build`); the server imports `@velocity/graphql/persisted-documents.json`, and a regression test (`apps/server/test/persisted-operations.test.ts`) checks every shipped hash and `__typename`. (3) The visual gallery capture flaked in the Playwright image (first `fullPage` screenshot ~4px short for a 5270px page); `e2e/0-visual.spec.ts` now waits for `document.fonts.ready` and takes warm-up full-page captures until the height is stable. (4) `Attachments` shows the existing `noAttachments` copy when empty; the prompt relation sort is stable for unknown relation types.
 - **Verification (integrated tree, 2026-10-06):** `pnpm exec turbo run typecheck --force` 13/13; whole-repo `pnpm test` 13/13; `pnpm build` 5/5 (web bundle 186.1 KB gzip, budget 350); `eslint .` + `check-hex` + `check-legal` + `node --test scripts/*.test.mjs` (8/8) clean. Browser: host Chromium E2E `--grep-invert @visual` **87 passed** (slot 6); Docker WebKit **87 passed, 8 expected visual skips** (slot 7); Docker visual **11 passed** (slot 8). Deploy: fresh `docker build` of the integrated tree + Compose smoke (`scripts/deploy/smoke.mjs`) passed (setup → team → issue, CSRF/auth rejection, readiness, metrics protection, SPA/assets); `scripts/deploy/upgrade-smoke.sh` from `b622999` passed (issue preserved across migrations, automatic pre-migration dump validated, restore into a fresh DB booted and migrated).
-- **Remaining external release checks:** the upgrade smoke was verified locally against Docker on this host, not yet on a clean CI runner. Real GitHub App installation and live Claude Desktop/Cursor MCP client checks still need the owner's credentials/clients (R7). No release tag or publication has been made.
+- **Remaining external release checks:** the upgrade smoke was verified locally against Docker on this host, not yet on a clean CI runner. Real GitHub App installation and live Claude Desktop/Cursor MCP client checks still need the owner's credentials/clients (R7). Releases v1.2.0–v1.2.2 are published from `main` with signed GHCR images and SBOMs. A history rewrite on 2026-10-09 (removing the internal planning archive and the owner's personal email from commit metadata) changed every commit SHA, so the SHAs cited in this file are the rewritten ones; pre-rewrite hashes no longer resolve.
 - **In-app GitHub App setup (2026-10-06):** owner-only manifest flow (`GithubService.beginManifest/confirmManifest/saveAppFromManifest/removeApp`, HMAC state with 1 h TTL, migration 0007 `github_app` singleton with AES-GCM-encrypted private key/webhook secret/client secret, GraphQL `beginGithubAppSetup`/`confirmGithubAppSetup`/`removeGithubApp`, `GithubSettings.tsx` panel, CSP `form-action 'self' https://github.com`). DB row overrides `GITHUB_*` env; removal falls back to env. Docs: SPEC §6.5.4, `docs/self-hosting.md` "GitHub integration". Verified by code read only in this doc pass; E2E coverage in `integrations.spec.ts` is in progress. **Fixed since:** the post-install redirect (`handleGithubSetup`) now lands on `/settings/github`, and `resolvedConfig` catches `APP_SECRET` decrypt failure (warns, falls back to env; `setupStatus.storedAppUnreadable`; `removeApp` works on an unreadable row). **Remaining follow-up:** `storedAppUnreadable` is not exposed via GraphQL/UI yet, so the owner sees no notice. **Needs owner:** a real end-to-end run against github.com with a publicly reachable `APP_URL` (create App, install, webhook delivery, backfill).
-- **One-line install + `velocity` host CLI (2026-10-05):** `scripts/install/install.sh` (POSIX sh, `curl … | sudo sh`, generates `.env`, pull-or-build, waits healthy) and `scripts/install/velocity` (status/logs/update/backup/backups/restore/domain/reset-password/users/doctor/config/uninstall); tests in `scripts/install/test.sh`. Server: `APP_SECRET` auto-generated to `APP_SECRET_FILE`, `APP_URL` derived from `CADDY_DOMAIN`, nightly pg-boss backups (`BACKUP_*`, 03:00 UTC, 14 days, files 0600), `dist/admin-cli.js` (reset-password/backup/backups/list-users). Installer installs keep backups on the host in `$VELOCITY_HOME/backups`. Verified by a full isolated lifecycle and `upgrade-smoke.sh`. Not verifiable here: real ACME/DNS, Docker auto-install, pulling a published image (none published yet, so installs build from source).
+- **One-line install + `velocity` host CLI (2026-10-05):** `scripts/install/install.sh` (POSIX sh, `curl … | sudo sh`, generates `.env`, pull-or-build, waits healthy) and `scripts/install/velocity` (status/logs/update/backup/backups/restore/domain/reset-password/users/doctor/config/uninstall); tests in `scripts/install/test.sh`. Server: `APP_SECRET` auto-generated to `APP_SECRET_FILE`, `APP_URL` derived from `CADDY_DOMAIN`, nightly pg-boss backups (`BACKUP_*`, 03:00 UTC, 14 days, files 0600), `dist/admin-cli.js` (reset-password/backup/backups/list-users). Installer installs keep backups on the host in `$VELOCITY_HOME/backups`. Verified by a full isolated lifecycle and `upgrade-smoke.sh`. Not verifiable here: real ACME/DNS, Docker auto-install, pulling the published image (images are published to GHCR).
 - **Pickup sequence if interrupted:** inspect `git status --short`; the integrated tree passes every gate above. Re-run `pnpm --filter @velocity/web codegen` after any GraphQL change (it also re-syncs the persisted manifest), keep `docs/agents.md` and `packages/mcp-tools/src/guide.ts` in sync, and re-review the full diff before any owner-requested commit.
 
 Last committed checkpoint: 2026-10-04 (evening), after the design pass. The commits below are on `master`:
 
 | Commit | What |
 |---|---|
-| `4a11dc8` | Design pass: light/responsive fixes, visual baselines |
-| `2531f85` | Final verification (Lane F): WebKit green, board/reconnect fixes, Docker deploy verified |
-| `a0325f7` | Checkpoint: complete web app, backend hardening, API/server tests |
-| `b622999` | Baseline: backend, UI library, tokens, deploy scaffolding |
+| `84df57e` | Design pass: light/responsive fixes, visual baselines |
+| `754b467` | Final verification (Lane F): WebKit green, board/reconnect fixes, Docker deploy verified |
+| `3d78f16` | Checkpoint: complete web app, backend hardening, API/server tests |
+| `9cf440d` | Baseline: backend, UI library, tokens, deploy scaffolding |
 
 **Where things stand:** v1.0 feature work is done and verified. Every screen and the backend pass all gates on Chromium and WebKit, and `docker compose up` gets through the setup wizard to a first issue.
 
@@ -34,9 +34,6 @@ Last committed checkpoint: 2026-10-04 (evening), after the design pass. The comm
 
 Deeper context:
 - `apps/web/WEB_PROGRESS.md`: web architecture map, QA findings F1–F10, the design queue.
-- `docs/archive/DIAGNOSIS.md`: why the WebKit runs stalled, and what fixed them.
-- `docs/archive/CODEX_WEB_QA.md`: QA lanes A–F, all done.
-- `docs/archive/HANDOFF.CODEX.md`: backend performance work.
 
 ---
 
@@ -185,17 +182,17 @@ Each item has an owner, its paths, and how to verify it. Log progress in `apps/w
 **Status 2026-10-05:** Security review and high-severity fixes are in `docs/security-review.md`. Full-history gitleaks is clean. `pnpm audit --audit-level high` passes with one exact GHSA exception for unpatched, development-only `braces`; production audit has no high/critical findings. Full typecheck, tests and lint pass. Commit remains for the owner.
 
 ### R2 — Upgrade path and backups · Codex · SPEC §5.9, §8.2 ("N-1 compatibility")
-- Build an image from `b622999` (or `a0325f7`) and run it with compose. Create data, then switch to the current image (`docker compose pull && up -d` semantics). Migrations must apply cleanly and the data must survive.
+- Build an image from `9cf440d` (or `3d78f16`) and run it with compose. Create data, then switch to the current image (`docker compose pull && up -d` semantics). Migrations must apply cleanly and the data must survive.
 - Verify `VELOCITY_BACKUP_BEFORE_MIGRATE=1` writes a dump to `/data/backups`, and document and test a restore.
 - Run `pnpm deploy --prod --legacy` on its own.
 - Update `docs/self-hosting.md`.
 - **Verify:** a scripted upgrade test (e.g. `scripts/deploy/upgrade-smoke.sh`) passes, and a restore is demonstrated.
 
-**Status 2026-10-05:** `scripts/deploy/upgrade-smoke.sh` passed from `b622999`: an issue survived migration 3→4, the automatic dump was validated, and restore into a fresh DB survived startup migration. Standalone `pnpm deploy --prod --legacy` passed after fixing missing runtime dependency declarations. `docs/self-hosting.md` has the upgrade and restore steps.
+**Status 2026-10-05:** `scripts/deploy/upgrade-smoke.sh` passed from `9cf440d`: an issue survived migration 3→4, the automatic dump was validated, and restore into a fresh DB survived startup migration. Standalone `pnpm deploy --prod --legacy` passed after fixing missing runtime dependency declarations. `docs/self-hosting.md` has the upgrade and restore steps.
 
 ### R3 — Load test re-run · Codex · SPEC §4.16, §7.3
 - Re-run `scripts/perf/mutation-storm.js` (k6) against a 10k-issue DB (`velocity_perf_codex` has one; login `demo` / `correct-horse-battery-staple`) after the perf fixes, plus `issues-list.js` with 25 VUs.
-- Interleave runs; laptop clock state skews results (see `docs/archive/HANDOFF.CODEX.md` §1).
+- Interleave runs; laptop clock state skews results.
 - **Verify:** budgets met or regressions fixed; numbers recorded in `scripts/perf/README.md`.
 
 **Status 2026-10-05:** Both 25-VU, three-minute k6 workloads passed their thresholds against 10,000 issues. The uncontended list rerun was p95 143.17 ms; mutation storm made 15,834 updates with zero errors. A list run during concurrent image builds was p95 188.16 ms. All values and conditions are recorded in `scripts/perf/README.md`.

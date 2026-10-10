@@ -59,4 +59,4 @@ Database-backed tests require PostgreSQL; details and current verification statu
 
 ## Project status
 
-The v1 feature set is implemented. Browser E2E runs cover Chromium and WebKit, and the Compose setup flow has been verified through first issue creation. Release hardening and checks that require owner credentials remain open; see [HANDOFF.md](HANDOFF.md) for the live checklist and test results.
+The v1 feature set is implemented. Browser E2E runs cover Chromium and WebKit, and the Compose setup flow has been verified through first issue creation. Release hardening is in place (signed images, an SBOM, and a full CI gate before publication); checks that require owner credentials remain open. See [HANDOFF.md](HANDOFF.md) for the live checklist and test results.

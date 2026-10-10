@@ -191,7 +191,7 @@ instead. No public release image has been verified yet. Migrations run automatic
 boot under a Postgres advisory lock. A failed backup prevents the app from starting;
 inspect `docker compose logs app` before retrying.
 
-The repository's `scripts/deploy/upgrade-smoke.sh` checks the upgrade from `b622999`
+The repository's `scripts/deploy/upgrade-smoke.sh` checks the upgrade from `9cf440d`
 to the current checkout using a disposable Compose project. It creates an issue on the
 old image, checks that the new image migrates and preserves it, validates the automatic
 pre-migration dump in `/data/backups`, restores that dump into another database, and
