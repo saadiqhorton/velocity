@@ -4,15 +4,17 @@ Pushing a `v*` tag starts [CI](../.github/workflows/ci.yml). Its first job, `gat
 
 [The release workflow](../.github/workflows/release.yml) builds natively per platform: `build` runs `linux/amd64` on `ubuntu-latest` and `linux/arm64` on `ubuntu-24.04-arm` (no QEMU), each pushing an image by digest. `merge` combines the digests into one tagged manifest list on GHCR (`{{version}}`, `{{major}}.{{minor}}`, and `latest` for non-prerelease tags), generates an SPDX JSON SBOM, signs the merged digest and attaches the SBOM attestation with Cosign, then creates or updates the GitHub release with the SBOM asset. The stdio MCP client ships inside the image and is served at `/mcp/client-<hash>.tgz`; nothing is published to npm.
 
-## Manual upgrade gate
+## Upgrade gate
 
-Before pushing a release tag, run the upgrade and restore check from a clean checkout with full Git history and Docker access:
+The upgrade and restore check runs on a clean CI runner every Monday and on demand through the [Upgrade gate](../.github/workflows/upgrade-gate.yml) workflow. That job needs full Git history — the script archives the pinned baseline commit out of the clone — and Docker for the two image builds, which is why it is separate from `ci.yml` and takes around half an hour. First verified on a clean CI runner on 2026-10-10.
+
+Run it from a clean checkout before pushing a release tag as well:
 
 ```sh
 OLD_REF=9cf440d50d657b79cf1ebf26d56cb1925c0950bc scripts/deploy/upgrade-smoke.sh
 ```
 
-The script builds the pinned baseline and current images, verifies an existing issue survives migration, checks the pre-migration dump, restores it into a separate database, and boots the current image against that restore. It reads the expected migration counts from each checkout's migration journal. This remains a manual gate because the historical checkout's dependency resolution and two image builds have not been verified on a clean CI runner.
+The script builds the pinned baseline and current images, verifies an existing issue survives migration, checks the pre-migration dump, restores it into a separate database, and boots the current image against that restore. It reads the expected migration counts from each checkout's migration journal.
 
 ## Local dry run (2026-10-05)
 
