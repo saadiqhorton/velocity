@@ -26,11 +26,21 @@ The release steps were exercised without registry or npm credentials:
 
 ## Published releases
 
-`v1.2.0` through `v1.2.3` are published from `main`, and each tag run was verified afterwards:
+`v1.2.0` through `v1.2.4` are published from `main`, and each tag run was verified afterwards:
 
 - `docker buildx imagetools inspect ghcr.io/saadiqhorton/velocity:<version>` returns an OCI image index containing `linux/amd64`, `linux/arm64` and their provenance manifests.
 - The GitHub release carries `sbom.spdx.json` as an asset.
 - The registry holds the Cosign signature and the SBOM attestation for the published index digest, as `sha256-<digest>.sig` and `sha256-<digest>.att`.
+
+`v1.2.4` (2026-10-10) published index digest `sha256:3ac74b40464ebb948ff8f17f4eab879a19fcb2d84ed03f1ba73503c9ec1b4fcb`. Signing this repository's images keyless, the verification a user runs is:
+
+```sh
+cosign verify ghcr.io/saadiqhorton/velocity@sha256:3ac74b40464ebb948ff8f17f4eab879a19fcb2d84ed03f1ba73503c9ec1b4fcb \
+  --certificate-identity-regexp '^https://github.com/saadiqhorton/velocity/' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+```
+
+It reports the signing certificate's subject as `https://github.com/saadiqhorton/velocity/.github/workflows/release.yml@refs/tags/v1.2.4`, the GitHub OIDC issuer, and `githubWorkflowSha` `b004ca4db044ef0b7d15b48587fb62b621da392d`, which is the tagged commit. `cosign verify-attestation --type spdxjson` against the same digest passes and returns the SPDX document, and an anonymous pull of both the index and the `linux/amd64` manifest returns `200`. The upgrade and restore gate passed on `b004ca4` before the tag was cut.
 - The package is publicly readable: an anonymous `ghcr.io` pull token lists the tags and fetches the manifest, so `docker pull` needs no credentials.
 
 The 2026-10-05 dry run above shows the build, SBOM and signing steps work without registry credentials; the tag runs exercised the real registry push, keyless OIDC signing and publication.
