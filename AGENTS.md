@@ -14,7 +14,6 @@ This block is written and re-added by `turbo` before repository-scoped commands 
 Velocity is a pnpm/Turbo TypeScript monorepo (Node 22) for a self-hostable Linear-style issue tracker: a GraphQL API + SPA, a public API, an MCP server, and importers. Orient before changing anything:
 
 - `SPEC.md` — source of truth (product + engineering requirements).
-- `HANDOFF.md` — live state, ownership, and the "Gotchas already paid for" list.
 - `CONTRIBUTING.md` — rules and dev setup.
 - `docs/architecture.md` — runtime, package boundaries, recorded deviations.
 
@@ -58,10 +57,10 @@ schema <- events <- services <- graphql <- apps      ui <- tokens
 
 ## Hard rules
 
-- **Do not commit, branch, amend, or push unless the repo owner explicitly asks.** This repo is under active multi-agent work; check `HANDOFF.md`.
+- **Do not commit, branch, amend, or push unless the repo owner explicitly asks.** This repo is under active multi-agent work.
 - **Clean-room (SPEC §1.5):** no "Linear" in `apps/web` user-facing copy, no Linear assets. Comment phrases `Linear-style`/`Linear-parity`/`Linear-like`/`Linear's public API` are allowed; the importer is the exception. `check-legal` enforces this.
 - **Design tokens only:** style with semantic ADS tokens (`--ds-*`); no hex outside `packages/tokens` (`check-hex`), no gradients/blur/glass, radius ≤ 12px, no top bar.
-- **Design boundary:** non-design agents don't restyle `apps/web` or touch `packages/ui`/`packages/tokens`; log visual issues in `apps/web/WEB_PROGRESS.md`.
+- **Design boundary:** non-design agents don't restyle `apps/web` or touch `packages/ui`/`packages/tokens`; report visual issues as separate changes.
 - Every fix (especially a bug fix) ships a regression test.
 
 ## E2E / visual testing

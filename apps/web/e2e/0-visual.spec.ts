@@ -1,5 +1,5 @@
 // Visual snapshots (WP9). Chromium only; the design owner generates and approves the baselines
-// (HANDOFF §0). Until baselines exist this spec skips, so it never fails CI (and a normal run never
+// Until baselines exist this spec skips, so it never fails CI (and a normal run never
 // writes unapproved baselines). Font rendering differs between hosts, so the baselines are captured
 // and checked only inside the Playwright image (CI job `visual`, tag `@visual`):
 //   apps/web/scripts/visual-docker.sh <slot> --update      # regenerate (design owner)

@@ -5,7 +5,7 @@ import tailwindcss from '@tailwindcss/vite';
 import { fileURLToPath } from 'node:url';
 import { PRODUCT_NAME } from '@velocity/ui/brand';
 
-/** API origin for the dev proxy (the API server runs separately; see WEB_PROGRESS.md). */
+/** API origin for the dev proxy (the API server runs separately). */
 const API = process.env.VELOCITY_API_URL ?? 'http://localhost:3100';
 
 /** The product name lives in one constant (BRANDING.md); inject it into index.html. */

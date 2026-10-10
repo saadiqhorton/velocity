@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Runs the visual baselines (e2e/0-visual.spec.ts, Chromium) inside the official Playwright image,
 # the same image CI's `visual` job uses, so local captures and CI render fonts identically.
-# Baselines are only ever (re)generated through this script (HANDOFF §5).
+# Baselines are only ever (re)generated through this script.
 #
 # Usage (from anywhere):
 #   apps/web/scripts/visual-docker.sh <slot 1-9>              # compare against the baselines

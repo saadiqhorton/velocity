@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Design verification screenshots (WEB_PROGRESS.md "Design verification").
+// Design verification screenshots.
 // Usage: node scripts/screenshots.mjs [baseUrl] [--only=name,name] [--sizes=1440x900,1024x768] [--themes=dark,light]
 //        node scripts/screenshots.mjs --pages="settings-labels:/settings/labels,project:/project/<id>" [--out=dir] [--wait=selector]
 //   --pages captures only the given name:path pairs (signed in), skipping the built-in flows.

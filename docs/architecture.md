@@ -111,7 +111,7 @@ packages/ui components + apps/web/src/styles/app.css (@import tailwindcss, token
 
 ### Design boundary and visual baselines
 
-- The design owner owns `packages/ui`, `packages/tokens`, the visual layer of `apps/web` and the baselines (`HANDOFF.md` §0). Other contributors fix behavior without restyling, and log visual issues in the Design review queue in `apps/web/WEB_PROGRESS.md`.
+- The design owner owns `packages/ui`, `packages/tokens`, the visual layer of `apps/web` and the visual baselines. Other contributors fix behavior without restyling and report visual issues as separate changes.
 - `apps/web/e2e/0-visual.spec.ts` snapshots the component gallery and the shell (`/team/ENG/active`) in both themes at 1440×900 and 1024×768, on Chromium only. The baselines are in `e2e/0-visual.spec.ts-snapshots/` and the tolerance is `maxDiffPixelRatio` 0.002.
 - The shell shots compare real content: the E2E seed runs `seed-cli --deterministic`, and the spec's `0-` prefix makes it the first file to run, before any spec adds randomly named data. Only relative times and absolute dates are masked, because they follow the run date.
 - Without approved baselines the spec skips. A normal run never writes baselines.

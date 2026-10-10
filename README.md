@@ -55,8 +55,8 @@ pnpm test
 pnpm --filter @velocity/server seed -- --issues 10000
 ```
 
-Database-backed tests require PostgreSQL; details and current verification status are in [HANDOFF.md](HANDOFF.md). No test or build result is implied by these instructions.
+Database-backed tests require PostgreSQL; see [CONTRIBUTING.md](CONTRIBUTING.md) for the container and setup. No test or build result is implied by these instructions.
 
 ## Project status
 
-The v1 feature set is implemented. Browser E2E runs cover Chromium and WebKit, and the Compose setup flow has been verified through first issue creation. Release hardening is in place (signed images, an SBOM, and a full CI gate before publication); checks that require owner credentials remain open. See [HANDOFF.md](HANDOFF.md) for the live checklist and test results.
+The v1 feature set is implemented. Browser E2E runs cover Chromium and WebKit, and the Compose setup flow has been verified through first issue creation. Release hardening is in place (signed images, an SBOM, and a full CI gate before publication); checks that require owner credentials remain open. See [docs/security-review.md](docs/security-review.md) for the security checks and [docs/release.md](docs/release.md) for the release process.

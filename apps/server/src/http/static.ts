@@ -58,7 +58,7 @@ export function createStaticHandler(webDistDir: string) {
       return;
     }
     const nonce = randomBytes(16).toString('base64');
-    // `content` is the documented contract (HANDOFF §5): the app reads the per-request style nonce
+    // `content` is the documented contract: the app reads the per-request style nonce
     // from `meta[name=csp-nonce]`. `property` + `nonce` additionally let Vite's `__vitePreload`
     // helper nonce any <link> it injects at runtime. Build-emitted tags need no nonce: they are
     // same-origin files, which `'self'` already allows.
