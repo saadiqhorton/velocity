@@ -1,0 +1,53 @@
+name: Upgrade gate
+
+# The pre-tag upgrade and restore check described in docs/release.md. It needs a
+# clean checkout with full history (the baseline commit is archived straight out of
+# the clone), Docker for the two image builds, and around half an hour. It runs
+# weekly and on demand, so the migration path stays verified without adding thirty
+# minutes to every pull request.
+on:
+  schedule:
+    - cron: "0 7 * * 1"
+  workflow_dispatch:
+    inputs:
+      old_ref:
+        description: Baseline commit to upgrade from
+        required: false
+        default: 9cf440d50d657b79cf1ebf26d56cb1925c0950bc
+
+concurrency:
+  group: upgrade-gate-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: 22
+  DEFAULT_OLD_REF: 9cf440d50d657b79cf1ebf26d56cb1925c0950bc
+
+jobs:
+  upgrade:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The script archives the baseline commit out of this clone and resolves
+          # its dependencies, so a shallow clone is not enough.
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - name: Confirm the baseline commit is present
+        env:
+          OLD_REF: ${{ inputs.old_ref || env.DEFAULT_OLD_REF }}
+        run: |
+          git cat-file -e "${OLD_REF}^{commit}"
+          echo "baseline ${OLD_REF} present"
+      - name: Upgrade and restore gate
+        env:
+          OLD_REF: ${{ inputs.old_ref || env.DEFAULT_OLD_REF }}
+        run: scripts/deploy/upgrade-smoke.sh

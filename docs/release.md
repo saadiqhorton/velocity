@@ -20,6 +20,15 @@ The release steps were exercised without registry or npm credentials:
 
 - `docker buildx build --platform linux/amd64,linux/arm64 --output type=oci,dest=/tmp/velocity-release-dryrun.oci.tar --provenance=mode=max .` produced a 237 MB OCI archive. Its index contains both target architectures and their provenance manifests.
 - Syft 1.54.0 scanned each platform from that archive with `--platform linux/amd64` and `--platform linux/arm64`, producing SPDX 2.3 JSON SBOMs (537 package entries each).
-- Cosign 3.0.2 signed the OCI archive and both SBOM files as local blobs with an ephemeral key. `cosign verify-blob` returned `Verified OK` for all three. The private key was deleted after verification. Local blob signatures prove the artifact steps work; the workflow's keyless signing of a pushed image digest still needs a registry and GitHub OIDC run.
+- Cosign 3.0.2 signed the OCI archive and both SBOM files as local blobs with an ephemeral key. `cosign verify-blob` returned `Verified OK` for all three. The private key was deleted after verification. Local blob signatures prove the artifact steps work.
 
-For the final tag, the repository owner must provide GHCR package access through `GITHUB_TOKEN` and a GitHub environment that permits OIDC signing. Check the image digest, both platforms, SBOM release asset, Cosign signature and attestation after the workflow completes. The local dry run did not exercise remote pushes, keyless identity or real publication.
+## Published releases
+
+`v1.2.0` through `v1.2.3` are published from `main`, and each tag run was verified afterwards:
+
+- `docker buildx imagetools inspect ghcr.io/saadiqhorton/velocity:<version>` returns an OCI image index containing `linux/amd64`, `linux/arm64` and their provenance manifests.
+- The GitHub release carries `sbom.spdx.json` as an asset.
+- The registry holds the Cosign signature and the SBOM attestation for the published index digest, as `sha256-<digest>.sig` and `sha256-<digest>.att`.
+- The package is publicly readable: an anonymous `ghcr.io` pull token lists the tags and fetches the manifest, so `docker pull` needs no credentials.
+
+The 2026-10-05 dry run above shows the build, SBOM and signing steps work without registry credentials; the tag runs exercised the real registry push, keyless OIDC signing and publication.

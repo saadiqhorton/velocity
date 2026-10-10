@@ -6,7 +6,7 @@ const flush = () => new Promise((r) => setTimeout(r, 0));
 
 describe('isTransientNetworkError', () => {
   it('treats aborted, cancelled and offline requests as transient', () => {
-    // WebKit's wording for a fetch cancelled by navigation (DIAGNOSIS F3).
+    // WebKit's wording for a fetch cancelled by navigation.
     const cancelled = new TypeError('Fetch API cannot load http://localhost/graphql due to access control checks.');
     expect(isTransientNetworkError(cancelled)).toBe(true);
     expect(isTransientNetworkError(new ApolloError({ networkError: cancelled }))).toBe(true);
