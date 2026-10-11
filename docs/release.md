@@ -6,7 +6,7 @@ Pushing a `v*` tag starts [CI](../.github/workflows/ci.yml). Its first job, `gat
 
 ## Upgrade gate
 
-The upgrade and restore check runs on a clean CI runner every Monday and on demand through the [Upgrade gate](../.github/workflows/upgrade-gate.yml) workflow. That job needs full Git history — the script archives the pinned baseline commit out of the clone — and Docker for the two image builds, which is why it is separate from `ci.yml` and takes around half an hour. First verified on a clean CI runner on 2026-10-10.
+The upgrade and restore check runs on a clean CI runner every Monday and on demand through the [Upgrade gate](../.github/workflows/upgrade-gate.yml) workflow. That job needs full Git history — the script archives the pinned baseline commit out of the clone — and Docker for the two image builds, which is why it is separate from `ci.yml`. A measured CI run takes about two minutes (2m31s on 2026-10-10, 2m14s on 2026-10-11). First verified on a clean CI runner on 2026-10-10.
 
 Run it from a clean checkout before pushing a release tag as well:
 
@@ -26,7 +26,7 @@ The release steps were exercised without registry or npm credentials:
 
 ## Published releases
 
-`v1.2.0` through `v1.2.4` are published from `main`, and each tag run was verified afterwards:
+`v1.2.0` through `v1.2.5` are published from `main`, and each tag run was verified afterwards:
 
 - `docker buildx imagetools inspect ghcr.io/saadiqhorton/velocity:<version>` returns an OCI image index containing `linux/amd64`, `linux/arm64` and their provenance manifests.
 - The GitHub release carries `sbom.spdx.json` as an asset.
@@ -42,5 +42,7 @@ cosign verify ghcr.io/saadiqhorton/velocity@sha256:3ac74b40464ebb948ff8f17f4eab8
 
 It reports the signing certificate's subject as `https://github.com/saadiqhorton/velocity/.github/workflows/release.yml@refs/tags/v1.2.4`, the GitHub OIDC issuer, and `githubWorkflowSha` `b004ca4db044ef0b7d15b48587fb62b621da392d`, which is the tagged commit. `cosign verify-attestation --type spdxjson` against the same digest passes and returns the SPDX document, and an anonymous pull of both the index and the `linux/amd64` manifest returns `200`. The upgrade and restore gate passed on `b004ca4` before the tag was cut.
 - The package is publicly readable: an anonymous `ghcr.io` pull token lists the tags and fetches the manifest, so `docker pull` needs no credentials.
+
+`v1.2.5` (2026-10-11) published index digest `sha256:ba38a59c668a7365f4edfc91d17783cb942c94e497033d762ea2209f2f5fcd7e` from `cfee847`, which is also the digest `:latest` resolves to. Verification was pinned to the exact certificate rather than a pattern: `cosign verify` with `--certificate-identity https://github.com/saadiqhorton/velocity/.github/workflows/release.yml@refs/tags/v1.2.5`, `--certificate-oidc-issuer https://token.actions.githubusercontent.com` and `--certificate-github-workflow-sha cfee847b9af83cd88d8ba647d80526a5c16f9f80` exits 0, so the signing certificate is bound to that tag and that commit and no other. `cosign verify-attestation --type spdxjson` with the same pins exits 0 and returns an SPDX-2.3 document naming the index digest with 536 packages. The release carries `sbom.spdx.json` (5.2 MB), an anonymous pull of both the tag and the digest returns `200`, and the index holds `linux/amd64`, `linux/arm64` and their two provenance attestation manifests. The upgrade and restore gate passed on `cfee847` before the tag was cut. This is the first published release whose build and signing ran through actions off the retired majors (`checkout` v7, `setup-buildx` v4, `build-push` v7, `login` v4, `metadata` v6, `cosign-installer` v4.1.2).
 
 The 2026-10-05 dry run above shows the build, SBOM and signing steps work without registry credentials; the tag runs exercised the real registry push, keyless OIDC signing and publication.
