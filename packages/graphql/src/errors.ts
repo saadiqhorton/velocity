@@ -18,6 +18,12 @@ export function toGraphQLError(err: unknown): GraphQLError | null {
 /** Resolver guard: every non-public operation needs an authenticated actor (SPEC §7.1.4). */
 export function requireActor(ctx: GqlContext): ServiceActor {
   if (!ctx.actor) throw new GraphQLError('Sign in to continue.', { extensions: { code: 'UNAUTHENTICATED' } });
+  // The permission table already denies a suspended actor, but not every read goes through it: point
+  // lookups (issue(id:), children, activity) and subscriptions call services that take no actor, so
+  // suspension has to be enforced here, at the one gate every resolver passes.
+  if (ctx.actor.suspended) {
+    throw new GraphQLError('This account is suspended.', { extensions: { code: 'FORBIDDEN' } });
+  }
   return ctx.actor;
 }
 

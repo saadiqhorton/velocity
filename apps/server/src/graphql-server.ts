@@ -11,6 +11,7 @@ import { complexityLimitRule, createLoaders, depthLimitRule, schema, toGraphQLEr
 import type { GqlContext, VelocityPubSub } from '@velocity/graphql';
 import type { ServiceActor, Services } from '@velocity/services';
 import { memberActor } from '@velocity/services';
+import { timingSafeEqualStr } from '@velocity/services/lib/crypto';
 import type { ServerConfig } from './config';
 import { graphqlDuration, rateLimited, wsConnections } from './metrics';
 import { RateLimiter } from './rate-limit';
@@ -159,7 +160,8 @@ export function createGraphQLServer(opts: { services: Services; pubsub: Velocity
     // CSRF double-submit for cookie-authenticated POSTs (SPEC §7.1.2).
     if (auth.method === 'session' && request.method === 'POST') {
       const header = request.headers.get('x-csrf-token');
-      if (!header || header !== auth.csrfToken) {
+      // Constant-time: this compares a secret the operator configured.
+      if (!header || !auth.csrfToken || !timingSafeEqualStr(header, auth.csrfToken)) {
         throw new GraphQLError('Missing or invalid CSRF token. Reload the page and try again.', { extensions: { code: 'FORBIDDEN', http: { status: 403 } } });
       }
     }

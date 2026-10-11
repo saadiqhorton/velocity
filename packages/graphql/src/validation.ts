@@ -58,6 +58,10 @@ export function complexityLimitRule(maxCost = 50_000) {
           let mult = 1;
           if (LIST_FIELDS.has(sel.name.value)) {
             const firstArg = sel.arguments?.find((a) => a.name.value === 'first' || a.name.value === 'limit');
+            // A page size the client controls at runtime (a variable, or none at all) is priced at the
+            // documented default. Pricing it at the resolver's real default (100) instead doubles the
+            // cost of every list and puts first-party calls such as the bundled MCP tools over budget,
+            // so the budget stays tuned to this number; the resolver's own 1000-row clamp bounds it.
             mult = firstArg && firstArg.value.kind === Kind.INT ? Math.max(1, Number(firstArg.value.value)) : 50;
             if (sel.name.value === 'nodes' || sel.name.value === 'edges') mult = 1; // counted on the connection field
           }

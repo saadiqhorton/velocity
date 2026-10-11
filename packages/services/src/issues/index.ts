@@ -846,7 +846,7 @@ export class IssueService extends ServiceBase {
     return this.tx((tx) => this.moveInTx(tx, actor, id, targetTeamId, opts));
   }
 
-  async moveAllFromTeam(actor: ServiceActor, fromTeamId: string, toTeamId: string): Promise<number> {
+  async moveAllFromTeam(actor: ServiceActor, fromTeamId: string, toTeamId: string, executor?: Tx): Promise<number> {
     const rows = await this.db
       .select({ id: issues.id })
       .from(issues)
@@ -854,9 +854,13 @@ export class IssueService extends ServiceBase {
       .orderBy(asc(issues.number));
     for (let i = 0; i < rows.length; i += 200) {
       const chunk = rows.slice(i, i + 200);
-      await this.tx(async (tx) => {
+      const moveChunk = async (tx: Tx) => {
         for (const r of chunk) await this.moveInTx(tx, actor, r.id, toTeamId, {});
-      });
+      };
+      // A caller that already holds a transaction passes it in: opening a second connection here
+      // would block on the rows that transaction has locked.
+      if (executor) await moveChunk(executor);
+      else await this.tx(moveChunk);
     }
     return rows.length;
   }
@@ -991,7 +995,8 @@ export class IssueService extends ServiceBase {
   // ───────────── Subscriptions (SPEC §3.11) ─────────────
 
   async setSubscribed(actor: ServiceActor, issueId: string, subscribed: boolean): Promise<boolean> {
-    assertCan(actor, 'issue.read');
+    // Subscribing is a write: a read-scoped API key must not be able to insert or delete rows.
+    assertCan(actor, 'issue.write');
     if (!actor.userId) throw new ServiceError('VALIDATION', 'Only members can subscribe.');
     const issue = await this.require(issueId);
     if (subscribed) await this.db.insert(subscriptions).values({ issueId: issue.id, userId: actor.userId }).onConflictDoNothing();

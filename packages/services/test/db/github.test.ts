@@ -415,6 +415,18 @@ describe('push (plain mention)', () => {
   });
 });
 
+describe('event dispatch', () => {
+  it('treats an event name with no handler of its own as ignored, including inherited keys', async () => {
+    for (const event of ['repository', 'workflow_run', 'constructor', 'toString', '__proto__']) {
+      const r = await deliver(event, fixture('push'));
+      expect(r.status).toBe('ignored');
+      const [ev] = await db().select().from(githubEvents).where(eq(githubEvents.id, r.eventRowId as string));
+      expect(ev?.status).toBe('ignored');
+      expect(ev?.processedAt).not.toBeNull();
+    }
+  });
+});
+
 describe('issue sync', () => {
   const issueCount = async () => (await db().select().from(issues)).length;
 

@@ -9,6 +9,7 @@ import type { WebSocketServer } from 'ws';
 import { createVelocityPubSub } from '@velocity/graphql';
 import { runMigrations } from '@velocity/schema/migrate';
 import { LocalDiskDriver, MemoryJobQueue, createDb, createServices } from '@velocity/services';
+import { timingSafeEqualStr } from '@velocity/services/lib/crypto';
 import type { JobQueue, Services } from '@velocity/services';
 import type { OutboxListener } from '@velocity/events';
 import { backupDatabase, registerBackupSchedule } from './backup';
@@ -149,7 +150,8 @@ export async function createApp(config: ServerConfig, opts: { logger?: Logger; i
     }
     if (pathname === '/metrics') {
       const auth = req.headers.authorization ?? '';
-      if (config.metricsToken ? auth !== `Bearer ${config.metricsToken}` : Boolean(req.headers['x-forwarded-for'])) {
+      // Constant-time: this compares a secret the operator configured.
+      if (config.metricsToken ? !timingSafeEqualStr(auth, `Bearer ${config.metricsToken}`) : Boolean(req.headers['x-forwarded-for'])) {
         return sendText(res, 403, 'Forbidden');
       }
       res.writeHead(200, { 'content-type': registry.contentType });
@@ -158,8 +160,13 @@ export async function createApp(config: ServerConfig, opts: { logger?: Logger; i
     }
     if (config.role === 'worker') return sendText(res, 404, 'Not found (worker role)');
     if (pathname === '/graphql') {
-      const len = Number(req.headers['content-length'] ?? 0);
-      if (len > (config.app.maxUploadMb + 1) * 1024 * 1024) return sendJson(res, 413, { errors: [{ message: 'Request too large.', extensions: { code: 'VALIDATION' } }] });
+      if (req.method === 'POST') {
+        // A chunked body carries no length up front, so it cannot be measured before it is read.
+        const raw = req.headers['content-length'];
+        const len = raw === undefined ? Number.NaN : Number(raw);
+        if (!Number.isFinite(len) || len < 0) return sendJson(res, 411, { errors: [{ message: 'Content-Length required.', extensions: { code: 'VALIDATION' } }] });
+        if (len > (config.app.maxUploadMb + 1) * 1024 * 1024) return sendJson(res, 413, { errors: [{ message: 'Request too large.', extensions: { code: 'VALIDATION' } }] });
+      }
       // The adapter is itself a Node request listener (writes the response).
       await gql.yoga.requestListener(req, res);
       return;

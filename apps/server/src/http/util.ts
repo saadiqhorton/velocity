@@ -3,8 +3,11 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 export function clientIp(req: IncomingMessage, trustProxy: boolean): string | null {
   if (trustProxy) {
     const xff = req.headers['x-forwarded-for'];
-    const first = (Array.isArray(xff) ? xff[0] : xff)?.split(',')[0]?.trim();
-    if (first) return first;
+    const parts = (Array.isArray(xff) ? xff.join(',') : xff)?.split(',').map((v) => v.trim()).filter(Boolean);
+    // The proxy appends the address it received the request from, so the last hop is the one a client
+    // cannot forge; anything leading it is whatever the client itself sent in the header.
+    const last = parts?.[parts.length - 1];
+    if (last) return last;
   }
   return req.socket.remoteAddress ?? null;
 }

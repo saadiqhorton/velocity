@@ -26,12 +26,17 @@ export class ApiKeyService extends ServiceBase {
     if (!name || name.length > 64) throw validation('Key name must be 1–64 characters.', { field: 'name' });
     const { key, prefix } = generateApiKey();
     const expiresAt = input.expiresInDays ? new Date(this.now().getTime() + input.expiresInDays * 86_400_000) : null;
-    const [row] = await this.db
-      .insert(apiKeys)
-      .values({ userId: actor.userId, name, prefix, keyHash: await hashSecret(key), scope: input.scope, expiresAt })
-      .returning();
-    if (!row) throw new Error('api key insert failed');
-    await this.audit.log(this.db, actor, { action: 'apikey.created', objectType: 'api_key', objectId: row.id, changes: { name, scope: input.scope, prefix } });
+    // Insert and audit in one transaction: a crash between them would leave an unlogged credential.
+    const [row] = await this.tx(async (tx) => {
+      const rows = await tx
+        .insert(apiKeys)
+        .values({ userId: actor.userId, name, prefix, keyHash: await hashSecret(key), scope: input.scope, expiresAt })
+        .returning();
+      const created = rows[0];
+      if (!created) throw new Error('api key insert failed');
+      await this.audit.log(tx, actor, { action: 'apikey.created', objectType: 'api_key', objectId: created.id, changes: { name, scope: input.scope, prefix } });
+      return rows;
+    });
     return { apiKey: row, plaintext: key };
   }
 
@@ -62,9 +67,12 @@ export class ApiKeyService extends ServiceBase {
     if (!key || key.revokedAt) throw notFound('API key');
     if (key.userId !== actor.userId) assertCan(actor, 'apikey.revoke_any');
     else assertCan(actor, 'apikey.manage_own');
-    await this.db.update(apiKeys).set({ revokedAt: this.now() }).where(eq(apiKeys.id, id));
+    // Update and audit in one transaction, so a revocation is never missing from the audit trail.
+    await this.tx(async (tx) => {
+      await tx.update(apiKeys).set({ revokedAt: this.now() }).where(eq(apiKeys.id, id));
+      await this.audit.log(tx, actor, { action: 'apikey.revoked', objectType: 'api_key', objectId: id, changes: { name: key.name, prefix: key.prefix } });
+    });
     this.auth.forgetApiKey();
-    await this.audit.log(this.db, actor, { action: 'apikey.revoked', objectType: 'api_key', objectId: id, changes: { name: key.name, prefix: key.prefix } });
   }
 
   async activity(actor: ServiceActor, id: string) {

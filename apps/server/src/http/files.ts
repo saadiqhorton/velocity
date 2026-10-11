@@ -17,6 +17,7 @@ export async function handleAvatar(services: Services, req: IncomingMessage, res
   if (!/^[0-9a-f-]{36}$/i.test(id)) return sendText(res, 404, 'Not found');
   const auth = await authenticate(services, headerGetter(req), ip).catch(() => null);
   if (!auth?.actor) return sendText(res, 401, 'Sign in to view this image.');
+  if (auth.actor.suspended) return sendText(res, 403, 'This account is suspended.');
   const user = await services.users.get(id);
   if (!user?.avatarPath || user.deletedAt) return sendText(res, 404, 'Not found');
   const size = await services.deps.storage.size(user.avatarPath);
@@ -45,6 +46,9 @@ export async function handleFile(services: Services, req: IncomingMessage, res: 
   if (!signed) {
     const auth = await authenticate(services, headerGetter(req), ip).catch(() => null);
     if (!auth?.actor) return sendText(res, 401, 'Sign in to view this file.');
+    // Downloads take no actor below this line, so suspension is decided here (the same rule the
+    // permission table applies everywhere else).
+    if (auth.actor.suspended) return sendText(res, 403, 'This account is suspended.');
   }
   const row = await services.attachments.get(id);
   if (!row) return sendText(res, 404, 'Not found');

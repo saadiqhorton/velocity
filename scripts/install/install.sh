@@ -427,7 +427,10 @@ write_env() {
   else
     app_url="http://${ip:-localhost}"
     [ "$VELOCITY_HTTP_PORT" = 80 ] || app_url="$app_url:$VELOCITY_HTTP_PORT"
-    ok "No domain given: Velocity will be served over plain HTTP at $app_url"
+    warn "No domain given: Velocity will be served over plain HTTP at $app_url"
+    warn "Passwords, session cookies and API keys travel unencrypted on this URL. Either give this"
+    warn "install a domain (--domain tracker.example.com) for automatic HTTPS, or keep this port closed"
+    warn "to the internet and reach it over a VPN or an SSH tunnel."
   fi
   umask 077
   cat > "$envf" <<EOF

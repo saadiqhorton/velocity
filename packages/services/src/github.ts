@@ -623,7 +623,11 @@ export class GitHubService extends ServiceBase {
     } catch {
       throw validation('Webhook body is not valid JSON.');
     }
-    const handled = HANDLED[input.event]?.(payload.action) ?? false;
+    // `HANDLED` is an object literal, so `HANDLED[event]` also answers for inherited keys:
+    // `constructor` would resolve to a function and enqueue the event as pending, and `__proto__`
+    // would throw. Only an own key counts as a handler.
+    const handler = Object.hasOwn(HANDLED, input.event) ? HANDLED[input.event] : undefined;
+    const handled = handler?.(payload.action) ?? false;
     const [row] = await this.db
       .insert(githubEvents)
       .values({
