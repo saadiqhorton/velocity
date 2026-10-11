@@ -176,6 +176,15 @@ image_tag_for_ref() {
   esac
 }
 
+# Version recorded in .velocity-release: the release tag itself for a tag install (the tags are the
+# release history; the package.json versions are not bumped per release), otherwise the checkout's
+# package.json, which is what a local-source install has to go on.
+release_version() { # ref, package.json path
+  tag=$(image_tag_for_ref "$1")
+  if [ -n "$tag" ]; then printf '%s\n' "$tag"; return 0; fi
+  sed -n 's/^  "version": "\(.*\)",$/\1/p' "$2" 2>/dev/null | head -n1
+}
+
 # Digest of a published image ref, or empty. Best effort: a miss falls back to the version tag.
 resolve_image_digest() { # ghcr.io/<owner>/<repo>:<tag>
   spec=$1
@@ -193,9 +202,22 @@ resolve_image_digest() { # ghcr.io/<owner>/<repo>:<tag>
     | tr -d '\r' | sed -n 's/^[Dd]ocker-[Cc]ontent-[Dd]igest: *//p' | head -n1 || true
 }
 
-# Pin the app image in .env for a release install. A local-source install builds from this checkout
-# and needs no pin. An explicit value of your own is never overwritten; the floating :latest default
-# is.
+# Remember which image the installer itself pinned, so a later release can refresh exactly that line
+# and never a value written by hand.
+record_image_pin() { # ref
+  [ -n "${envf:-}" ] || return 0
+  printf '%s\n' "$1" > "$VELOCITY_HOME/.velocity-image.tmp" 2>/dev/null || return 0
+  chmod 600 "$VELOCITY_HOME/.velocity-image.tmp" 2>/dev/null || true
+  if ! mv -f "$VELOCITY_HOME/.velocity-image.tmp" "$VELOCITY_HOME/.velocity-image" 2>/dev/null; then
+    rm -f "$VELOCITY_HOME/.velocity-image.tmp"
+  fi
+}
+
+# Pin the app image in .env for a release install. A local-source install builds from this checkout and
+# needs no pin. A value written by hand is never overwritten, with two exceptions: the floating :latest
+# default, and a pin to this project's own image when an upgrade was invoked (VELOCITY_REFRESH_PIN=1,
+# which `velocity update` sets) -- moving that line is the upgrade the user asked for. A digest pinned
+# by hand without the flag is left alone, and the installer says how to move it.
 write_image_pin() {
   if [ -n "$VELOCITY_SOURCE" ]; then return 0; fi
   tag=$(image_tag_for_ref "$VELOCITY_REF")
@@ -204,23 +226,35 @@ write_image_pin() {
     return 0
   fi
   ref="ghcr.io/$VELOCITY_REPO:$tag"
+  digest=''
   if [ "$VELOCITY_PIN_DIGEST" = 1 ]; then
     digest=$(resolve_image_digest "$ref" || true)
     if [ -n "$digest" ]; then
       ref="ghcr.io/$VELOCITY_REPO@$digest"
-      ok "Pinned the app image to $digest"
     else
       warn "Could not read the image digest for $tag; pinning the version tag instead."
     fi
   fi
   current=$(env_value VELOCITY_IMAGE)
-  if [ "$current" = "$ref" ]; then return 0; fi
+  if [ "$current" = "$ref" ]; then record_image_pin "$ref"; return 0; fi
   if [ -n "$current" ]; then
-    case "$current" in
-      *:latest) warn "Replacing VELOCITY_IMAGE=$current with the pinned $ref" ;;
-      *) say "  Keeping your VELOCITY_IMAGE=$current (delete the line to let the installer pin it)."
-         return 0 ;;
-    esac
+    recorded=$(head -n1 "$VELOCITY_HOME/.velocity-image" 2>/dev/null || true)
+    if [ -n "$recorded" ] && [ "$current" = "$recorded" ]; then
+      say "  Moving VELOCITY_IMAGE to $tag (the installer pinned this line on an earlier release)."
+    else
+      case "$current" in
+        *:latest) warn "Replacing VELOCITY_IMAGE=$current with the pinned $ref" ;;
+        "ghcr.io/$VELOCITY_REPO:"*|"ghcr.io/$VELOCITY_REPO@"*)
+          if [ "${VELOCITY_REFRESH_PIN:-0}" = 1 ]; then
+            say "  Moving VELOCITY_IMAGE to $tag (the upgrade you asked for)."
+          else
+            say "  Keeping your VELOCITY_IMAGE=$current (run 'velocity update' to move it to $tag)."
+            return 0
+          fi ;;
+        *) say "  Keeping your VELOCITY_IMAGE=$current (delete the line to let the installer pin it)."
+           return 0 ;;
+      esac
+    fi
   fi
   # Rewrite through a temporary file. An unreadable .env must never be treated as "no matches":
   # that would replace the whole file with this single line.
@@ -239,6 +273,8 @@ write_image_pin() {
     warn "Could not replace $envf; leaving VELOCITY_IMAGE unset."
     return 0
   fi
+  record_image_pin "$ref"
+  if [ -n "$digest" ]; then ok "Pinned the app image to $digest"; else ok "Pinned the app image to $tag"; fi
 }
 
 env_value() { # key -> value from .env
@@ -325,7 +361,7 @@ fetch_release() {
     mv "$entry" "$VELOCITY_HOME/"
   done
   rm -rf "$stage"; trap - EXIT
-  version=$(sed -n 's/^  "version": "\(.*\)",$/\1/p' "$VELOCITY_HOME/package.json" 2>/dev/null | head -n1)
+  version=$(release_version "$VELOCITY_REF" "$VELOCITY_HOME/package.json")
   {
     if [ -n "$VELOCITY_SOURCE" ]; then echo "repo=local:$VELOCITY_SOURCE"; else echo "repo=$VELOCITY_REPO"; fi
     echo "ref=$VELOCITY_REF"

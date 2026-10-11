@@ -163,7 +163,8 @@ cmd_restore() {
   say "This will REPLACE the current database with the backup '$file'."
   say "Changes made since that backup will be lost. (A safety copy of the current database is saved first.)"
   confirm "Restore now?" || die "Cancelled."
-  local sname="pre-restore-$(date -u +%Y%m%dT%H%M%SZ).dump" safety
+  local sname safety
+  sname="pre-restore-$(date -u +%Y%m%dT%H%M%SZ).dump"
   safety="/data/backups/$sname"
   say "Saving a safety copy to $(backup_path "$sname") ..."
   # Written through the app container (the folder belongs to uid 10001), owner-only: the dump holds password hashes and tokens.
@@ -357,8 +358,11 @@ cmd_update() {
   # Update installs the NEWEST published release. The ref recorded in .velocity-release is
   # deliberately not forwarded: passing it back would reinstall the installed tag forever. Set
   # VELOCITY_REF=<tag> to pin a release or to roll back to an earlier one.
+  # VELOCITY_REFRESH_PIN moves an image pin this installer wrote (or one pointing at this project's own
+  # image) to the new release; without it the pin would hold the app on the version it was installed at
+  # while the files around it moved on.
   if ! VELOCITY_HOME="$VELOCITY_HOME" VELOCITY_BIN_DIR="$VELOCITY_BIN_DIR" VELOCITY_REPO="${VELOCITY_REPO:-${repo:-saadiqhorton/velocity}}" \
-       VELOCITY_REF="${VELOCITY_REF:-}" VELOCITY_SOURCE="${VELOCITY_SOURCE:-$src}" sh "$installer" --yes; then
+       VELOCITY_REF="${VELOCITY_REF:-}" VELOCITY_SOURCE="${VELOCITY_SOURCE:-$src}" VELOCITY_REFRESH_PIN=1 sh "$installer" --yes; then
     bad "The update did not complete."
     say "  Your data and .env are untouched, and the backup above is safe. To roll back:"
     say "    velocity restore latest        (restore the database)"
