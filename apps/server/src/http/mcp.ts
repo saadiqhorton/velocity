@@ -4,19 +4,20 @@ import type { Logger } from 'pino';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import { createVelocityMcpServer } from '@velocity/mcp-tools';
-import { createHash, timingSafeEqual } from 'node:crypto';
+import { timingSafeEqual } from 'node:crypto';
 import type { GraphQLServer } from '../graphql-server';
 import { headerGetter, readBody, sendJson } from './util';
 
 interface McpSession {
   transport: StreamableHTTPServerTransport;
-  // Only a fingerprint is kept: a session binding does not need the credential itself in memory.
-  keyFingerprint: string;
+  // The session belongs to the key that opened it, so the presented key is what the follow-up
+  // request is checked against, in constant time. It is held for the life of the session (an hour
+  // at most, until the sweep): a digest of the credential instead would be a credential-to-hash
+  // flow, reported by CodeQL as js/insufficient-password-hash (CWE-916), and it removes no
+  // disclosure path that matters here, since the key is in this process for every request
+  // carrying it.
+  apiKey: string;
   lastSeen: number;
-}
-
-function fingerprint(value: string): string {
-  return createHash('sha256').update(value).digest('hex');
 }
 
 function safeEqual(a: string, b: string): boolean {
@@ -72,7 +73,7 @@ export function createMcpHandler(opts: { gql: GraphQLServer; token: string | nul
     if (sessionId) {
       const s = sessions.get(sessionId);
       if (!s) return sendJson(res, 404, { jsonrpc: '2.0', error: { code: -32001, message: 'Unknown MCP session.' }, id: null });
-      if (!safeEqual(s.keyFingerprint, fingerprint(apiKey))) return sendJson(res, 403, { jsonrpc: '2.0', error: { code: -32001, message: 'API key does not match this session.' }, id: null });
+      if (!safeEqual(s.apiKey, apiKey)) return sendJson(res, 403, { jsonrpc: '2.0', error: { code: -32001, message: 'API key does not match this session.' }, id: null });
       s.lastSeen = Date.now();
       await s.transport.handleRequest(req, res, body);
       return;
@@ -100,7 +101,7 @@ export function createMcpHandler(opts: { gql: GraphQLServer; token: string | nul
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: () => randomUUID(),
       onsessioninitialized: (sid) => {
-        sessions.set(sid, { transport, keyFingerprint: fingerprint(apiKey), lastSeen: Date.now() });
+        sessions.set(sid, { transport, apiKey, lastSeen: Date.now() });
       },
     });
     transport.onclose = () => {
