@@ -4,6 +4,20 @@ Velocity is an open-source, self-hostable issue tracker for individuals and smal
 
 Licensed under [AGPL-3.0-or-later](LICENSE).
 
+![Velocity issue list: Engineering issues grouped by status, with priorities, labels, and cycle progress](docs/images/dark-1440-list.png)
+
+## What it looks like
+
+| Board | Issue detail |
+| --- | --- |
+| ![Kanban board with Todo, In Progress, and Done columns](docs/images/dark-1440-board.png) | ![Issue detail panel open beside the issue list](docs/images/dark-1440-panel.png) |
+| Issues grouped by status; drag to move. | Open an issue without leaving the list. |
+
+| Command palette | Light theme |
+| --- | --- |
+| ![Command palette listing actions, views, and their shortcuts](docs/images/dark-1440-palette.png) | ![The same issue list in the light theme](docs/images/light-1440-list.png) |
+| `Ctrl+K` reaches every action and view. | Both themes ship; light is not an afterthought. |
+
 ## Quick start
 
 On a fresh Linux server (a small VPS is enough), run one command as root:
@@ -56,6 +70,13 @@ pnpm --filter @velocity/server seed -- --issues 10000
 ```
 
 Database-backed tests require PostgreSQL; see [CONTRIBUTING.md](CONTRIBUTING.md) for the container and setup. No test or build result is implied by these instructions.
+
+The screenshots above are captured from a seeded dev instance. To regenerate them:
+
+```sh
+node apps/web/scripts/screenshots.mjs http://localhost:5173 \
+  --only=list,board,panel,palette --sizes=1440x900 --themes=dark,light --out=docs/images
+```
 
 ## Project status
 
