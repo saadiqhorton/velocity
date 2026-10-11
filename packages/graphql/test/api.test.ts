@@ -286,6 +286,14 @@ describe('API permission truth table', () => {
     expect(errorCode(await executeApi(h, suspendedMember, CREATE_ISSUE, { input: { teamId, title: 'suspended write' } }))).toBe('FORBIDDEN');
     expect(errorCode(await executeApi(h, suspendedMember, 'mutation { createInvite(name: "suspended invite") { id } }'))).toBe('FORBIDDEN');
     expect(errorCode(await executeApi(h, suspendedMember, 'mutation { updateProfile(input: { name: "Suspended changed profile" }) { id } }'))).toBe('FORBIDDEN');
+    // A point lookup and a subscription toggle reach services that take no actor, so suspension has
+    // to hold at the resolver gate too, not only in the permission table.
+    const target = await h.services.issues.create(member, { teamId, title: 'suspended read target' });
+    expect(errorCode(await executeApi(h, suspendedMember, `query { issue(id: "${target.id}") { id title } }`))).toBe('FORBIDDEN');
+    expect(errorCode(await executeApi(h, suspendedMember, `mutation { setIssueSubscribed(id: "${target.id}", subscribed: true) { id } }`))).toBe('FORBIDDEN');
+    // Subscribing inserts a row, so a read-scoped key cannot do it either.
+    expect(errorCode(await executeApi(h, readMember, `mutation { setIssueSubscribed(id: "${target.id}", subscribed: true) { id } }`))).toBe('FORBIDDEN');
+    expect(errorCode(await executeApi(h, member, `mutation { setIssueSubscribed(id: "${target.id}", subscribed: true) { id } }`))).toBeUndefined();
 
     const disposable = await addMember(h, owner, 'graphql-disposable');
     const disposableReadKey = apiActor(disposable, 'read');

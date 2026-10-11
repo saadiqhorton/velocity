@@ -10,6 +10,12 @@ import { headerGetter, readBody, sendJson } from './util';
 
 interface McpSession {
   transport: StreamableHTTPServerTransport;
+  // The session belongs to the key that opened it, so the presented key is what the follow-up
+  // request is checked against, in constant time. It is held for the life of the session (an hour
+  // at most, until the sweep): a digest of the credential instead would be a credential-to-hash
+  // flow, reported by CodeQL as js/insufficient-password-hash (CWE-916), and it removes no
+  // disclosure path that matters here, since the key is in this process for every request
+  // carrying it.
   apiKey: string;
   lastSeen: number;
 }

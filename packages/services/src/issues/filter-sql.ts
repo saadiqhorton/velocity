@@ -186,9 +186,18 @@ function resolveInstant(s: FilterScalar, ctx: FilterCompileContext): { start: Da
     if (Number.isNaN(start.getTime())) throw validation(`Invalid date “${v}”.`);
     return { start, end };
   }
-  const t = new Date(v);
+  const t = new Date(normalizeOffsetless(v));
   if (Number.isNaN(t.getTime())) throw validation(`Invalid date “${v}”.`);
   return { start: t, end: null };
+}
+
+/**
+ * A timestamp with no zone (`2026-01-01T00:30`) means UTC, matching the date-only branch above and the
+ * rest of the system. `new Date` would read it as server local time, so the same filter would select
+ * different rows depending on the host's timezone.
+ */
+export function normalizeOffsetless(v: string): string {
+  return /T\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/.test(v) ? `${v}Z` : v;
 }
 
 function dateCompare(field: 'createdAt' | 'updatedAt' | 'completedAt', op: string, s: FilterScalar, ctx: FilterCompileContext): SQL {

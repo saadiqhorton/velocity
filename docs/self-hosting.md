@@ -37,7 +37,9 @@ The installer:
 6. installs the `velocity` command and prints the address to open.
 
 Open the address and create your account; the first account is the owner. Sign-up then closes
-(`DISABLE_SIGNUP=true`); invite members from settings. Re-running the installer upgrades in place.
+(`DISABLE_SIGNUP=true`); invite members from settings. Re-running the installer upgrades in place: it
+pins `VELOCITY_IMAGE` to the release it installed and moves that pin on the next run (a line you set by
+hand is left alone; `velocity update` moves it, because you asked for the upgrade).
 
 Non-interactive use and options:
 
@@ -185,9 +187,11 @@ docker compose up -d --build
 docker compose ps
 ```
 
-The Compose file builds from the checkout. When using a published image, set
-`VELOCITY_IMAGE` to the next release tag and use `docker compose pull app && docker compose up -d`
-instead. No public release image has been verified yet. Migrations run automatically on
+The Compose file builds from the checkout. Left unset, `VELOCITY_IMAGE` pulls the newest release image
+(`ghcr.io/saadiqhorton/velocity:latest`) rather than building; to hold one release, set it to a tag or
+digest and use `docker compose pull app && docker compose up -d`. Published images exist for v1.2.4 and
+later: `docs/release.md` records each release's digest and the `cosign verify` command for it.
+Migrations run automatically on
 boot under a Postgres advisory lock. A failed backup prevents the app from starting;
 inspect `docker compose logs app` before retrying.
 

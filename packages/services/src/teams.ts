@@ -247,9 +247,12 @@ export class TeamService extends ServiceBase {
       if (!opts.moveIssuesToTeamId) throw validation(`Move this team’s ${n} issues to another team before deleting it.`, { field: 'moveIssuesToTeamId' });
       if (opts.moveIssuesToTeamId === id) throw validation('Pick a different team.');
       await this.require(opts.moveIssuesToTeamId);
-      await this.issueService.moveAllFromTeam(actor, id, opts.moveIssuesToTeamId);
     }
+    // The move and the delete share one transaction: committing per 200-issue chunk would leave
+    // issues already moved into the target team while the source team still exists if anything
+    // failed midway through the move.
     await this.tx(async (tx) => {
+      if (n > 0) await this.issueService.moveAllFromTeam(actor, id, opts.moveIssuesToTeamId!, tx);
       await tx.update(teams).set({ deletedAt: this.now(), updatedAt: this.now() }).where(eq(teams.id, id));
       await this.audit.log(tx, actor, { action: 'team.deleted', objectType: 'team', objectId: id, changes: { key: team.key, name: team.name, movedTo: opts.moveIssuesToTeamId ?? null } });
       await publish(tx, 'team.updated', { teamId: id, actor: toActorRef(actor) });

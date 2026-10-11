@@ -91,7 +91,75 @@ pin_keeps_unreadable_env() (
 )
 t "image pin never replaces an unreadable .env" pin_keeps_unreadable_env
 
+# The real upgrade shape: an install whose .env already carries the pin the installer wrote. Before
+# this was covered, the next release left the running image on the installed version and said success.
+pin_refreshes_its_own_pin() (
+  VELOCITY_INSTALL_SOURCED=1; export VELOCITY_INSTALL_SOURCED
+  . "$here/install.sh"
+  home="$work/ownpin"; mkdir -p "$home"
+  VELOCITY_HOME="$home"; export VELOCITY_HOME
+  envf="$home/.env"; export envf
+  printf 'POSTGRES_PASSWORD=x\nVELOCITY_IMAGE=ghcr.io/saadiqhorton/velocity@sha256:olddigest\n' > "$envf"
+  printf 'ghcr.io/saadiqhorton/velocity@sha256:olddigest\n' > "$home/.velocity-image"
+  VELOCITY_REPO=saadiqhorton/velocity VELOCITY_REF=v1.2.5 VELOCITY_PIN_DIGEST=0 write_image_pin >/dev/null 2>&1 || exit 1
+  grep -qx 'VELOCITY_IMAGE=ghcr.io/saadiqhorton/velocity:1.2.5' "$envf" || exit 1
+  grep -qx 'ghcr.io/saadiqhorton/velocity:1.2.5' "$home/.velocity-image" || exit 1
+  grep -qx 'POSTGRES_PASSWORD=x' "$envf"
+)
+t "image pin: the installer's own pin follows the new release" pin_refreshes_its_own_pin
+
+# A digest pinned by hand, with no record of the installer having written it: a bare re-run must leave
+# it alone and say how to move it (the upgrade command does that).
+pin_keeps_handwritten_digest() (
+  VELOCITY_INSTALL_SOURCED=1; export VELOCITY_INSTALL_SOURCED
+  . "$here/install.sh"
+  home="$work/handpin"; mkdir -p "$home"
+  VELOCITY_HOME="$home"; export VELOCITY_HOME
+  envf="$home/.env"; export envf
+  printf 'VELOCITY_IMAGE=ghcr.io/saadiqhorton/velocity@sha256:olddigest\n' > "$envf"
+  VELOCITY_REPO=saadiqhorton/velocity VELOCITY_REF=v1.2.5 VELOCITY_PIN_DIGEST=0 write_image_pin > "$home/log" 2>&1
+  grep -qx 'VELOCITY_IMAGE=ghcr.io/saadiqhorton/velocity@sha256:olddigest' "$envf" || exit 1
+  grep -q "velocity update" "$home/log"
+)
+t "image pin: a hand-written digest is kept, with the way out printed" pin_keeps_handwritten_digest
+
+pin_moves_repo_pin_when_updating() (
+  VELOCITY_INSTALL_SOURCED=1; export VELOCITY_INSTALL_SOURCED
+  . "$here/install.sh"
+  home="$work/updpin"; mkdir -p "$home"
+  VELOCITY_HOME="$home"; export VELOCITY_HOME
+  envf="$home/.env"; export envf
+  printf 'VELOCITY_IMAGE=ghcr.io/saadiqhorton/velocity@sha256:olddigest\n' > "$envf"
+  VELOCITY_REPO=saadiqhorton/velocity VELOCITY_REF=v1.2.5 VELOCITY_PIN_DIGEST=0 VELOCITY_REFRESH_PIN=1 \
+    write_image_pin >/dev/null 2>&1 || exit 1
+  grep -qx 'VELOCITY_IMAGE=ghcr.io/saadiqhorton/velocity:1.2.5' "$envf"
+)
+t "image pin: an upgrade moves a pin to this project's image" pin_moves_repo_pin_when_updating
+
+pin_keeps_another_registry() (
+  VELOCITY_INSTALL_SOURCED=1; export VELOCITY_INSTALL_SOURCED
+  . "$here/install.sh"
+  home="$work/mirrorpin"; mkdir -p "$home"
+  VELOCITY_HOME="$home"; export VELOCITY_HOME
+  envf="$home/.env"; export envf
+  printf 'VELOCITY_IMAGE=registry.example.com/mirror/velocity@sha256:mine\n' > "$envf"
+  VELOCITY_REPO=saadiqhorton/velocity VELOCITY_REF=v1.2.5 VELOCITY_PIN_DIGEST=0 VELOCITY_REFRESH_PIN=1 \
+    write_image_pin >/dev/null 2>&1 || exit 1
+  grep -qx 'VELOCITY_IMAGE=registry.example.com/mirror/velocity@sha256:mine' "$envf"
+)
+t "image pin: another registry is never rewritten, even on update" pin_keeps_another_registry
+
+version_from_tag() (
+  VELOCITY_INSTALL_SOURCED=1; export VELOCITY_INSTALL_SOURCED
+  . "$here/install.sh"
+  [ "$(release_version v1.2.5 "$work/src/package.json")" = "1.2.5" ] || exit 1
+  [ "$(release_version '' "$work/src/package.json")" = "9.9.9" ] || exit 1
+  [ -z "$(release_version '' "$work/missing-package.json")" ]
+)
+t "recorded version follows the release tag, not the un-bumped package.json" version_from_tag
+
 sudo_forwards_args() (
+  [ "$(id -u)" = 0 ] && return 0   # root never re-execs, so the case cannot be reproduced
   mkdir -p "$work/sbin"
   printf '#!/bin/sh\nexit 1\n' > "$work/sbin/docker"   # unusable Docker, so the installer must re-exec
   cat > "$work/sbin/sudo" <<EOF
@@ -122,6 +190,7 @@ FAKE
   cat > "$work/uphome/scripts/install/install.sh" <<EOF
 #!/bin/sh
 printf 'VELOCITY_REF=[%s]\n' "\${VELOCITY_REF-UNSET}" > "$work/up-ref"
+printf '%s\n' "\${VELOCITY_REFRESH_PIN-UNSET}" > "$work/up-refresh"
 exit 0
 EOF
   chmod +x "$work/upbin/docker" "$work/uphome/scripts/install/install.sh"
@@ -132,6 +201,7 @@ EOF
   grep -qxF 'VELOCITY_REF=[]' "$work/up-ref"
 )
 t "update installs the newest release, not the installed ref" update_resolves_newest
+t "update tells the installer to move an existing image pin" grep -qx '1' "$work/up-refresh"
 
 run_install() { # extra args...
   env PATH="$work/bin:$PATH" VELOCITY_HOME="$work/home" VELOCITY_SOURCE="$work/src" VELOCITY_BIN_DIR="$work/binout" \
@@ -165,7 +235,7 @@ grep -v '^VELOCITY_BACKUP_DIR=' "$env_file" > "$work/env.old"; cp "$work/env.old
 t "re-run adds missing VELOCITY_BACKUP_DIR" run_install --yes
 t "only the backup var was added" sh -c "cp '$env_file' '$work/env.new'; echo VELOCITY_BACKUP_DIR=$work/home/backups >> '$work/env.old'; cmp '$work/env.old' '$work/env.new'"
 
-rm -rf "$work/home" "$work/binout"
+rm -rf "${work:?}/home" "${work:?}/binout"
 t "no domain -> plain http on detected IP" run_install --yes
 t "ip-based APP_URL and empty CADDY_DOMAIN" sh -c "grep -qx 'CADDY_DOMAIN=' '$env_file' && grep -qx 'APP_URL=http://203.0.113.9:8088' '$env_file'"
 t "VELOCITY_DOMAIN env respected" sh -c "rm -rf '$work/home' && VELOCITY_DOMAIN=env.example.com PATH='$work/bin':\$PATH VELOCITY_HOME='$work/home' VELOCITY_SOURCE='$work/src' VELOCITY_BIN_DIR='$work/binout' VELOCITY_NO_START=1 sh '$here/install.sh' --yes && grep -qx 'CADDY_DOMAIN=env.example.com' '$work/home/.env'"

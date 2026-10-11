@@ -62,16 +62,24 @@ export class MaintenanceService extends ServiceBase {
    * the deployment returns to first-run state. Uploaded files are removed by directory.
    */
   async purgeWorkspaceIfDue(now = this.now()): Promise<boolean> {
-    const [ws] = await this.db.select().from(workspace).where(eq(workspace.id, 1));
-    if (!ws?.deletionRequestedAt || ws.deletionRequestedAt.getTime() > now.getTime() - 7 * DAY) return false;
-    const paths = await this.db.select({ path: attachments.storagePath }).from(attachments);
-    await this.db.execute(sql`truncate table
-      reactions, comments, issue_labels, issue_relations, issue_activity, cycle_history, github_links, attachments,
-      notifications, subscriptions, favorites, views, issues, milestones, project_teams, projects, cycles,
-      statuses, workflows, team_counters, team_members, teams, labels, webhook_deliveries, webhooks,
-      github_events, github_installs, import_items, import_runs, exports, invites, api_keys, sessions,
-      mcp_sessions, event_outbox, users, workspace restart identity cascade`);
-    for (const p of paths) await this.storage.delete(p.path).catch(() => {});
+    // One transaction with the workspace row locked, so a `cancelDeletion` that commits between the
+    // due check and the truncate cannot be overtaken by it: the cancel is an UPDATE of that same row,
+    // so it either wins before this transaction starts or waits until the workspace is already gone.
+    const paths = await this.tx(async (tx) => {
+      const [ws] = await tx.select().from(workspace).where(eq(workspace.id, 1)).for('update');
+      if (!ws?.deletionRequestedAt || ws.deletionRequestedAt.getTime() > now.getTime() - 7 * DAY) return null;
+      const files = await tx.select({ path: attachments.storagePath }).from(attachments);
+      await tx.execute(sql`truncate table
+        reactions, comments, issue_labels, issue_relations, issue_activity, cycle_history, github_links, attachments,
+        notifications, subscriptions, favorites, views, issues, milestones, project_teams, projects, cycles,
+        statuses, workflows, team_counters, team_members, teams, labels, webhook_deliveries, webhooks,
+        github_events, github_installs, import_items, import_runs, exports, invites, api_keys, sessions,
+        mcp_sessions, event_outbox, users, workspace restart identity cascade`);
+      return files.map((f) => f.path);
+    });
+    if (!paths) return false;
+    // Bytes go after the commit: a rolled-back purge must not leave rows pointing at deleted files.
+    for (const p of paths) await this.storage.delete(p).catch(() => {});
     this.logger.warn('workspace purged after deletion retention window');
     return true;
   }
