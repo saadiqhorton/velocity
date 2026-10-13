@@ -39,8 +39,8 @@ for (const { width, height, colorScheme } of cases) {
     expect(wideTopElements).toBe(0);
 
     expect(sidebarBox?.width).toBeCloseTo(width === 1440 ? 220 : 180, -1);
-    expect((await page.getByTestId('view-header').boundingBox())?.height).toBeCloseTo(48, -1);
-    expect((await page.getByTestId('issue-row').first().boundingBox())?.height).toBeCloseTo(32, -1);
+    expect((await page.getByTestId('view-header').boundingBox())?.height).toBeCloseTo(44, 0);
+    expect((await page.getByTestId('issue-row').first().boundingBox())?.height).toBeCloseTo(36, 0);
 
     const workspaceName = page.getByTestId('workspace-name');
     const search = page.locator('#sidebar-search');

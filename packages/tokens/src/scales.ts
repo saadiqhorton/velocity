@@ -18,14 +18,18 @@ export const space = {
   '1000': 80,
 } as const;
 
-/** Radius: 4px controls, 8px cards/panels/dropdowns, 12px modals only. Full = badges/avatars. */
-export const radius = { '4': '4px', '8': '8px', '12': '12px', full: '9999px' } as const;
+/**
+ * Radius: 4px chips/lozenges, 6px controls, 8px cards/panels/dropdowns, 12px modals only.
+ * Full = badges/avatars/pill tabs.
+ */
+export const radius = { '4': '4px', '6': '6px', '8': '8px', '12': '12px', full: '9999px' } as const;
 
+/** UI base is 13px (300); 400 is the 15px emphasis size for view titles and inputs. */
 export const fontSize = {
   '100': '11px',
   '200': '12px',
-  '300': '14px',
-  '400': '16px',
+  '300': '13px',
+  '400': '15px',
   '500': '18px',
   '600': '20px',
   '700': '24px',
@@ -49,7 +53,7 @@ export const layout = {
   sidebarWidthCompact: 180,
   panelWidth: 400,
   panelWidthCompact: 360,
-  viewHeaderHeight: 48,
-  issueRowHeight: 32,
-  tableRowHeight: 40,
+  viewHeaderHeight: 44,
+  issueRowHeight: 36,
+  tableRowHeight: 44,
 } as const;

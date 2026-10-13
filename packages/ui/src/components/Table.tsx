@@ -146,7 +146,7 @@ export function Table<T>({
                   aria-sort={col.sortable ? (sorted === 'asc' ? 'ascending' : sorted === 'desc' ? 'descending' : 'none') : undefined}
                   style={{ width: col.width, zIndex: stickyHeader ? 'var(--ds-z-index-sticky)' : undefined }}
                   className={clsx(
-                    'h-8 whitespace-nowrap bg-sunken px-3 text-xs font-semibold uppercase text-fg-subtle',
+                    'h-9 whitespace-nowrap border-b border-border bg-surface px-3 text-sm font-medium text-fg-subtlest',
                     inset && ci === 0 && 'pl-5',
                     inset && ci === columns.length - 1 && 'pr-5',
                     col.align === 'right' ? 'text-right' : 'text-left',
@@ -157,7 +157,7 @@ export function Table<T>({
                     <button
                       type="button"
                       onClick={() => toggleSort(col.key)}
-                      className="inline-flex items-center gap-1 rounded-sm uppercase transition-colors duration-100 hover:text-fg"
+                      className="-mx-1 inline-flex items-center gap-1 rounded-sm px-1 py-0.5 transition-colors duration-100 hover:bg-hover hover:text-fg"
                     >
                       {col.header}
                       {sorted ? <Icon name={sorted === 'asc' ? 'arrow-up' : 'arrow-down'} /> : null}
@@ -173,7 +173,7 @@ export function Table<T>({
         <tbody>
           {displayRows.length === 0 ? (
             <tr>
-              <td colSpan={columns.length} className="border-t border-border">
+              <td colSpan={columns.length}>
                 {emptyState}
               </td>
             </tr>
@@ -195,14 +195,16 @@ export function Table<T>({
                   className={clsx(
                     'group transition-colors duration-100 focus-visible:-outline-offset-2',
                     onRowClick && 'cursor-pointer',
-                    selected ? 'bg-primary-subtle' : 'hover:bg-sunken',
+                    selected ? 'bg-primary-subtle' : 'hover:bg-hover active:bg-pressed',
                   )}
                 >
                   {columns.map((col, ci) => (
                     <td
                       key={col.key}
                       className={clsx(
-                        'h-10 border-t border-border px-3',
+                        // Middle-align so in-place property bubbles (inline-flex h-7 triggers)
+                        // share the row midline instead of sitting on the text baseline.
+                        'h-11 align-middle px-3',
                         col.align === 'right' && 'text-right',
                         ci === 0 && 'border-l-2',
                         inset && ci === 0 && 'pl-4.5',

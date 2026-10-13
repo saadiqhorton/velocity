@@ -89,12 +89,15 @@ describe('structural relationships (SPEC §4.3)', () => {
   });
   it('light: binding spec values', () => {
     const l = themes.light.color as Record<string, string>;
-    expect(l.primary).toBe('#0C66E4');
-    expect(l.text).toBe('#172B4D');
-    expect(l['text-subtle']).toBe('#44546F');
+    expect(l.primary).toBe('#5E6AD2');
+    expect(l.text).toBe('#1B1C1F');
+    expect(l['text-subtle']).toBe('#5C5E66');
     expect(l.surface).toBe('#FFFFFF');
-    expect(l['surface-sunken']).toBe('#F7F8F9');
-    expect(l['primary-subtle']).toBe('#E9F2FF');
-    expect(l.focus).toBe('#85B8FF');
+    expect(l['surface-sunken']).toBe('#F4F4F5');
+    expect(l['primary-subtle']).toBe('#5E6AD21A');
+    expect(l.focus).toBe('#8B93F0');
+  });
+  it('both themes share one accent (SPEC §4.3, amended)', () => {
+    expect(themes.dark.color.primary).toBe(themes.light.color.primary);
   });
 });

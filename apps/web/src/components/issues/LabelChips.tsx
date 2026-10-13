@@ -10,14 +10,14 @@ export function LabelChips({ labels, max = 2 }: { labels: readonly { id: string;
       {shown.map((l) => (
         <span
           key={l.id}
-          className="inline-flex h-5 max-w-28 items-center gap-1 rounded-sm border border-border px-1.5 text-sm text-fg-subtle"
+          className="inline-flex h-5 max-w-32 items-center gap-1.5 rounded-full border border-border px-2 text-sm text-fg-subtle"
         >
           <ColorDot color={l.color} size={6} />
           <span className="truncate">{l.name}</span>
         </span>
       ))}
       {rest > 0 ? (
-        <span className="inline-flex h-5 items-center rounded-sm border border-border px-1.5 text-sm text-fg-subtle" title={labels.slice(max).map((l) => l.name).join(', ')}>
+        <span className="inline-flex h-5 items-center rounded-full border border-border px-2 text-sm text-fg-subtle" title={labels.slice(max).map((l) => l.name).join(', ')}>
           +{rest}
         </span>
       ) : null}

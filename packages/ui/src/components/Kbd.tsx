@@ -13,7 +13,7 @@ export function Kbd({ children, keys, className }: KbdProps) {
     <kbd
       key={i}
       className={clsx(
-        'inline-flex h-5 min-w-5 items-center justify-center rounded-sm border border-border bg-sunken px-1 font-mono text-xs text-fg-subtle',
+        'inline-flex h-5 min-w-5 items-center justify-center rounded-xs border border-border bg-neutral px-1 font-sans text-xs font-medium text-fg-subtle',
         className,
       )}
     >

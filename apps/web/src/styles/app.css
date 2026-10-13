@@ -12,7 +12,7 @@
   }
   body {
     margin: 0;
-    background: var(--ds-color-surface);
+    background: var(--ds-color-surface-sunken);
     color: var(--ds-color-text);
     overflow: hidden;
     font-feature-settings: 'cv11', 'ss01';
@@ -24,9 +24,10 @@
   button {
     cursor: default;
   }
-  /* Identifiers are always monospace (SPEC §4.6, §4.14). */
+  /* Identifiers: muted UI sans with tabular digits so columns align (SPEC §4.6, §4.14, amended). */
   .identifier {
-    font-family: var(--ds-font-code);
+    font-family: var(--ds-font-ui);
+    font-weight: 500;
     font-size: var(--ds-font-size-200);
     color: var(--ds-color-text-subtlest);
     font-variant-numeric: tabular-nums;

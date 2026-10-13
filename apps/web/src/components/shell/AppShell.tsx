@@ -49,20 +49,28 @@ export function AppShell() {
       >
         {m.nav.skipToContent}
       </a>
-      <div className="relative flex h-full overflow-hidden bg-surface" data-testid="app-shell">
+      <div className="relative flex h-full overflow-hidden bg-sunken" data-testid="app-shell">
         <Sidebar className="hidden w-(--ds-layout-sidebar-compact) md:flex xl:w-(--ds-layout-sidebar)" />
         <MobileNav />
-        <main id="main-content" data-region="list" tabIndex={-1} className="relative flex min-w-0 flex-1 flex-col outline-none">
-          <OfflineBanner />
-          <DeletionBanner />
-          <CycleClosingBanner />
-          <div className="flex min-h-0 flex-1 flex-col">
-            <Suspense fallback={<ContentSkeleton />}>
-              <Outlet />
-            </Suspense>
+        {/* The content panel is inset on the app chrome (SPEC §4.10, amended): rounded, hairline border. */}
+        <div className="flex min-w-0 flex-1 md:py-2 md:pr-2">
+          <div
+            data-testid="content-panel"
+            className="relative flex min-w-0 flex-1 overflow-hidden bg-surface md:rounded-md md:border md:border-border"
+          >
+            <main id="main-content" data-region="list" tabIndex={-1} className="relative flex min-w-0 flex-1 flex-col outline-none">
+              <OfflineBanner />
+              <DeletionBanner />
+              <CycleClosingBanner />
+              <div className="flex min-h-0 flex-1 flex-col">
+                <Suspense fallback={<ContentSkeleton />}>
+                  <Outlet />
+                </Suspense>
+              </div>
+            </main>
+            <DetailPanel />
           </div>
-        </main>
-        <DetailPanel />
+        </div>
       </div>
       <Overlays />
       </CodingToolsSync>

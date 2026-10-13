@@ -1,22 +1,25 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { Avatar, Icon, Lozenge, PopupSelect, ProgressBar, StatusDot, TextField } from '@velocity/ui';
+import clsx from 'clsx';
+import { Avatar, Icon, PopupSelect, ProgressBar, TextField } from '@velocity/ui';
 import type { ProjectInput } from '@/gql/graphql';
 import { useWorkspace } from '@/app/workspace';
 import { LazyEditor } from '@/components/editor/LazyEditor';
 import { PropertyButton } from '@/components/issues/pickers';
-import { ColorDot } from '@/components/common/EntityIcons';
-import { formatShortDate } from '@/lib/format';
+import { ColorDot, ProjectIcon } from '@/components/common/EntityIcons';
 import { sortMilestones } from './ProjectMilestones';
 import type { Milestone } from './ProjectMilestones';
+import { ProjectSummaryChips } from './ProjectSummaryChips';
 import {
+  MilestoneIcon,
   NONE,
+  ProjectStatusIcon,
   PropertyRow,
   healthColor,
   healthLabel,
   healthOptions,
   leadOptions,
-  statusAppearance,
   statusLabel,
   statusOptions,
   teamOptions,
@@ -77,7 +80,7 @@ function NameEditor({ project, save }: { project: ProjectRecord; save: (i: Proje
           (e.target as HTMLInputElement).blur();
         }
       }}
-      className="h-10 w-full rounded-sm bg-transparent px-1 text-xl font-semibold text-fg hover:bg-hover focus:bg-hover"
+      className="-mx-1 h-10 w-[calc(100%+8px)] rounded-sm bg-transparent px-1 text-2xl font-semibold tracking-tight text-fg transition-colors duration-100 hover:bg-hover focus:bg-hover"
     />
   );
 }
@@ -99,7 +102,7 @@ function DescriptionEditor({ project, save }: { project: ProjectRecord; save: (i
     [],
   );
   return (
-    <div className="rounded-sm px-1" data-testid="project-description">
+    <div className="-mx-1 rounded-sm px-1" data-testid="project-description">
       <LazyEditor
         key={project.id}
         value={project.descriptionMd}
@@ -136,8 +139,13 @@ function Properties({ project, save }: { project: ProjectRecord; save: (i: Proje
           value={project.status}
           onChange={(v) => save({ status: v as ProjectRecord['status'] })}
           renderTrigger={(t) => (
-            <PropertyButton {...triggerProps(t as never)} aria-label={`${m.project.status}: ${statusLabel(project.status)}`} testId="prop-project-status">
-              <Lozenge appearance={statusAppearance(project.status)}>{statusLabel(project.status)}</Lozenge>
+            <PropertyButton
+              {...triggerProps(t as never)}
+              aria-label={`${m.project.status}: ${statusLabel(project.status)}`}
+              icon={<ProjectStatusIcon status={project.status} percent={project.progress.percent} />}
+              testId="prop-project-status"
+            >
+              {statusLabel(project.status)}
             </PropertyButton>
           )}
         />
@@ -182,7 +190,7 @@ function Properties({ project, save }: { project: ProjectRecord; save: (i: Proje
         />
       </PropertyRow>
       <PropertyRow label={m.project.targetDate}>
-        <div className="flex items-center gap-1 pl-1">
+        <div className="flex items-center gap-1">
           <TextField
             size="sm"
             type="date"
@@ -218,55 +226,159 @@ function Properties({ project, save }: { project: ProjectRecord; save: (i: Proje
   );
 }
 
+/** A rail card with a collapsible heading (Properties, Milestones, Progress). */
+function RailCard({ title, action, children }: { title: string; action?: ReactNode; children: ReactNode }) {
+  const [open, setOpen] = useState(true);
+  return (
+    <section aria-label={title} className="rounded-md border border-border bg-raised">
+      <div className="flex h-10 items-center gap-1 pl-2 pr-1.5">
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-label={m.project.toggleSection(title)}
+          onClick={() => setOpen(!open)}
+          className="flex h-7 items-center gap-1.5 rounded-sm px-1.5 text-base font-medium text-fg-subtle transition-colors duration-100 hover:bg-hover hover:text-fg"
+        >
+          {title}
+          <Icon name="chevron-down" className={clsx('h-3 w-3 transition-transform duration-150', !open && '-rotate-90')} />
+        </button>
+        <span className="flex-1" />
+        {action}
+      </div>
+      {open ? <div className="px-2 pb-2">{children}</div> : null}
+    </section>
+  );
+}
+
 export function ProjectOverview({ project, milestones, save }: { project: ProjectRecord; milestones: Milestone[]; save: (i: ProjectInput) => void }) {
   const sorted = sortMilestones(milestones);
-  const shown = sorted.slice(0, 4);
   const p = project.progress;
   const estimates = useFeatures().estimates;
+  const milestonesHref = `/project/${project.id}/milestones`;
   return (
-    <div className="mx-auto flex w-full max-w-240 flex-col gap-8 p-5 md:flex-row" data-testid="project-overview">
-      <div className="flex min-w-0 flex-1 flex-col gap-4">
-        <NameEditor project={project} save={save} />
-        <DescriptionEditor project={project} save={save} />
-        <section aria-label={m.project.milestones} className="flex flex-col gap-2 pt-2">
-          <div className="flex items-center justify-between">
-            <h2 className="text-base font-semibold text-fg">{m.project.milestones}</h2>
-            <Link to={`/project/${project.id}/milestones`} className="rounded-sm px-1 text-sm text-link hover:bg-hover">
+    <div className="flex w-full flex-col gap-6 px-5 py-8 lg:flex-row lg:items-start lg:gap-8 lg:pr-4 lg:pl-8" data-testid="project-overview">
+      <div className="mx-auto flex w-full min-w-0 max-w-190 flex-1 flex-col gap-5">
+        <span
+          aria-hidden="true"
+          className="flex h-10 w-10 items-center justify-center rounded-md"
+          style={{ backgroundColor: `var(--ds-status-${project.color}-bg)` }}
+        >
+          <ProjectIcon project={project} size={20} />
+        </span>
+        <div className="flex flex-col gap-3">
+          <NameEditor project={project} save={save} />
+          <ProjectSummaryChips project={project} save={save} />
+        </div>
+        <div className="flex flex-col gap-2 border-t border-border pt-6">
+          <h2 className="text-base font-medium text-fg-subtle">{m.common.description}</h2>
+          <DescriptionEditor project={project} save={save} />
+        </div>
+        <section aria-label={m.project.milestones} className="flex flex-col gap-1 border-t border-border pt-6">
+          <div className="flex items-center justify-between pb-1">
+            <h2 className="text-base font-medium text-fg-subtle">{m.project.milestones}</h2>
+            <Link
+              to={milestonesHref}
+              className="rounded-sm px-1.5 py-0.5 text-sm text-fg-subtle transition-colors duration-100 hover:bg-hover hover:text-fg"
+            >
               {m.project.viewAll}
             </Link>
           </div>
-          {shown.length === 0 ? (
-            <p className="text-base text-fg-subtle">{m.project.noMilestones}</p>
+          {sorted.length === 0 ? (
+            <p className="text-base text-fg-subtlest">{m.project.noMilestones}</p>
           ) : (
-            <ul className="rounded-md border border-border bg-raised">
-              {shown.map((x) => (
-                <li key={x.id} className="flex h-10 items-center gap-3 border-b border-border px-3 last:border-b-0">
-                  <StatusDot color={x.status === 'done' ? 'green' : x.status === 'in_progress' ? 'blue' : 'grey'} label={(m.project.milestoneStatuses as Record<string, string>)[x.status]} />
-                  <span className="min-w-0 flex-1 truncate text-base text-fg">{x.name}</span>
-                  <span className="w-16 shrink-0 text-sm text-fg-subtle">{x.targetDate ? formatShortDate(x.targetDate) : ''}</span>
-                  <span className="w-24 shrink-0">
-                    <ProgressBar value={x.progress.percent} label={`${m.project.progress}: ${x.name}`} />
-                  </span>
-                  <span className="w-8 shrink-0 text-right text-sm tabular-nums text-fg-subtle">{Math.round(x.progress.percent)}%</span>
+            <ul className="-mx-2 flex flex-col">
+              {sorted.map((x) => (
+                <li key={x.id}>
+                  <Link
+                    to={milestonesHref}
+                    className="group/ms flex flex-col gap-1 rounded-md px-2 py-2.5 transition-colors duration-100 hover:bg-hover"
+                  >
+                    <span className="flex items-center gap-2.5">
+                      <MilestoneIcon status={x.status} />
+                      <span className="min-w-0 flex-1 truncate text-base font-medium text-fg">{x.name}</span>
+                      <span className="shrink-0 text-sm tabular-nums text-fg-subtle">
+                        {m.project.issueCount(x.progress.total)} · {Math.round(x.progress.percent)}%
+                      </span>
+                    </span>
+                    {x.description ? <span className="line-clamp-2 pl-5.5 text-base text-fg-subtle">{x.description}</span> : null}
+                  </Link>
                 </li>
               ))}
             </ul>
           )}
+          <Link
+            to={milestonesHref}
+            className="-mx-2 flex h-8 items-center gap-2 rounded-sm px-2 text-base text-fg-subtlest transition-colors duration-100 hover:bg-hover hover:text-fg"
+          >
+            <Icon name="add" className="h-3.5 w-3.5" />
+            {m.project.addMilestone}
+          </Link>
         </section>
       </div>
-      <aside className="flex min-w-0 flex-col gap-6 md:w-72 md:shrink-0" aria-label={m.project.properties}>
-        <section className="flex flex-col gap-1">
-          <h2 className="px-2 text-sm font-semibold text-fg-subtle">{m.project.properties}</h2>
+      <aside className="flex w-full min-w-0 flex-col gap-3 lg:sticky lg:top-0 lg:w-90 lg:shrink-0" aria-label={m.project.properties}>
+        <RailCard title={m.project.properties}>
           <Properties project={project} save={save} />
-        </section>
-        <section className="flex flex-col gap-2 px-2" aria-label={m.project.progress}>
-          <h2 className="text-sm font-semibold text-fg-subtle">{m.project.progress}</h2>
-          <ProgressBar value={p.percent} label={m.project.progress} showPercent />
-          <p className="text-sm text-fg-subtle" data-testid="project-progress-count">
-            {m.cycles.stats(p.done, p.total)}
-          </p>
-          {estimates && p.pointsTotal > 0 ? <p className="text-sm text-fg-subtle">{m.cycles.points(p.pointsDone, p.pointsTotal)}</p> : null}
-        </section>
+        </RailCard>
+        <RailCard
+          title={m.project.milestones}
+          action={
+            <Link
+              to={milestonesHref}
+              aria-label={m.project.addMilestone}
+              className="flex h-7 w-7 items-center justify-center rounded-sm text-icon-subtle transition-colors duration-100 hover:bg-hover hover:text-icon"
+            >
+              <Icon name="add" />
+            </Link>
+          }
+        >
+          {sorted.length === 0 ? (
+            <p className="px-2 pb-1 text-base text-fg-subtlest">{m.project.noMilestones}</p>
+          ) : (
+            <ul className="flex flex-col">
+              {sorted.map((x) => (
+                <li key={x.id}>
+                  <Link
+                    to={milestonesHref}
+                    className="flex h-8 items-center gap-2.5 rounded-sm px-2 transition-colors duration-100 hover:bg-hover"
+                  >
+                    <MilestoneIcon status={x.status} />
+                    <span className="min-w-0 truncate text-base font-medium text-fg">{x.name}</span>
+                    <span className="shrink-0 text-sm tabular-nums text-fg-subtle">
+                      {m.project.milestoneProgress(Math.round(x.progress.percent), x.progress.total)}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </RailCard>
+        <RailCard title={m.project.progress}>
+          <div className="flex flex-col gap-3 px-2 pb-1" aria-label={m.project.progress}>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="flex flex-col gap-0.5">
+                <span className="flex items-center gap-1.5 text-sm text-fg-subtle">
+                  <span aria-hidden="true" className="h-2 w-2 rounded-xs bg-neutral-hover" />
+                  {m.project.progressScope}
+                </span>
+                <span className="text-md font-medium tabular-nums text-fg">{p.total}</span>
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <span className="flex items-center gap-1.5 text-sm text-fg-subtle">
+                  <span aria-hidden="true" className="h-2 w-2 rounded-xs bg-primary" />
+                  {m.project.progressCompleted}
+                </span>
+                <span className="text-md font-medium tabular-nums text-fg">
+                  {p.done} <span className="text-sm font-normal text-fg-subtlest">· {Math.round(p.percent)}%</span>
+                </span>
+              </div>
+            </div>
+            <ProgressBar value={p.percent} label={m.project.progress} />
+            <p className="text-sm text-fg-subtle" data-testid="project-progress-count">
+              {m.cycles.stats(p.done, p.total)}
+            </p>
+            {estimates && p.pointsTotal > 0 ? <p className="text-sm text-fg-subtle">{m.cycles.points(p.pointsDone, p.pointsTotal)}</p> : null}
+          </div>
+        </RailCard>
       </aside>
     </div>
   );

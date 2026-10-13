@@ -74,7 +74,7 @@
   --text-base: var(--ds-font-size-300);
   --text-base--line-height: 20px;
   --text-md: var(--ds-font-size-400);
-  --text-md--line-height: 24px;
+  --text-md--line-height: 22px;
   --text-lg: var(--ds-font-size-500);
   --text-lg--line-height: 24px;
   --text-xl: var(--ds-font-size-600);
@@ -83,7 +83,8 @@
   --text-2xl--line-height: 32px;
 
   --radius-*: initial;
-  --radius-sm: var(--ds-radius-4);
+  --radius-xs: var(--ds-radius-4);
+  --radius-sm: var(--ds-radius-6);
   --radius-md: var(--ds-radius-8);
   --radius-lg: var(--ds-radius-12);
   --radius-full: var(--ds-radius-full);
@@ -104,6 +105,8 @@
     color: var(--ds-color-text);
     background: var(--ds-color-surface);
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
   }
   /* Focus ring: 2px focus color, 2px offset (SPEC §4.2.2). Never suppressed (SPEC §4.15). */
   :focus-visible {
@@ -121,4 +124,14 @@
       transition-duration: 0ms !important;
     }
   }
+}
+
+/* Tooltip enter: opacity only, no movement (SPEC §4.11). */
+@keyframes ds-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+.ds-fade-in {
+  animation: ds-fade-in var(--ds-duration-150) ease-out;
 }

@@ -1,7 +1,8 @@
-import { Avatar, Button, Icon, PriorityIcon, StatusIcon } from '@velocity/ui';
+import { Avatar, Button, Icon, PriorityIcon, StatusIcon, priorityNames } from '@velocity/ui';
 import { useOpenIssue } from '@/lib/navigation';
 import { useUi } from '@/stores/ui';
 import { PRIORITY_KEYS } from '@/components/issues/IssueRow';
+import { InlineProp } from '@/components/issues/InlineProp';
 import type { DetailIssue } from './IssueDetail';
 import { m } from '@/i18n';
 
@@ -20,18 +21,47 @@ export function SubIssues({ issue }: { issue: DetailIssue }) {
         </div>
       ) : null}
       {children.map((c) => (
-        <button
+        // The row opens the sub-issue; its priority, status and assignee edit in place.
+        <div
           key={c.id}
-          type="button"
           onClick={() => openIssue(c.id)}
-          className="flex h-8 min-w-0 items-center gap-2 rounded-sm px-1 text-left text-base transition-colors duration-100 hover:bg-hover"
+          className="group/sub flex h-8 min-w-0 cursor-pointer items-center gap-2 rounded-sm px-1 text-base transition-colors duration-100 hover:bg-hover"
         >
-          <PriorityIcon priority={PRIORITY_KEYS[c.priority] ?? 'none'} />
+          <InlineProp
+            kind="priority"
+            issueId={c.id}
+            label={`${m.issue.priority}: ${priorityNames[PRIORITY_KEYS[c.priority] ?? 'none']}`}
+            className="h-6 w-6"
+          >
+            <PriorityIcon priority={PRIORITY_KEYS[c.priority] ?? 'none'} label="" />
+          </InlineProp>
           <span className="identifier shrink-0">{c.identifier}</span>
-          <StatusIcon category={c.status.category} color={c.status.color} label={c.status.name} />
-          <span className="min-w-0 flex-1 truncate text-fg">{c.title}</span>
-          {c.assignee ? <Avatar name={c.assignee.name} src={c.assignee.avatarUrl} size={20} /> : null}
-        </button>
+          <InlineProp kind="status" issueId={c.id} label={`${m.issue.status}: ${c.status.name}`} className="h-6 w-6">
+            <StatusIcon category={c.status.category} color={c.status.color} label="" />
+          </InlineProp>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              openIssue(c.id);
+            }}
+            className="min-w-0 flex-1 truncate rounded-sm text-left font-medium text-fg focus-visible:-outline-offset-2"
+          >
+            {c.title}
+          </button>
+          <InlineProp
+            kind="assignee"
+            issueId={c.id}
+            label={`${m.issue.assignee}: ${c.assignee?.name ?? m.issue.noAssignee}`}
+            className="h-6 w-6 rounded-full"
+          >
+            {c.assignee ? (
+              <Avatar name={c.assignee.name} src={c.assignee.avatarUrl} size={20} />
+            ) : (
+              <Icon name="user" className="text-fg-subtlest opacity-60" />
+            )}
+          </InlineProp>
+        </div>
       ))}
       <div>
         <Button

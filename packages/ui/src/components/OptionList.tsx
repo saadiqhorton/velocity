@@ -168,8 +168,8 @@ export function OptionList({
 
   const rowClass = (active: boolean, disabled?: boolean) =>
     clsx(
-      'flex min-h-8 cursor-pointer items-center gap-2 px-3 py-1 text-base',
-      active ? 'bg-primary-subtle' : '',
+      'mx-1 flex min-h-8 cursor-pointer items-center gap-2 rounded-sm px-2 py-1 text-base',
+      active ? 'bg-neutral-hover' : '',
       disabled ? 'cursor-not-allowed text-fg-disabled' : 'text-fg',
     );
 
@@ -225,7 +225,7 @@ export function OptionList({
       {groups.map((g, gi) =>
         g.group ? (
           <div key={g.group} role="group" aria-labelledby={`${id}-group-${gi}`}>
-            <div id={`${id}-group-${gi}`} className="px-3 pb-1 pt-2 text-xs font-semibold uppercase text-fg-subtle">
+            <div id={`${id}-group-${gi}`} className="px-3 pb-1 pt-2 text-sm font-medium text-fg-subtlest">
               {g.group}
             </div>
             {g.options.map(renderRow)}

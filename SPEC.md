@@ -60,6 +60,7 @@
   - [4.15 Accessibility](#415-accessibility)
   - [4.16 Performance Budgets (UI)](#416-performance-budgets-ui)
   - [4.17 Anti-Patterns (Explicitly Banned)](#417-anti-patterns-explicitly-banned)
+  - [4.18 Amendment A1 — Linear-feel visual refresh](#418-amendment-a1--linear-feel-visual-refresh-2026-10-12)
 - [5. Architecture](#5-architecture)
   - [5.1 System Overview](#51-system-overview)
   - [5.2 Technology Stack](#52-technology-stack)
@@ -413,7 +414,7 @@ Velocity's UX is governed by a two-layer model, resolved deliberately:
 
 - Where ADS *component chrome* and Linear *layout geometry* disagree, **layout follows Linear, styling follows ADS**. E.g.: navigation lives in a Linear-style sidebar, but the sidebar's items, hover/selected states, and colors are ADS side-navigation patterns.
 - Where ADS interaction defaults conflict with keyboard-first operation, **keyboard parity wins**.
-- Density target: Linear-like density in issue lists (32px rows); ADS medium density in settings/forms.
+- Density target: Linear-like density in issue lists (36px rows, amendment A1 §4.18); ADS medium density in settings/forms.
 
 **Binding rules:**
 
@@ -432,7 +433,7 @@ Tokens are the single source of styling truth. Implementation: CSS custom proper
 --ds-space-{n}             4px base grid: 0,25,50,75,100,150,200,300,400,600,800,1000 (0–40px)
 --ds-radius-{n}            4,8,12 → rounded-sm (4), rounded (8), rounded-lg (12); NO larger radii
 --ds-font-{role}           body, heading, code, ui
---ds-font-size-{n}          100 (11px), 200 (12px), 300 (14px), 400 (16px), 500 (18px), 600 (20px), 700 (24px)
+--ds-font-size-{n}          100 (11px), 200 (12px), 300 (13px), 400 (15px), 500 (18px), 600 (20px), 700 (24px)   (A1)
 --ds-shadow-{n}            none, card, overlay (minimal usage)
 --ds-duration-{n}           100ms, 150ms, 200ms
 --ds-z-index-{n}           sticky=100, dropdown=300, modal=400, flag=500, tooltip=600
@@ -507,24 +508,24 @@ Dark is the default theme (Linear-class feel), built on ADS dark theme semantics
 ## 4.6 Typography
 
 - Stack: `Atlassian Sans Variable` self-hosted (fallback: `"Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`).
-- Scale (rem): 11/12/14/16/18/20/24 (§4.2.1 token names). UI default 14px/1.5; dense issue rows use 14px title + 12px metadata; semibold sparingly (titles, primary buttons, selected nav).
-- Code: `ui-monospace, "SFMono-Regular", Menlo, Consolas` — issue identifiers (`ENG-123`) always mono, 12px, subtle color.
+- Scale (rem): 11/12/13/15/18/20/24 (§4.2.1 token names). UI default 13px/1.5 (A1); dense issue rows use 13px medium title + 12px metadata; medium (500) is the default emphasis, semibold for page titles only.
+- Code: `ui-monospace, "SFMono-Regular", Menlo, Consolas` for code. Issue identifiers (`ENG-123`) use the UI sans at 12px medium, subtle color, tabular digits (A1).
 
 ## 4.7 Iconography
 
 - **@atlaskit/icon** preferred; fallback per skill rule: **Font Awesome 6** free (self-hosted subset) with a semantic mapping table.
 - Sizes: 16px inline, 20px buttons, 24px nav; stroke/currentColor.
 - Icon-only buttons banned without `aria-label` (binding skill rule); each carries a tooltip with its accessible name.
-- Fixed priority mapping: Urgent=alarm, High=arrow-up-circle, Medium=arrow-right-circle, Low=arrow-down-circle, None=dash-circle — theme-aware colors.
+- Fixed priority mapping (A1): Urgent = filled rounded square with `!` (danger color), High/Medium/Low = three signal bars with 3/2/1 filled (subtle text color, unfilled bars at 30%), None = three dashes.
 
 ## 4.8 Spacing, Radius, Elevation
 
 ADS foundation rules (binding):
 
 - **Spacing:** 4px base grid via `--ds-space-*` tokens (§4.2.1). Component paddings from the token scale only — no ad-hoc pixel values.
-- **Radius:** `4px` controls/inputs/lozenges, `8px` cards/panels/dropdowns, `12px` modals only. Nothing rounder; pill-radius only on badges/avatars. (Skill rule: no over-rounding.)
+- **Radius (A1):** `4px` lozenges/checkboxes/kbd, `6px` controls/inputs/nav items, `8px` cards/panels/dropdowns/content panel, `12px` modals only. Pill radius only on badges, avatars, label chips and pill tabs.
 - **Elevation:** shadows minimal — dropdowns and modals get the `overlay` shadow; everything else separates via surface value shifts (`surface` vs `surface-sunken`) and 1px borders. No shadow stacking on nested elements; no depth theatrics.
-- **Motion:** 100–200ms transitions on color/background only; the only movement animations are dropdown/modal enter (150ms opacity + 4px translate) and toast slide (200ms). `prefers-reduced-motion` disables all transform/opacity animation.
+- **Motion:** 100–200ms transitions on color/background only; the only movement animations are dropdown/modal enter (150ms opacity + 4px translate), toast slide (200ms) and disclosure chevron rotation (150ms, A1). Tooltips fade in (150ms opacity). `prefers-reduced-motion` disables all transform/opacity animation.
 
 ## 4.9 Component Specifications
 
@@ -546,7 +547,7 @@ Checkbox 16px + indeterminate for bulk headers; radios ≤ 5 options; switch 32�
 Signature status display: variant-tinted (status color at 15% bg / full-color text), 4px radius, 11px semibold, `nowrap`. Issue lists render a 6px color dot + name (density); full lozenge in detail views, boards, tables.
 
 ### 4.9.6 Table (DynamicTable)
-Header: `surface-sunken`, 12px uppercase subtle, sortable columns with ↑/↓ indicator via `aria-sort` (never raw sort text — skill rule). Rows 40px, border-top separators, hover sunken, selected = `primary-subtle` + 2px left primary border, roving tabindex, sticky header. Empty state: icon + one sentence + primary action.
+Header (A1): `surface`, 12px sentence-case medium `text-subtlest`, a single bottom hairline; sortable columns with ↑/↓ indicator via `aria-sort` (never raw sort text — skill rule). Rows 44px with no separators, hover = `surface-hover`, selected = `primary-subtle` + 2px left primary border, roving tabindex, sticky header. Empty state: icon + one sentence + primary action.
 
 ### 4.9.7 Flag (toast)
 Bottom-left stack, max 3, auto-dismiss 5s (errors persist), 200ms slide-in, dismiss ×, optional action link, severity dot. Never for critical errors (those become inline messages/banners — skill rule).
@@ -570,10 +571,10 @@ Views default to infinite scroll (Linear-parity, `J/K` page-through); explicit A
 Overflow menus (⋯): grouped items, danger text for destructive, submenu for moves; keyboard navigable; primary actions never buried in menus (skill rule).
 
 ### 4.9.14 Tabs
-ADS tabs (bottom border active `primary`) for object-page siblings: project tabs, issue detail (Comments/Activity/GitHub), settings sections. 32px height, 14px text.
+ADS tabs (bottom border active `primary`) for issue detail (Comments/Activity/GitHub) and settings sections, 32px height. Object-page siblings in a page toolbar (project Overview/Issues/Milestones/Activity) and view presets use the pill variant (A1): 28px, pill radius, selected = `neutral-hover` fill.
 
 ### 4.9.15 Side navigation
-Persistent left nav per §4.10 geometry. Item states: rest (`text-subtle`), hover (`surface-sunken`), selected (`surface-sunken`/`surface-raised` + `primary` text + 2px left `primary` border + weight 500), focus ring. Collapsible groups; collapse persists; keyboard-navigable as combined list with group separators.
+Persistent left nav per §4.10 geometry. Item states (A1): rest (`text-subtle`, icon `icon-subtle`), hover (`surface-hover`), pressed (`surface-pressed`), selected (`neutral` fill + `text` + weight 500, no indicator bar), focus ring inset. Counts are plain muted numerals. Collapsible groups; collapse persists; keyboard-navigable as combined list with group separators.
 
 ### 4.9.16 Breadcrumbs
 Only where depth exists (Settings paths). Subtle links, current = text + semibold; `>` separators; truncation beyond 4 levels.
@@ -620,10 +621,10 @@ Only where depth exists (Settings paths). Subtle links, current = text + semibol
 | Element | Spec |
 |---|---|
 | **Top bar** | **None.** No top navigation bar, no top app bar, no top header strip. Search, New, settings, avatar live in the sidebar (bottom or top inset). This is the defining Linear geometry trait. |
-| Sidebar | 220px fixed, full-height, `surface-sunken`; no top bar means sidebar owns identity: workspace name (plain text, 14px semibold) at top; below it the search input; then nav sections. |
-| Content | Fills remaining width between sidebar and optional panel. View header (48px): title (16px semibold), count badge, filter chips, display options menu, `+ New issue` primary button (32px). |
-| Issue rows | 32px height, single-line: priority icon, team-key+number (mono 12px subtle), title (14px), right-aligned metadata (label lozenges condensed, assignee avatar 20px). Row hover = `surface-sunken`; focused row = 2px left primary border; selected = `primary-subtle`. |
-| Status groups | Section header: 6px status-color dot + name (12px semibold subtle) + count (12px subtle) + collapse chevron; sticky within scroll. |
+| Sidebar | 220px fixed, full-height, on the `surface-sunken` app chrome with no border; no top bar means sidebar owns identity: workspace mark + name (13px semibold) at top; below it the search input; then nav sections. |
+| Content | (A1) An inset panel on the app chrome: 8px gap top/right/bottom, 8px radius, 1px `border`, `surface` fill; the detail panel lives inside it. View header (44px): optional breadcrumb trail, title (13px medium), muted count, filter chips, display options menu, `+ New issue` primary button (28px). |
+| Issue rows | 36px height (A1), single-line: priority icon, team-key+number (12px medium subtle), title (13px medium), right-aligned metadata (pill label chips, assignee avatar 20px). Row hover = `surface-hover`; focused row = `neutral` fill + 2px left primary bar; selected = `primary-subtle`. |
+| Status groups | Section header (36px, `surface-raised`, no rules): status icon + name (13px medium) + count (subtlest) + collapse chevron; sticky within scroll. |
 | Detail panel | 400px fixed right panel, opens on issue focus (`Enter`); `Esc` closes and returns focus to list; full-page issue view available via `⌘Enter`; panel = `surface` with 1px left border. |
 | Empty states | Centered in content: icon + one sentence + primary action. |
 | Modal | Issue-create modal centered (per §4.9.8), Linear-parity `C` flow. |
@@ -634,16 +635,16 @@ Only where depth exists (Settings paths). Subtle links, current = text + semibol
 
 1. Workspace name (identity row)
 2. Search input (⌕, `/` focuses, §4.12)
-3. **Workspace nav:** Inbox (unread badge), My Issues
+3. **Workspace nav:** Inbox (unread count), My Issues; then a collapsible **Workspace** group with *Projects* (all projects, `/projects`) and *Views* (all views, `/views`) (A1)
 4. **Teams:** per team — collapsible: Active, Backlog, Cycles, Projects, Views
 5. **Projects** (cross-team list, ≤ 8 shown + overflow)
 6. **Favorites** (starred views, orderable)
-7. **Bottom inset:** `+ New` (opens menu: Issue/Team/Project/View), Settings gear, user avatar + name + workspace
+7. **Bottom inset:** `+ New` (opens menu: Issue/Team/Project/View), Settings gear, user avatar + name
 
 ### 4.10.4 Layout-parity conformance tests
 
 - Visual regression suite snapshots the shell at 1440px and 1024px in both themes; geometry diffs (column widths, row heights, section presence/order) fail CI.
-- A checklist test asserts: no top-bar element exists in the DOM shell; sidebar is 220px±2; panel is 400px±2; issue row height 32px±2.
+- A checklist test asserts: no top-bar element exists in the DOM shell; sidebar is 220px±2; panel is 400px±2; view header 44px±1; issue row height 36px±1.
 
 ## 4.11 Screen Specifications
 
@@ -777,6 +778,19 @@ Bundle discipline: route-level splitting; SVG-native charts; lazy editor; icon s
 10. **A top bar.** Any top navigation strip above the content region violates the Linear-parity shell (§4.10.2). The only fixed chrome is the sidebar.
 
 ---
+
+
+## 4.18 Amendment A1 — Linear-feel visual refresh (2026-10-12)
+
+Approved by the repo owner. Where this amendment and earlier §4 text disagree, this amendment wins; the earlier sections have been updated inline and marked "(A1)".
+
+- **Palette.** Both themes share one desaturated indigo accent (`primary #5E6AD2`). Dark is a neutral near-black stack — app chrome `#09090A` (`surface-sunken`) < content panel `#121213` (`surface`) < cards `#1A1A1B` (`surface-raised`) < menus `#1E1E20` (`surface-overlay`) — with white-alpha hover/pressed/neutral fills and hairline white-alpha borders. Light uses neutral greys (`#F4F4F5` chrome, `#FFFFFF` panel, near-black `#1B1C1F` text). Status accents keep their ADS values. All text pairs stay ≥ 4.5:1 (enforced in `packages/tokens/test/contrast.test.ts`). The dark theme is no longer generated wholesale from ADS: `packages/tokens/src/dark.ts` overrides the generated ADS base for neutrals, borders and the accent.
+- **Shell.** The sidebar sits borderless on the app chrome; content renders in an inset rounded panel (§4.10.2). Sidebar selection is a neutral fill, not an indicator bar.
+- **Type and density.** 13px UI base; medium weight as the default emphasis; 36px issue rows; 44px view headers and table rows; sans identifiers with tabular digits.
+- **Components.** Sentence-case table and menu headings; neutral (not accent-tinted) highlight in menus, pickers and the command palette; tooltips are dark raised bubbles (`surface-overlay` + border + overlay shadow) instead of inverted chips; pill tabs and pill label chips; signal-bar priority icons; default buttons on a `neutral` fill with a hairline border.
+- **In-place editing.** Every property shown on an issue row, board card or sub-issue row (status, priority, assignee, labels, project, cycle, estimate) is itself a trigger: a click opens the same picker as its keyboard shortcut, anchored to the property, and never opens or selects the issue. Projects-list Status, Health and Lead cells edit in place the same way. Triggers stay out of the tab order; keyboard users keep the row shortcuts (§4.12).
+- **Navigation.** The sidebar's Workspace group links to all projects and all views from every screen (§4.10.3).
+- **Project page.** Breadcrumb header (team › Projects › project), pill section tabs, a centered document column (≤760px: icon tile, 24px title, read-only property summary, description, milestone list) and a right rail of collapsible cards (Properties, Milestones, Progress). Projects list columns: Name, Health, Lead, Target date, Teams, Issues, Status (status ring with progress pie + percent).
 
 # 5. Architecture
 

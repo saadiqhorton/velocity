@@ -59,10 +59,10 @@ The interface uses the published Atlassian Design System (ADS) look on a layout 
 ### How tokens flow
 
 ```text
-@atlaskit/tokens (atlassian-dark)    SPEC §4.2 light values
+@atlaskit/tokens (atlassian-dark)    SPEC §4.18 (A1) light values
       │ pnpm --filter @velocity/tokens generate      │ src/light.ts
       ▼                                              ▼
-packages/tokens/src/generated/ads-dark.ts  ──►  src/css.ts
+packages/tokens/src/generated/ads-dark.ts ──► src/dark.ts (A1 overrides) ──► src/css.ts
       │ pnpm --filter @velocity/tokens build
       ▼
 packages/tokens/dist/tokens.css      --ds-* custom properties under [data-theme='dark'|'light']
@@ -107,7 +107,7 @@ packages/ui components + apps/web/src/styles/app.css (@import tailwindcss, token
 - `tokens.css` defines the dark theme on `:root` and on `[data-theme='dark']`, with `[data-theme='light']` overriding it.
 - `public/theme-init.js` sets `data-theme` before first paint (from `localStorage` `vel.theme`, otherwise `prefers-color-scheme`). It is an external script because of the strict CSP.
 - After sign-in the profile's saved theme (`dark`, `light` or `system`) wins and is stored on the profile. The palette command "Switch theme" toggles it.
-- Light values are the SPEC values. Dark values are generated from the published `atlassian-dark` theme (see deviations below).
+- Light and dark values follow SPEC §4.18 (A1): the generated ADS dark theme is the base and `src/dark.ts` overrides its neutrals, borders and accent (see deviations below).
 
 ### Design boundary and visual baselines
 
@@ -165,7 +165,7 @@ Roadmap v1.2 (U1/U2) changed `Enter` from the panel to the full page, added `Spa
 
 These implementation choices are documented for transparency; `SPEC.md` remains the target contract unless noted.
 
-- The light theme follows the specified values. The dark theme uses the published `@atlaskit/tokens` `atlassian-dark` theme, as allowed by the specification's published-token rule. Dark lozenge text is lightened to maintain 4.5:1 contrast on a 15% tint.
+- Theme values follow SPEC §4.18 (amendment A1). `packages/tokens/src/generated/ads-dark.ts` is still generated from the published `@atlaskit/tokens` `atlassian-dark` theme and serves as the base; `packages/tokens/src/dark.ts` overrides its neutrals, borders and accent with the A1 charcoal-and-indigo palette, and `light.ts` carries the A1 light values. Status accents keep their ADS values. Dark lozenge text is lightened to maintain 4.5:1 contrast on a 15% tint.
 - The schema contains additional tables for singleton workspace state, invites, team counters, project-team links, issue activity, ordered favorites, MCP sessions, import items, and exports. API keys also store a lookup/display prefix.
 - Team keys are stored in a permanent alias table. Renaming a team changes its displayed issue prefix while old identifiers continue to resolve to that team; old keys cannot be assigned to another team. The aliases survive soft deletion so moved-issue pointers keep resolving.
 - Database tests use shared PostgreSQL configured by `TEST_DATABASE_URL` and clone a per-run template database rather than starting testcontainers.

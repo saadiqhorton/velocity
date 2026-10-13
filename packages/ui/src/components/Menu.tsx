@@ -148,7 +148,7 @@ export function Menu({ children, autoFocus = false, className, ...rest }: MenuPr
         aria-label={rest['aria-label']}
         ref={ref}
         onKeyDown={onKeyDown}
-        className={clsx('min-w-48 py-1 text-base', className)}
+        className={clsx('min-w-48 p-1 text-base', className)}
       >
         {children}
       </div>
@@ -166,7 +166,7 @@ export function MenuGroup({ heading, children }: MenuGroupProps) {
   return (
     <div role="group" aria-labelledby={heading ? id : undefined} className="not-first:mt-1 not-first:border-t not-first:border-border not-first:pt-1">
       {heading ? (
-        <div id={id} className="px-3 py-1 text-xs font-semibold uppercase text-fg-subtle">
+        <div id={id} className="px-2 py-1 text-sm font-medium text-fg-subtlest">
           {heading}
         </div>
       ) : null}
@@ -191,8 +191,12 @@ export interface MenuItemProps {
 
 const itemClass = (danger: boolean | undefined, disabled: boolean | undefined) =>
   clsx(
-    'flex h-8 w-full items-center gap-2 px-3 text-left transition-colors duration-100',
-    disabled ? 'cursor-not-allowed text-fg-disabled' : danger ? 'text-danger-fg hover:bg-danger-subtle focus:bg-danger-subtle' : 'text-fg hover:bg-hover focus:bg-hover',
+    'flex h-8 w-full items-center gap-2 rounded-sm px-2 text-left transition-colors duration-100 focus-visible:outline-none',
+    disabled
+      ? 'cursor-not-allowed text-fg-disabled'
+      : danger
+        ? 'text-danger-fg hover:bg-danger-subtle focus:bg-danger-subtle'
+        : 'text-fg hover:bg-neutral-hover focus:bg-neutral-hover',
   );
 
 export function MenuItem({ children, onSelect, icon, shortcut, danger, disabled, keepOpen, current }: MenuItemProps) {
@@ -224,7 +228,7 @@ export interface MenuSeparatorProps {
   className?: string;
 }
 export function MenuSeparator({ className }: MenuSeparatorProps) {
-  return <div role="separator" className={clsx('my-1 border-t border-border', className)} />;
+  return <div role="separator" className={clsx('-mx-1 my-1 border-t border-border', className)} />;
 }
 
 export interface SubMenuProps {

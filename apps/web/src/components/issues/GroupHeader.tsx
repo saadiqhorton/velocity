@@ -83,7 +83,7 @@ export function GroupHeader({ info, count, collapsed, rowIndex, onToggle, onCrea
       aria-expanded={!collapsed}
       data-testid="group-header"
       className={clsx(
-        'group/header flex h-8 items-center gap-2 border-y border-border bg-sunken pl-2 pr-3',
+        'group/header flex h-9 items-center gap-2 bg-raised pl-2 pr-3 transition-colors duration-100 hover:bg-overlay',
         sticky && 'shadow-none',
       )}
     >
@@ -92,12 +92,15 @@ export function GroupHeader({ info, count, collapsed, rowIndex, onToggle, onCrea
           type="button"
           onClick={onToggle}
           aria-label={collapsed ? m.list.expandGroup(info.label) : m.list.collapseGroup(info.label)}
-          className="flex h-6 min-w-0 items-center gap-2 rounded-sm px-1 text-sm transition-colors duration-100 hover:bg-hover"
+          className="flex h-7 min-w-0 items-center gap-2 rounded-sm px-1 text-base transition-colors duration-100 hover:bg-hover"
         >
-          <Icon name={collapsed ? 'chevron-right' : 'chevron-down'} className="h-3 w-3 text-fg-subtlest" />
+          <Icon
+            name="chevron-down"
+            className={clsx('h-3 w-3 text-fg-subtlest transition-transform duration-150', collapsed && '-rotate-90')}
+          />
           <span className="flex w-4 shrink-0 items-center justify-center">{info.icon}</span>
-          <span className="truncate font-semibold text-fg-subtle">{info.label}</span>
-          <span className="text-fg-subtlest">{count}</span>
+          <span className="truncate font-medium text-fg">{info.label}</span>
+          <span className="tabular-nums text-fg-subtlest">{count}</span>
         </button>
       </div>
       {onCreate ? (

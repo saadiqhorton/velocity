@@ -30,9 +30,93 @@ export const healthColor = (h: string): PaletteColor => HEALTH_COLOR[h] ?? ('gre
 export const statusLabel = (s: string): string => (m.project.statuses as Record<string, string>)[s] ?? s;
 export const healthLabel = (h: string): string => (m.project.healths as Record<string, string>)[h] ?? h;
 
+const STATUS_TONE: Record<string, string> = {
+  planned: 'var(--ds-color-text-subtlest)',
+  in_progress: 'var(--ds-status-yellow)',
+  completed: 'var(--ds-color-primary)',
+  canceled: 'var(--ds-color-text-subtlest)',
+};
+
+/**
+ * Project status glyph: the status ring (dashed while planned) filled as a pie by progress,
+ * a check when completed and a cross when canceled. Named for assistive tech by its status.
+ */
+export function ProjectStatusIcon({ status, percent, size = 14 }: { status: string; percent: number; size?: number }) {
+  const tone = STATUS_TONE[status] ?? STATUS_TONE.planned;
+  const pie = Math.max(0, Math.min(100, percent));
+  // A stroke as wide as the radius sweeps a pie; the circumference of r=2.5 is 15.708.
+  const sweep = (pie / 100) * 15.708;
+  return (
+    <svg viewBox="0 0 14 14" width={size} height={size} fill="none" role="img" aria-label={statusLabel(status)} className="shrink-0" style={{ color: tone }}>
+      {status === 'completed' ? (
+        <>
+          <circle cx="7" cy="7" r="6.25" fill="currentColor" />
+          <path d="M4.5 7.25 6.25 9 9.5 5.5" stroke="var(--ds-color-surface)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </>
+      ) : status === 'canceled' ? (
+        <>
+          <circle cx="7" cy="7" r="6.25" fill="currentColor" />
+          <path d="m5 5 4 4M9 5 5 9" stroke="var(--ds-color-surface)" strokeWidth="1.5" strokeLinecap="round" />
+        </>
+      ) : (
+        <>
+          <circle
+            cx="7"
+            cy="7"
+            r="6"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeDasharray={status === 'planned' ? '1.6 1.6' : undefined}
+          />
+          {sweep > 0 ? (
+            <circle
+              cx="7"
+              cy="7"
+              r="2.5"
+              stroke="currentColor"
+              strokeWidth="5"
+              strokeDasharray={`${sweep} 15.708`}
+              transform="rotate(-90 7 7)"
+            />
+          ) : null}
+        </>
+      )}
+    </svg>
+  );
+}
+
+const MILESTONE_TONE: Record<string, string> = {
+  planned: 'var(--ds-color-text-subtlest)',
+  in_progress: 'var(--ds-status-yellow)',
+  done: 'var(--ds-color-primary)',
+};
+
+/** Milestone glyph: a diamond — outlined while planned, half-filled in progress, solid when done. */
+export function MilestoneIcon({ status, size = 12 }: { status: string; size?: number }) {
+  const tone = MILESTONE_TONE[status] ?? MILESTONE_TONE.planned;
+  return (
+    <svg viewBox="0 0 12 12" width={size} height={size} aria-hidden="true" className="shrink-0" style={{ color: tone }}>
+      <path
+        d="M6 1 11 6 6 11 1 6Z"
+        fill={status === 'done' ? 'currentColor' : 'none'}
+        stroke="currentColor"
+        strokeWidth="1.25"
+        strokeLinejoin="round"
+      />
+      {status === 'in_progress' ? <path d="M6 1 11 6 6 11Z" fill="currentColor" /> : null}
+    </svg>
+  );
+}
+
 /** Health is color + dot + text, never color alone. */
 export function HealthBadge({ health }: { health: string | null | undefined }) {
-  if (!health) return <span className="whitespace-nowrap text-fg-subtlest">{m.project.noHealth}</span>;
+  if (!health)
+    return (
+      <span className="inline-flex items-center gap-2 whitespace-nowrap text-fg-subtlest">
+        <span aria-hidden="true" className="h-3.5 w-3.5 shrink-0 rounded-full border border-dashed border-fg-subtlest opacity-60" />
+        {m.project.noHealth}
+      </span>
+    );
   return (
     <span className="inline-flex items-center gap-2 whitespace-nowrap text-fg">
       <ColorDot color={healthColor(health)} size={8} />
@@ -72,8 +156,8 @@ export function teamOptions(ws: WorkspaceData): PopupOption[] {
 
 export function PropertyRow({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="flex min-h-8 items-center gap-2">
-      <span className="w-28 shrink-0 pl-2 text-sm text-fg-subtlest">{label}</span>
+    <div className="flex min-h-9 items-center gap-2">
+      <span className="w-24 shrink-0 text-base text-fg-subtle">{label}</span>
       <div className="min-w-0 flex-1">{children}</div>
     </div>
   );

@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { DragEvent, MouseEvent as ReactMouseEvent, ReactNode } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import clsx from 'clsx';
-import { Avatar, Icon, IconButton, PriorityIcon, Spinner, StatusIcon } from '@velocity/ui';
+import { Avatar, Icon, IconButton, PriorityIcon, Spinner, StatusIcon, priorityNames } from '@velocity/ui';
 import type { IssueRowFieldsFragment, UpdateIssueInput } from '@/gql/graphql';
 import { useWorkspace } from '@/app/workspace';
 import { useCommands } from '@/keyboard/react';
@@ -19,6 +19,7 @@ import { openRowContextMenu, spaceTargetOk } from './rowActions';
 import { ContentSkeleton } from '@/components/shell/ShellSkeleton';
 import { groupInfo } from './GroupHeader';
 import { LabelChips } from './LabelChips';
+import { InlineProp } from './InlineProp';
 import { PRIORITY_KEYS } from './IssueRow';
 import { useUpdateIssues } from './actions';
 import { useLoadWhenVisible } from './useLoadWhenVisible';
@@ -87,22 +88,55 @@ const BoardCard = memo(function BoardCard({ issue, focused, selected, onClick, o
       onContextMenu={(e) => onContextMenu(issue, e)}
       onDragStart={(e) => onDragStart(e, issue)}
       className={clsx(
-        'flex h-full cursor-default select-none flex-col gap-1.5 rounded-md border bg-surface p-3 text-base outline-none transition-colors duration-100',
-        selected ? 'border-primary bg-primary-subtle' : focused ? 'border-primary' : 'border-border hover:border-border-input',
+        'flex h-full cursor-default select-none flex-col gap-1.5 rounded-md border bg-raised p-3 text-base shadow-card outline-none transition-colors duration-100',
+        selected ? 'border-primary bg-primary-subtle' : focused ? 'border-primary' : 'border-border hover:border-border-input hover:bg-overlay',
         pulse !== undefined && 'sync-pulse',
       )}
     >
       <div className="flex items-center gap-2">
         <span className="identifier">{issue.identifier}</span>
         <span className="flex-1" />
-        {issue.assignee ? <Avatar name={issue.assignee.name} src={issue.assignee.avatarUrl} size={20} /> : null}
+        <InlineProp
+          kind="assignee"
+          issueId={issue.id}
+          label={`${m.issue.assignee}: ${issue.assignee?.name ?? m.issue.noAssignee}`}
+          className="h-6 w-6 rounded-full"
+        >
+          {issue.assignee ? (
+            <Avatar name={issue.assignee.name} src={issue.assignee.avatarUrl} size={20} />
+          ) : (
+            <Icon name="user" className="text-fg-subtlest opacity-60" />
+          )}
+        </InlineProp>
       </div>
-      <div className="line-clamp-2 min-h-0 flex-1 text-fg">{issue.title}</div>
+      <div className="line-clamp-2 min-h-0 flex-1 font-medium text-fg">{issue.title}</div>
       <div className="flex items-center gap-1.5">
-        <PriorityIcon priority={PRIORITY_KEYS[issue.priority] ?? 'none'} />
-        <StatusIcon category={issue.status.category} color={issue.status.color} label={issue.status.name} />
-        {issue.labels.length > 0 ? <LabelChips labels={issue.labels} max={1} /> : null}
-        {estimates && issue.estimate !== null ? <span className="rounded-sm border border-border px-1 text-sm text-fg-subtle">{issue.estimate}</span> : null}
+        <InlineProp
+          kind="priority"
+          issueId={issue.id}
+          label={`${m.issue.priority}: ${priorityNames[PRIORITY_KEYS[issue.priority] ?? 'none']}`}
+          className="h-6 w-6"
+        >
+          <PriorityIcon priority={PRIORITY_KEYS[issue.priority] ?? 'none'} label="" />
+        </InlineProp>
+        <InlineProp kind="status" issueId={issue.id} label={`${m.issue.status}: ${issue.status.name}`} className="h-6 w-6">
+          <StatusIcon category={issue.status.category} color={issue.status.color} label="" />
+        </InlineProp>
+        {issue.labels.length > 0 ? (
+          <InlineProp kind="labels" issueId={issue.id} label={`${m.issue.labels}: ${issue.labels.map((l) => l.name).join(', ')}`} className="rounded-full">
+            <LabelChips labels={issue.labels} max={1} />
+          </InlineProp>
+        ) : null}
+        {estimates && issue.estimate !== null ? (
+          <InlineProp
+            kind="estimate"
+            issueId={issue.id}
+            label={`${m.issue.estimate}: ${issue.estimate}`}
+            className="h-5 min-w-5 rounded-full border border-border px-1.5 text-sm tabular-nums text-fg-subtle hover:text-fg"
+          >
+            {issue.estimate}
+          </InlineProp>
+        ) : null}
       </div>
     </div>
   );
@@ -162,18 +196,20 @@ function BoardColumn({ group, grouping, focusedId, selected, dropActive, context
         onDrop(group.key);
       }}
       className={clsx(
-        'flex h-full w-72 shrink-0 flex-col rounded-md border transition-colors duration-100',
-        dropActive ? 'border-primary bg-primary-subtle' : 'border-transparent bg-sunken',
+        'group/column flex h-full w-80 shrink-0 flex-col rounded-md border transition-colors duration-100',
+        dropActive ? 'border-primary bg-primary-subtle' : 'border-transparent',
       )}
     >
-      <div className="flex h-10 shrink-0 items-center gap-2 px-3">
+      <div className="flex h-10 shrink-0 items-center gap-2 px-2">
         <span className="flex w-4 justify-center">{info.icon}</span>
-        <span className="truncate text-sm font-semibold text-fg-subtle">{info.label}</span>
-        <span className="text-sm text-fg-subtlest">{group.count}</span>
+        <span className="truncate text-base font-medium text-fg">{info.label}</span>
+        <span className="text-base tabular-nums text-fg-subtlest">{group.count}</span>
         <span className="flex-1" />
-        <IconButton label={m.issue.newIssue} size="sm" icon={<Icon name="add" />} onClick={() => openCreate({ ...context, ...info.defaults })} />
+        <span className="opacity-0 transition-opacity duration-100 focus-within:opacity-100 group-hover/column:opacity-100">
+          <IconButton label={m.issue.newIssue} size="sm" icon={<Icon name="add" />} onClick={() => openCreate({ ...context, ...info.defaults })} />
+        </span>
       </div>
-      <div ref={scrollRef} className="scrollbar-thin min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+      <div ref={scrollRef} className="scrollbar-thin min-h-0 flex-1 overflow-y-auto px-0.5 pb-2">
         <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
           {virtualizer.getVirtualItems().map((it) => {
             const issue = group.issues[it.index];
@@ -190,7 +226,7 @@ function BoardColumn({ group, grouping, focusedId, selected, dropActive, context
         </div>
         {group.unloaded > 0 ? (
           // SPEC §4.9.11: a 16px spinner beside the text for a component fetch.
-          <div ref={moreRef} role="status" className="flex h-8 items-center justify-center gap-2 text-sm text-fg-subtle" data-testid="board-loading-more">
+          <div ref={moreRef} role="status" className="flex h-9 items-center justify-center gap-2 text-sm text-fg-subtle" data-testid="board-loading-more">
             <Spinner size={16} label="" />
             {m.list.loadingMore}
           </div>
@@ -407,7 +443,7 @@ export function IssueBoard({ listId, data, grouping, context, cycleNames, empty 
 
   return (
     <div
-      className="scrollbar-thin flex min-h-0 flex-1 gap-3 overflow-x-auto p-4"
+      className="scrollbar-thin flex min-h-0 flex-1 gap-2 overflow-x-auto px-3 py-2"
       data-testid="issue-board"
       onDragEnd={() => setDrag(null)}
       onPointerDown={() => setList(listId, order, context ? { teamId: context.teamId } : null)}

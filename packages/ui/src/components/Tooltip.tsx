@@ -116,7 +116,7 @@ function TooltipBubble({
       id={id}
       role="tooltip"
       ref={setFloating}
-      className="pointer-events-none max-w-60 rounded-sm bg-fg px-2 py-1 text-sm text-fg-inverse"
+      className="ds-fade-in pointer-events-none max-w-60 rounded-sm border border-border bg-overlay px-2 py-1 text-sm text-fg shadow-overlay"
       style={{ ...style, zIndex: 'var(--ds-z-index-tooltip)' }}
     >
       {children}

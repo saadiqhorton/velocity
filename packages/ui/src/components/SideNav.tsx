@@ -50,9 +50,9 @@ export interface SideNavItemProps {
 }
 
 /**
- * Side navigation item (SPEC §4.9.15): rest = subtle text; hover = hover surface;
- * selected = raised surface, selected text, weight 500 and a 2px primary indicator.
- * 28px rows keep the sidebar at list density (§4.10).
+ * Side navigation item (SPEC §4.9.15): rest = subtle text with muted icon; hover = hover
+ * surface; pressed = pressed surface; selected = neutral fill, full-strength text and
+ * icon, weight 500. 28px rows keep the sidebar at list density (§4.10).
  */
 export const SideNavItem = forwardRef<HTMLElement, SideNavItemProps>(function SideNavItem(
   { children, icon, trailing, selected = false, href, to, as, onClick, level = 0, className, ...rest },
@@ -71,16 +71,23 @@ export const SideNavItem = forwardRef<HTMLElement, SideNavItemProps>(function Si
       data-sidenav-item=""
       aria-current={selected ? 'page' : undefined}
       className={clsx(
-        'relative flex h-7 w-full shrink-0 select-none items-center gap-2 rounded-sm pr-2 text-left text-base transition-colors duration-100',
+        'group/navitem relative flex h-7 w-full shrink-0 select-none items-center gap-2 rounded-sm pr-2 text-left text-base transition-colors duration-100',
+        'focus-visible:-outline-offset-2',
         level === 1 ? 'pl-7' : 'pl-2',
-        'before:absolute before:inset-y-1.5 before:left-0 before:w-0.5 before:rounded-full',
-        selected
-          ? 'bg-raised font-medium text-fg-selected before:bg-primary'
-          : 'text-fg-subtle before:bg-transparent hover:bg-hover hover:text-fg',
+        selected ? 'bg-neutral font-medium text-fg' : 'text-fg-subtle hover:bg-hover hover:text-fg active:bg-pressed',
         className,
       )}
     >
-      {icon ? <span className="inline-flex w-4 shrink-0 items-center justify-center">{icon}</span> : null}
+      {icon ? (
+        <span
+          className={clsx(
+            'inline-flex w-4 shrink-0 items-center justify-center transition-colors duration-100',
+            selected ? 'text-icon' : 'text-icon-subtle group-hover/navitem:text-icon',
+          )}
+        >
+          {icon}
+        </span>
+      ) : null}
       <span className="min-w-0 flex-1 truncate">{children}</span>
       {trailing}
     </Comp>
@@ -129,15 +136,21 @@ export function SideNavGroup({
           aria-controls={id}
           onClick={() => setCollapsed(!isCollapsed)}
           className={clsx(
-            'flex h-7 w-full min-w-0 select-none items-center gap-2 rounded-sm px-2 text-left transition-colors duration-100 hover:bg-hover',
-            variant === 'section' ? 'text-sm font-medium text-fg-subtlest hover:text-fg-subtle' : 'text-base text-fg-subtle hover:text-fg',
+            'flex w-full min-w-0 select-none items-center gap-1.5 rounded-sm px-2 text-left transition-colors duration-100 hover:bg-hover focus-visible:-outline-offset-2',
+            variant === 'section'
+              ? 'h-6 text-sm font-medium text-fg-subtlest hover:text-fg-subtle'
+              : 'h-7 gap-2 text-base text-fg-subtle hover:text-fg active:bg-pressed',
           )}
         >
           {icon ? <span className="inline-flex w-4 shrink-0 items-center justify-center">{icon}</span> : null}
           <span className="min-w-0 truncate">{title}</span>
           <Icon
-            name={isCollapsed ? 'chevron-right' : 'chevron-down'}
-            className={clsx('h-3 w-3 shrink-0 opacity-70', variant === 'section' && 'opacity-0 group-hover/navgroup:opacity-70')}
+            name="chevron-down"
+            className={clsx(
+              'h-3 w-3 shrink-0 transition-transform duration-150',
+              isCollapsed && '-rotate-90',
+              variant === 'section' ? 'opacity-60' : 'opacity-0 group-hover/navgroup:opacity-60',
+            )}
           />
         </button>
         {actions ? <div className="absolute right-1 flex items-center">{actions}</div> : null}

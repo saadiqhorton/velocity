@@ -19,12 +19,14 @@ export interface PresetTabsProps<T extends string> {
 
 /**
  * Shared look of a compact header segment (preset tabs, project status filter, cycle/closed switch):
- * 28px, 12px text, the selected one on a neutral fill. One style for every view header.
+ * 28px pills, 12px medium text, the selected one on a neutral fill with a hairline. One style for every view header.
  */
 export function segmentClass(selected: boolean): string {
   return clsx(
-    'inline-flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-sm px-2 text-sm transition-colors duration-100',
-    selected ? 'bg-neutral font-medium text-fg' : 'text-fg-subtle hover:bg-hover hover:text-fg',
+    'inline-flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 text-sm font-medium transition-colors duration-100',
+    selected
+      ? 'border-border bg-neutral-hover text-fg'
+      : 'border-transparent text-fg-subtle hover:bg-hover hover:text-fg active:bg-pressed',
   );
 }
 

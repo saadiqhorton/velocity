@@ -101,7 +101,7 @@ function TitleEditor({ issue }: { issue: DetailIssue }) {
           (e.target as HTMLTextAreaElement).blur();
         }
       }}
-      className="w-full resize-none overflow-hidden rounded-sm bg-transparent px-1 py-0.5 text-xl font-semibold leading-7 text-fg outline-none hover:bg-hover focus:bg-transparent focus-visible:outline-2 focus-visible:outline-focus"
+      className="w-full resize-none overflow-hidden rounded-sm bg-transparent px-1 py-0.5 text-2xl font-semibold leading-8 tracking-tight text-fg outline-none transition-colors duration-100 hover:bg-hover focus:bg-transparent focus-visible:outline-2 focus-visible:outline-focus"
     />
   );
 }
@@ -232,7 +232,7 @@ function Section({ title, children, action, count }: { title: string; children: 
   return (
     <section className="flex flex-col gap-1">
       <div className="flex h-7 items-center justify-between px-1">
-        <h2 className="flex items-center gap-2 text-sm font-semibold text-fg-subtle">
+        <h2 className="flex items-center gap-2 text-base font-medium text-fg-subtle">
           {title}
           {count ? <span className="font-normal text-fg-subtlest">{count}</span> : null}
         </h2>

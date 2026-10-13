@@ -1,11 +1,11 @@
-import { adsDark } from './generated/ads-dark';
+import { dark } from './dark';
 import { light } from './light';
 import { statusPalette, chartPalette } from './palette';
 import { space, radius, fontSize, fontFamily, duration, zIndex, layout } from './scales';
 import type { ThemeName, ThemeTokens } from './types';
 import { STATUS_COLORS } from './types';
 
-export const themes: Record<ThemeName, ThemeTokens> = { light, dark: adsDark };
+export const themes: Record<ThemeName, ThemeTokens> = { light, dark };
 
 function themeBlock(name: ThemeName): string {
   const t = themes[name];

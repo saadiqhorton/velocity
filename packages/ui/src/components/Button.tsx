@@ -8,16 +8,17 @@ export type ButtonVariant = 'primary' | 'default' | 'subtle' | 'link' | 'danger'
 export type ButtonSize = 'sm' | 'md' | 'lg';
 
 export const buttonVariantClass: Record<ButtonVariant, string> = {
-  primary: 'bg-primary text-fg-inverse hover:bg-primary-hover disabled:bg-neutral disabled:text-fg-disabled',
+  primary:
+    'bg-primary text-fg-inverse shadow-card hover:bg-primary-hover active:bg-primary disabled:bg-neutral disabled:text-fg-disabled disabled:shadow-none',
   default:
-    'border border-border-input bg-transparent text-fg hover:bg-hover active:bg-pressed disabled:text-fg-disabled disabled:border-border',
+    'border border-border bg-neutral text-fg hover:bg-neutral-hover active:bg-pressed disabled:bg-transparent disabled:text-fg-disabled',
   subtle: 'bg-transparent text-fg-subtle hover:bg-hover hover:text-fg active:bg-pressed disabled:text-fg-disabled',
   link: 'bg-transparent text-link hover:underline disabled:text-fg-disabled disabled:no-underline',
-  danger: 'bg-danger text-fg-inverse hover:bg-danger-fg disabled:bg-neutral disabled:text-fg-disabled',
+  danger: 'bg-danger text-fg-inverse hover:bg-danger-fg active:bg-danger disabled:bg-neutral disabled:text-fg-disabled',
 };
 
 export const buttonSizeClass: Record<ButtonSize, string> = {
-  sm: 'h-7 px-2 text-sm',
+  sm: 'h-7 px-2.5 text-sm',
   md: 'h-8 px-3 text-base',
   lg: 'h-10 px-4 text-base',
 };

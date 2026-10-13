@@ -25,7 +25,7 @@ import { GroupHeader, groupInfo } from './GroupHeader';
 import type { IssueListResult } from './useIssueList';
 import { m } from '@/i18n';
 
-export const ROW_HEIGHT = 32;
+export const ROW_HEIGHT = 36;
 
 export interface IssueListProps {
   listId: string;

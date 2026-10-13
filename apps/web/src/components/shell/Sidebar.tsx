@@ -3,7 +3,7 @@ import type { DragEvent, ReactNode } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useApolloClient, useQuery } from '@apollo/client';
 import clsx from 'clsx';
-import { Avatar, Badge, DropdownMenu, Icon, IconButton, Kbd, MenuGroup, MenuItem, MenuSeparator, SideNav, SideNavGroup, SideNavItem } from '@velocity/ui';
+import { Avatar, DropdownMenu, Icon, IconButton, Kbd, MenuGroup, MenuItem, MenuSeparator, SideNav, SideNavGroup, SideNavItem } from '@velocity/ui';
 import { LogoutDocument, ReorderFavoriteDocument, SidebarCountsDocument } from '@/gql/graphql';
 import type { FavoriteFieldsFragment, TeamFieldsFragment } from '@/gql/graphql';
 import { useWorkspace } from '@/app/workspace';
@@ -33,8 +33,11 @@ function SidebarSearch() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   return (
-    <div className="relative px-2">
-      <Icon name="search" className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-fg-subtlest" />
+    <div className="group/search relative px-2">
+      <Icon
+        name="search"
+        className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-icon-subtle transition-colors duration-100 group-hover/search:text-icon"
+      />
       <input
         ref={inputRef}
         id="sidebar-search"
@@ -53,9 +56,11 @@ function SidebarSearch() {
             document.querySelector<HTMLElement>('[data-region="list"] [tabindex="0"]')?.focus();
           }
         }}
-        className="h-7 w-full rounded-sm border border-border bg-surface pl-7 pr-8 text-base text-fg placeholder:text-fg-subtlest hover:border-border-input focus:border-primary [&::-webkit-search-cancel-button]:hidden"
+        className="peer h-7 w-full rounded-sm border border-transparent bg-transparent pl-7 pr-8 text-base text-fg transition-colors duration-100 placeholder:text-fg-subtle hover:bg-hover focus:border-primary focus:bg-input focus-visible:outline-none [&::-webkit-search-cancel-button]:hidden"
       />
-      <Kbd className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2">/</Kbd>
+      <Kbd className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 opacity-0 transition-opacity duration-100 group-hover/search:opacity-100 peer-focus:opacity-100">
+        /
+      </Kbd>
     </div>
   );
 }
@@ -197,9 +202,9 @@ function NewMenu() {
       trigger={
         <button
           type="button"
-          className="flex h-7 min-w-0 flex-1 items-center gap-2 rounded-sm px-2 text-base text-fg-subtle transition-colors duration-100 hover:bg-hover hover:text-fg"
+          className="group/new flex h-7 min-w-0 flex-1 items-center gap-2 rounded-sm px-2 text-base text-fg-subtle transition-colors duration-100 hover:bg-hover hover:text-fg active:bg-pressed"
         >
-          <Icon name="add" />
+          <Icon name="add" className="text-icon-subtle transition-colors duration-100 group-hover/new:text-icon" />
           <span className="truncate">{m.nav.newMenu}</span>
         </button>
       }
@@ -221,7 +226,7 @@ function NewMenu() {
 }
 
 function AccountMenu() {
-  const { viewer, workspace } = useWorkspace();
+  const { viewer } = useWorkspace();
   const client = useApolloClient();
   const navigate = useNavigate();
   const setTheme = useSetTheme();
@@ -239,13 +244,13 @@ function AccountMenu() {
         <button
           type="button"
           data-testid="account-menu"
-          className="flex h-10 w-full min-w-0 items-center gap-2 rounded-sm px-2 text-left transition-colors duration-100 hover:bg-hover"
+          className="flex h-9 w-full min-w-0 items-center gap-2 rounded-sm px-2 text-left transition-colors duration-100 hover:bg-hover active:bg-pressed"
         >
-          <Avatar name={viewer.name} src={viewer.avatarUrl} size={24} />
+          <Avatar name={viewer.name} src={viewer.avatarUrl} size={20} />
           <span className="min-w-0 flex-1">
             <span className="block truncate text-base font-medium text-fg">{viewer.name}</span>
-            <span className="block truncate text-sm text-fg-subtlest">{workspace?.name}</span>
           </span>
+          <Icon name="chevron-up" className="h-3 w-3 shrink-0 text-icon-subtle" />
         </button>
       }
     >
@@ -286,6 +291,7 @@ export function Sidebar({ className }: { className?: string }) {
   const unread = counts.data?.unreadNotificationCount ?? 0;
   const teamsCollapsed = useSidebar((s) => s.collapsed.teams ?? false);
   const projectsCollapsed = useSidebar((s) => s.collapsed.projects ?? false);
+  const workspaceCollapsed = useSidebar((s) => s.collapsed.workspace ?? false);
   const setCollapsed = useSidebar((s) => s.setCollapsed);
   const navigate = useNavigate();
   const shownProjects = projects.filter((p) => p.status !== 'completed' && p.status !== 'canceled').slice(0, MAX_PROJECTS);
@@ -296,21 +302,33 @@ export function Sidebar({ className }: { className?: string }) {
       data-region="sidebar"
       aria-label={m.nav.sidebar}
       data-testid="sidebar"
-      className={clsx('flex h-full shrink-0 flex-col border-r border-border bg-sunken', className)}
+      className={clsx('flex h-full shrink-0 flex-col bg-sunken', className)}
     >
-      <div className="flex h-12 shrink-0 items-center px-4">
+      <div className="flex h-12 shrink-0 items-center gap-2 px-4">
+        <span
+          aria-hidden="true"
+          className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-xs bg-primary text-xs font-semibold text-fg-inverse"
+        >
+          {workspace?.name?.trim().charAt(0).toUpperCase()}
+        </span>
         <span className="truncate text-base font-semibold text-fg" data-testid="workspace-name">
           {workspace?.name}
         </span>
       </div>
       <SidebarSearch />
-      <SideNav aria-label={m.nav.primaryNav} className="scrollbar-thin mt-3 min-h-0 flex-1 overflow-y-auto px-2 pb-3">
+      <SideNav aria-label={m.nav.primaryNav} className="scrollbar-thin mt-2 min-h-0 flex-1 overflow-y-auto px-2 pb-3">
         <SideNavItem
           as={Link}
           to="/inbox"
           icon={<Icon name="inbox" />}
           selected={isActive('/inbox')}
-          trailing={unread > 0 ? <Badge value={unread} appearance="primary" /> : null}
+          trailing={
+            unread > 0 ? (
+              <span aria-hidden="true" className="shrink-0 text-sm tabular-nums text-fg-subtle">
+                {unread > 99 ? '99+' : unread}
+              </span>
+            ) : null
+          }
         >
           <span>{m.nav.inbox}</span>
           {unread > 0 ? <span className="sr-only">, {m.nav.unreadCount(unread)}</span> : null}
@@ -319,14 +337,25 @@ export function Sidebar({ className }: { className?: string }) {
           {m.nav.myIssues}
         </SideNavItem>
 
-        <div className="h-4" aria-hidden="true" />
+        <div className="h-3" aria-hidden="true" />
+        {/* Workspace-wide pages: every project and every saved view, one click from anywhere. */}
+        <SideNavGroup title={m.nav.workspace} collapsed={workspaceCollapsed} onCollapsedChange={(c) => setCollapsed('workspace', c)}>
+          <SideNavItem as={Link} to="/projects" icon={<Icon name="project" />} selected={isActive('/projects', true)} data-testid="nav-all-projects">
+            {m.nav.projects}
+          </SideNavItem>
+          <SideNavItem as={Link} to="/views" icon={<Icon name="view" />} selected={isActive('/views', true)} data-testid="nav-all-views">
+            {m.nav.views}
+          </SideNavItem>
+        </SideNavGroup>
+
+        <div className="h-3" aria-hidden="true" />
         <SideNavGroup title={m.nav.teams} collapsed={teamsCollapsed} onCollapsedChange={(c) => setCollapsed('teams', c)}>
           {teams.map((t) => (
             <TeamGroup key={t.id} team={t} />
           ))}
         </SideNavGroup>
 
-        <div className="h-4" aria-hidden="true" />
+        <div className="h-3" aria-hidden="true" />
         <SideNavGroup
           title={m.nav.projects}
           collapsed={projectsCollapsed}
@@ -356,11 +385,11 @@ export function Sidebar({ className }: { className?: string }) {
           ) : null}
         </SideNavGroup>
 
-        <div className="h-4" aria-hidden="true" />
+        <div className="h-3" aria-hidden="true" />
         <Favorites />
       </SideNav>
 
-      <div className="shrink-0 border-t border-border px-2 py-2">
+      <div className="flex shrink-0 flex-col gap-px px-2 pb-2 pt-1">
         <div className="flex items-center gap-1">
           <NewMenu />
           <IconButton
@@ -368,7 +397,7 @@ export function Sidebar({ className }: { className?: string }) {
             size="sm"
             icon={<Icon name="settings" />}
             onClick={() => navigate('/settings')}
-            className={clsx(isActive('/settings') && 'bg-raised text-fg-selected')}
+            className={clsx(isActive('/settings') && 'bg-neutral text-fg')}
           />
         </div>
         <AccountMenu />

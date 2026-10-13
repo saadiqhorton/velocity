@@ -16,10 +16,12 @@ export interface TabsProps {
   defaultValue?: string;
   onChange?: (id: string) => void;
   'aria-label': string;
+  /** `underline` = ADS tabs over a rule; `pill` = compact rounded segments with a filled selection. */
+  variant?: 'underline' | 'pill';
   className?: string;
 }
 
-export function Tabs({ items, value, defaultValue, onChange, className, ...rest }: TabsProps) {
+export function Tabs({ items, value, defaultValue, onChange, variant = 'underline', className, ...rest }: TabsProps) {
   const base = useId();
   const [current, setCurrent] = useControllableState<string>(value, defaultValue ?? items.find((i) => !i.disabled)?.id ?? '', onChange);
   const refs = useRef<Record<string, HTMLButtonElement | null>>({});
@@ -43,7 +45,12 @@ export function Tabs({ items, value, defaultValue, onChange, className, ...rest 
   const active = items.find((i) => i.id === current);
   return (
     <div className={className}>
-      <div role="tablist" aria-label={rest['aria-label']} onKeyDown={onKeyDown} className="flex gap-4 border-b border-border">
+      <div
+        role="tablist"
+        aria-label={rest['aria-label']}
+        onKeyDown={onKeyDown}
+        className={variant === 'pill' ? 'flex items-center gap-1' : 'flex gap-4 border-b border-border'}
+      >
         {items.map((item) => {
           const selected = item.id === current;
           return (
@@ -61,9 +68,14 @@ export function Tabs({ items, value, defaultValue, onChange, className, ...rest 
               disabled={item.disabled}
               onClick={() => setCurrent(item.id)}
               className={clsx(
-                // ADS tabs: medium weight in every state, so selecting a tab never shifts its neighbours.
-                '-mb-px h-8 border-b-2 text-base font-medium transition-colors duration-100 disabled:cursor-not-allowed disabled:text-fg-disabled',
-                selected ? 'border-primary text-fg-selected' : 'border-transparent text-fg-subtle hover:text-fg',
+                // Medium weight in every state, so selecting a tab never shifts its neighbours.
+                'text-base font-medium transition-colors duration-100 disabled:cursor-not-allowed disabled:text-fg-disabled',
+                variant === 'pill'
+                  ? clsx(
+                      'h-7 rounded-full px-3',
+                      selected ? 'bg-neutral-hover text-fg' : 'text-fg-subtle hover:bg-hover hover:text-fg active:bg-pressed',
+                    )
+                  : clsx('-mb-px h-8 border-b-2', selected ? 'border-primary text-fg' : 'border-transparent text-fg-subtle hover:text-fg'),
               )}
             >
               {item.label}

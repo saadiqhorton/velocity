@@ -30,7 +30,7 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Che
         disabled={disabled}
         aria-checked={indeterminate ? 'mixed' : undefined}
         className={clsx(
-          'peer h-4 w-4 cursor-pointer appearance-none rounded-sm border border-border-input bg-input transition-colors duration-100',
+          'peer h-4 w-4 cursor-pointer appearance-none rounded-xs border border-border-input bg-input transition-colors duration-100 hover:border-fg-subtlest',
           'checked:border-primary checked:bg-primary indeterminate:border-primary indeterminate:bg-primary',
           'disabled:cursor-not-allowed disabled:border-border disabled:bg-sunken',
           className,

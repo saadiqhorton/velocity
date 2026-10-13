@@ -4,17 +4,16 @@ import type { IconSize } from './Icon';
 export type Priority = 'urgent' | 'high' | 'medium' | 'low' | 'none';
 
 /**
- * Fixed priority mapping (SPEC §4.7): Urgent = alarm, High = arrow-up-circle,
- * Medium = arrow-right-circle, Low = arrow-down-circle, None = dash-circle.
- * Drawn with the same 1.5px stroke as StatusIcon so dense rows stay calm; only Urgent is
- * filled, so it is the one that draws the eye.
+ * Fixed priority mapping (SPEC §4.7, amended): Urgent = filled rounded square with "!",
+ * High/Medium/Low = three signal bars with 3/2/1 filled, None = three dashes. Unfilled
+ * bars sit at low opacity so the level reads at a glance; only Urgent carries color.
  */
-const config: Record<Priority, { color: string; name: string }> = {
-  urgent: { color: 'text-danger-fg', name: 'Urgent priority' },
-  high: { color: 'text-warning-fg', name: 'High priority' },
-  medium: { color: 'text-fg-subtle', name: 'Medium priority' },
-  low: { color: 'text-fg-subtlest', name: 'Low priority' },
-  none: { color: 'text-fg-subtlest', name: 'No priority' },
+const config: Record<Priority, { color: string; name: string; level: number }> = {
+  urgent: { color: 'text-danger-fg', name: 'Urgent priority', level: 3 },
+  high: { color: 'text-fg-subtle', name: 'High priority', level: 3 },
+  medium: { color: 'text-fg-subtle', name: 'Medium priority', level: 2 },
+  low: { color: 'text-fg-subtle', name: 'Low priority', level: 1 },
+  none: { color: 'text-fg-subtlest', name: 'No priority', level: 0 },
 };
 
 export const priorityNames: Record<Priority, string> = {
@@ -51,23 +50,30 @@ export function PriorityIcon({ priority, size = 16, label, className }: Priority
     >
       {priority === 'urgent' ? (
         <>
-          <circle cx="8" cy="8" r="7" fill="currentColor" />
-          <path d="M8 4.25v4.5" stroke="var(--ds-color-surface)" strokeWidth="1.75" strokeLinecap="round" />
+          <rect x="1.5" y="1.5" width="13" height="13" rx="3" fill="currentColor" />
+          <path d="M8 4.5v4.25" stroke="var(--ds-color-surface)" strokeWidth="1.75" strokeLinecap="round" />
           <circle cx="8" cy="11.25" r="1" fill="var(--ds-color-surface)" />
         </>
+      ) : priority === 'none' ? (
+        <path d="M2.5 8h2M7 8h2M11.5 8h2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
       ) : (
-        <circle cx="8" cy="8" r="6.25" stroke="currentColor" strokeWidth="1.5" />
+        [
+          { x: 2, y: 9, h: 5 },
+          { x: 6.5, y: 5.5, h: 8.5 },
+          { x: 11, y: 2, h: 12 },
+        ].map((bar, i) => (
+          <rect
+            key={i}
+            x={bar.x}
+            y={bar.y}
+            width="3"
+            height={bar.h}
+            rx="1"
+            fill="currentColor"
+            opacity={i < c.level ? 1 : 0.3}
+          />
+        ))
       )}
-      {priority === 'high' ? (
-        <path d="M8 11V5.25M5.5 7.5 8 5l2.5 2.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-      ) : null}
-      {priority === 'medium' ? (
-        <path d="M5 8h5.75M8.5 5.5 11 8l-2.5 2.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-      ) : null}
-      {priority === 'low' ? (
-        <path d="M8 5v5.75M5.5 8.5 8 11l2.5-2.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-      ) : null}
-      {priority === 'none' ? <path d="M5.25 8h5.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /> : null}
     </svg>
   );
 }
