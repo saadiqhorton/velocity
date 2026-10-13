@@ -657,7 +657,7 @@ View header: team icon+name, cycle picker (`Cycle 17 ⌄`) when cycles on, progr
 Flat manual-ordered list (drag + `⌥↑/↓`), group-by-priority toggle, bulk "add to cycle".
 
 ### 4.11.3 Issue detail (panel default, page optional)
-Header: `ENG-123` mono + status lozenge + inline-editable title (500ms debounce autosave). Properties block: status, assignee, priority, labels, project, cycle, estimate — popup-select inline editors. Description editor; sub-issue tree; relations; tabs Comments / Activity / GitHub (when linked); subscribe toggle + timestamps.
+Header: `ENG-123` (UI sans, tabular digits) + status lozenge + inline-editable title (500ms debounce autosave). Properties block: status, assignee, priority, labels, project, cycle, estimate — popup-select inline editors. Description editor; sub-issue tree; relations; tabs Comments / Activity / GitHub (when linked); subscribe toggle + timestamps.
 
 ### 4.11.4 Cycles screen
 Cycle header: range + velocity sparkline + progress; grouped issue list; "added" scope markers; closed-cycles archive list.
@@ -741,7 +741,7 @@ Binding (ADS skill):
 - Empty states: one sentence + action; never raw sort/filter tokens as text.
 - Icon-only controls carry accessible names; ≤ 8-char strings in compact controls never wrap.
 - Errors: human sentences with recovery action.
-- Issue identifiers always mono.
+- Issue identifiers use the UI sans at 12px medium with tabular digits (A1; not mono).
 
 ## 4.15 Accessibility
 
@@ -790,7 +790,7 @@ Approved by the repo owner. Where this amendment and earlier §4 text disagree, 
 - **Components.** Sentence-case table and menu headings; neutral (not accent-tinted) highlight in menus, pickers and the command palette; tooltips are dark raised bubbles (`surface-overlay` + border + overlay shadow) instead of inverted chips; pill tabs and pill label chips; signal-bar priority icons; default buttons on a `neutral` fill with a hairline border.
 - **In-place editing.** Every property shown on an issue row, board card or sub-issue row (status, priority, assignee, labels, project, cycle, estimate) is itself a trigger: a click opens the same picker as its keyboard shortcut, anchored to the property, and never opens or selects the issue. Projects-list Status, Health and Lead cells edit in place the same way. Triggers stay out of the tab order; keyboard users keep the row shortcuts (§4.12).
 - **Navigation.** The sidebar's Workspace group links to all projects and all views from every screen (§4.10.3).
-- **Project page.** Breadcrumb header (team › Projects › project), pill section tabs, a centered document column (≤760px: icon tile, 24px title, read-only property summary, description, milestone list) and a right rail of collapsible cards (Properties, Milestones, Progress). Projects list columns: Name, Health, Lead, Target date, Teams, Issues, Status (status ring with progress pie + percent).
+- **Project page.** Breadcrumb header (team › Projects › project), pill section tabs, a centered document column (≤760px: icon tile, 24px title, interactive property summary chips that edit in place the same way as the Properties rail, description, milestone list) and a right rail of collapsible cards (Properties, Milestones, Progress). Projects list columns: Name, Health, Lead, Target date, Teams, Issues, Status (status ring with progress pie + percent).
 
 # 5. Architecture
 

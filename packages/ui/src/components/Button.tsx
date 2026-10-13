@@ -9,7 +9,7 @@ export type ButtonSize = 'sm' | 'md' | 'lg';
 
 export const buttonVariantClass: Record<ButtonVariant, string> = {
   primary:
-    'bg-primary text-fg-inverse shadow-card hover:bg-primary-hover active:bg-primary disabled:bg-neutral disabled:text-fg-disabled disabled:shadow-none',
+    'bg-primary text-fg-inverse hover:bg-primary-hover active:bg-primary disabled:bg-neutral disabled:text-fg-disabled',
   default:
     'border border-border bg-neutral text-fg hover:bg-neutral-hover active:bg-pressed disabled:bg-transparent disabled:text-fg-disabled',
   subtle: 'bg-transparent text-fg-subtle hover:bg-hover hover:text-fg active:bg-pressed disabled:text-fg-disabled',

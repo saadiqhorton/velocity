@@ -32,7 +32,7 @@ export const healthLabel = (h: string): string => (m.project.healths as Record<s
 
 const STATUS_TONE: Record<string, string> = {
   planned: 'var(--ds-color-text-subtlest)',
-  in_progress: 'var(--ds-status-yellow)',
+  in_progress: 'var(--ds-color-warning)',
   completed: 'var(--ds-color-primary)',
   canceled: 'var(--ds-color-text-subtlest)',
 };
@@ -87,7 +87,7 @@ export function ProjectStatusIcon({ status, percent, size = 14 }: { status: stri
 
 const MILESTONE_TONE: Record<string, string> = {
   planned: 'var(--ds-color-text-subtlest)',
-  in_progress: 'var(--ds-status-yellow)',
+  in_progress: 'var(--ds-color-warning)',
   done: 'var(--ds-color-primary)',
 };
 

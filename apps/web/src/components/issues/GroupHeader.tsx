@@ -75,17 +75,14 @@ export interface GroupHeaderProps {
 }
 
 /** Sticky group header (SPEC §4.10.2): dot + name (12px semibold) + count + collapse chevron. */
-export function GroupHeader({ info, count, collapsed, rowIndex, onToggle, onCreate, sticky }: GroupHeaderProps) {
+export function GroupHeader({ info, count, collapsed, rowIndex, onToggle, onCreate, sticky: _sticky }: GroupHeaderProps) {
   return (
     <div
       role="row"
       aria-rowindex={rowIndex + 1}
       aria-expanded={!collapsed}
       data-testid="group-header"
-      className={clsx(
-        'group/header flex h-9 items-center gap-2 bg-raised pl-2 pr-3 transition-colors duration-100 hover:bg-overlay',
-        sticky && 'shadow-none',
-      )}
+      className="group/header flex h-9 items-center gap-2 bg-raised pl-2 pr-3 transition-colors duration-100 hover:bg-hover"
     >
       <div role="gridcell" className="flex min-w-0 flex-1 items-center">
         <button

@@ -88,7 +88,7 @@ const BoardCard = memo(function BoardCard({ issue, focused, selected, onClick, o
       onContextMenu={(e) => onContextMenu(issue, e)}
       onDragStart={(e) => onDragStart(e, issue)}
       className={clsx(
-        'flex h-full cursor-default select-none flex-col gap-1.5 rounded-md border bg-raised p-3 text-base shadow-card outline-none transition-colors duration-100',
+        'flex h-full cursor-default select-none flex-col gap-1.5 rounded-md border bg-raised p-3 text-base outline-none transition-colors duration-100',
         selected ? 'border-primary bg-primary-subtle' : focused ? 'border-primary' : 'border-border hover:border-border-input hover:bg-overlay',
         pulse !== undefined && 'sync-pulse',
       )}

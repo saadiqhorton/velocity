@@ -21,11 +21,10 @@ export function SubIssues({ issue }: { issue: DetailIssue }) {
         </div>
       ) : null}
       {children.map((c) => (
-        // The row opens the sub-issue; its priority, status and assignee edit in place.
+        // Title opens the sub-issue (keyboard + pointer); priority, status and assignee edit in place.
         <div
           key={c.id}
-          onClick={() => openIssue(c.id)}
-          className="group/sub flex h-8 min-w-0 cursor-pointer items-center gap-2 rounded-sm px-1 text-base transition-colors duration-100 hover:bg-hover"
+          className="group/sub flex h-8 min-w-0 items-center gap-2 rounded-sm px-1 text-base transition-colors duration-100 hover:bg-hover"
         >
           <InlineProp
             kind="priority"
@@ -41,10 +40,7 @@ export function SubIssues({ issue }: { issue: DetailIssue }) {
           </InlineProp>
           <button
             type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              openIssue(c.id);
-            }}
+            onClick={() => openIssue(c.id)}
             className="min-w-0 flex-1 truncate rounded-sm text-left font-medium text-fg focus-visible:-outline-offset-2"
           >
             {c.title}

@@ -46,12 +46,26 @@ for (const { width, height, colorScheme } of cases) {
     const search = page.locator('#sidebar-search');
     const inbox = sidebar.getByRole('link', { name: /^Inbox/ });
     const myIssues = sidebar.getByRole('link', { name: 'My issues', exact: true });
+    const workspaceProjects = sidebar.getByTestId('nav-all-projects');
+    const workspaceViews = sidebar.getByTestId('nav-all-views');
     const teams = sidebar.getByRole('button', { name: 'Teams', exact: true });
     const projects = sidebar.getByRole('button', { name: 'Projects', exact: true });
     const newMenu = sidebar.getByRole('button', { name: 'New', exact: true });
     const settings = sidebar.getByRole('button', { name: 'Settings', exact: true });
     const account = page.getByTestId('account-menu');
-    const orderedElements = [workspaceName, search, inbox, myIssues, teams, projects, newMenu, settings, account];
+    const orderedElements = [
+      workspaceName,
+      search,
+      inbox,
+      myIssues,
+      workspaceProjects,
+      workspaceViews,
+      teams,
+      projects,
+      newMenu,
+      settings,
+      account,
+    ];
     // The nav scrolls once there are enough teams/projects, so compare document order rather than
     // viewport Y (a scrolled-out item can sit below the fixed bottom bar in screen space).
     const handles = await Promise.all(orderedElements.map((element) => element.elementHandle()));
