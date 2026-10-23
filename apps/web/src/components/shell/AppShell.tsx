@@ -14,6 +14,7 @@ import { ThemeSync } from './theme';
 import { CodingToolsSync } from './CodingToolsSync';
 import { GlobalCommands } from '@/components/commands/GlobalCommands';
 import { IssueCommands } from '@/components/commands/IssueCommands';
+import { UndoCommands } from '@/components/commands/UndoCommands';
 import { Overlays } from './Overlays';
 import { m } from '@/i18n';
 
@@ -43,6 +44,7 @@ export function AppShell() {
       <Realtime />
       <GlobalCommands />
       <IssueCommands />
+      <UndoCommands />
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded-sm focus:bg-raised focus:px-3 focus:py-2"

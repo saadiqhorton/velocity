@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import type { MouseEvent } from 'react';
-import { Button, Icon, IconButton } from '@velocity/ui';
+import clsx from 'clsx';
+import { Button, Icon, IconButton, usePresence } from '@velocity/ui';
 import { useSelection } from '@/stores/selection';
 import { useUi } from '@/stores/ui';
 import type { PickerKind } from '@/stores/ui';
@@ -15,23 +17,32 @@ export function SelectionBar() {
   const openPicker = useUi((s) => s.openPicker);
   const askDelete = useUi((s) => s.askDelete);
   const archive = useArchiveIssues();
-  if (selected.size === 0) return null;
-  const ids = [...selected];
+  const { mounted, state } = usePresence(selected.size > 0);
+  // Keep the last selection while the bar animates out, so the count does not flash to zero.
+  const [lastSelected, setLastSelected] = useState(selected);
+  if (selected.size > 0 && selected !== lastSelected) setLastSelected(selected);
+  if (!mounted) return null;
+  const shown = selected.size > 0 ? selected : lastSelected;
+  const ids = [...shown];
   const pick = (kind: PickerKind) => (e: MouseEvent<HTMLButtonElement>) => openPicker({ kind, issueIds: ids, anchor: e.currentTarget });
   return (
     <div
       role="toolbar"
-      aria-label={m.issue.selectedCount(selected.size)}
+      aria-label={m.issue.selectedCount(shown.size)}
       data-testid="selection-bar"
       onKeyDown={(event) => {
         // Let focused toolbar buttons handle activation instead of opening the active issue.
         if (event.key === 'Enter' || event.key === ' ') event.stopPropagation();
       }}
-      className="fixed bottom-6 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-md border border-border bg-overlay py-1 pl-3 pr-1 text-base text-fg shadow-overlay"
+      className={clsx(
+        'fixed bottom-6 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-md border border-border bg-overlay py-1 pl-3 pr-1 text-base text-fg shadow-overlay',
+        state === 'enter' && 'ds-rise-in',
+        state === 'exit' && 'ds-rise-out pointer-events-none',
+      )}
       style={{ zIndex: 'var(--ds-z-index-dropdown)' }}
     >
       <span className="pr-2 font-medium" aria-live="polite">
-        {m.issue.selectedCount(selected.size)}
+        {m.issue.selectedCount(shown.size)}
       </span>
       <Button size="sm" variant="subtle" iconBefore={<Icon name="success" />} onClick={pick('status')}>
         {m.issue.status}

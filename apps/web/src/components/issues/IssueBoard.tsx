@@ -3,7 +3,7 @@ import type { DragEvent, MouseEvent as ReactMouseEvent, ReactNode } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual';
 import clsx from 'clsx';
 import { Avatar, Icon, IconButton, PriorityIcon, Spinner, StatusIcon, priorityNames } from '@velocity/ui';
-import type { IssueRowFieldsFragment, UpdateIssueInput } from '@/gql/graphql';
+import type { IssueRowFieldsFragment } from '@/gql/graphql';
 import { useWorkspace } from '@/app/workspace';
 import { useCommands } from '@/keyboard/react';
 import { useActiveList } from '@/stores/list';
@@ -14,6 +14,7 @@ import { usePulse } from '@/stores/sync';
 import type { GroupBy, IssueGroup } from '@/lib/grouping';
 import { useClosePanel, useOpenIssue, usePanelIssueId } from '@/lib/navigation';
 import { forgetListMemory, listReturnPath, peekListMemory } from '@/lib/issueNav';
+import { setIssueDragPreview } from '@/lib/dragPreview';
 import { useLocation } from 'react-router-dom';
 import { openRowContextMenu, spaceTargetOk } from './rowActions';
 import { ContentSkeleton } from '@/components/shell/ShellSkeleton';
@@ -21,34 +22,23 @@ import { groupInfo } from './GroupHeader';
 import { LabelChips } from './LabelChips';
 import { InlineProp } from './InlineProp';
 import { PRIORITY_KEYS } from './IssueRow';
-import { useUpdateIssues } from './actions';
+import { useIssueDrop } from './useIssueDrop';
 import { useLoadWhenVisible } from './useLoadWhenVisible';
 import type { IssueListResult } from './useIssueList';
 import { useFeatures } from '@/lib/features';
 import { m } from '@/i18n';
 
-const CARD_HEIGHT = 96;
+/** Initial card height; the virtualizer measures each card once it renders. */
+const CARD_ESTIMATE = 124;
 const CARD_GAP = 8;
 const BOARD_PAGE = 400;
 
-/** Field update that moves an issue into the column `key` of `grouping`. */
-export function columnPatch(grouping: GroupBy, key: string | null): UpdateIssueInput | null {
-  switch (grouping) {
-    case 'status':
-      return key ? { statusId: key } : null;
-    case 'priority':
-      return { priority: key === null ? 4 : Number(key) };
-    case 'assignee':
-      return { assigneeId: key };
-    case 'project':
-      return { projectId: key };
-    case 'cycle':
-      return { cycleId: key };
-    case 'label':
-      return key ? { addLabelIds: [key] } : null;
-    default:
-      return null;
-  }
+/** Board drag: the dragged ids, the column under the pointer, and the card above/below it. */
+interface BoardDrag {
+  ids: string[];
+  over: string | null | undefined;
+  overId: string | null;
+  below: boolean;
 }
 
 const PICKER_FOR: Partial<Record<GroupBy, PickerKind>> = {
@@ -88,7 +78,7 @@ const BoardCard = memo(function BoardCard({ issue, focused, selected, onClick, o
       onContextMenu={(e) => onContextMenu(issue, e)}
       onDragStart={(e) => onDragStart(e, issue)}
       className={clsx(
-        'flex h-full cursor-default select-none flex-col gap-1.5 rounded-md border bg-raised p-3 text-base outline-none transition-colors duration-100',
+        'flex cursor-default select-none flex-col gap-1.5 rounded-md border bg-raised p-3 text-base outline-none transition-colors duration-100',
         selected ? 'border-primary bg-primary-subtle' : focused ? 'border-primary' : 'border-border hover:border-border-input hover:bg-overlay',
         pulse !== undefined && 'sync-pulse',
       )}
@@ -109,7 +99,9 @@ const BoardCard = memo(function BoardCard({ issue, focused, selected, onClick, o
           )}
         </InlineProp>
       </div>
-      <div className="line-clamp-2 min-h-0 flex-1 font-medium text-fg">{issue.title}</div>
+      <div data-testid="board-card-title" className="line-clamp-2 shrink-0 font-medium text-fg">
+        {issue.title}
+      </div>
       <div className="flex items-center gap-1.5">
         <InlineProp
           kind="priority"
@@ -147,14 +139,15 @@ interface ColumnProps {
   grouping: GroupBy;
   focusedId: string | null;
   selected: ReadonlySet<string>;
-  dropActive: boolean;
+  drag: BoardDrag | null;
   context?: CreateDefaults;
   cycleNames?: ReadonlyMap<string, string>;
   onCardClick: (issue: IssueRowFieldsFragment, e: ReactMouseEvent) => void;
   onCardFocus: (issue: IssueRowFieldsFragment) => void;
   onCardContextMenu: (issue: IssueRowFieldsFragment, e: ReactMouseEvent<HTMLDivElement>) => void;
   onDragStart: (e: DragEvent, issue: IssueRowFieldsFragment) => void;
-  onDragEnter: (key: string | null) => void;
+  /** Hovering the column (`slot` null) or a card in it (`slot` is that card and whether the drop goes below it). */
+  onDragOver: (key: string | null, slot: { id: string; below: boolean } | null) => void;
   onDrop: (key: string | null) => void;
   /** Loads the next page; called while this column's "loading more" placeholder is on screen. */
   onNeedMore: () => void;
@@ -162,7 +155,7 @@ interface ColumnProps {
   loadedCount: number;
 }
 
-function BoardColumn({ group, grouping, focusedId, selected, dropActive, context, cycleNames, onCardClick, onCardFocus, onCardContextMenu, onDragStart, onDragEnter, onDrop, onNeedMore, loadedCount }: ColumnProps) {
+function BoardColumn({ group, grouping, focusedId, selected, drag, context, cycleNames, onCardClick, onCardFocus, onCardContextMenu, onDragStart, onDragOver, onDrop, onNeedMore, loadedCount }: ColumnProps) {
   const ws = useWorkspace();
   const openCreate = useUi((s) => s.openCreate);
   const info = groupInfo(grouping, group.key, ws, cycleNames);
@@ -171,11 +164,13 @@ function BoardColumn({ group, grouping, focusedId, selected, dropActive, context
   // order keeps loading pages while its placeholder is visible (large teams, done=all).
   const moreRef = useRef<HTMLDivElement | null>(null);
   useLoadWhenVisible(moreRef, group.unloaded > 0, onNeedMore, loadedCount);
+  // Cards size to their content: each is measured once rendered (data-index + measureElement).
   // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Virtual is used as documented.
   const virtualizer = useVirtualizer({
     count: group.issues.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: () => CARD_HEIGHT + CARD_GAP,
+    estimateSize: () => CARD_ESTIMATE,
+    gap: CARD_GAP,
     overscan: 6,
   });
   const focusedIndex = focusedId ? group.issues.findIndex((i) => i.id === focusedId) : -1;
@@ -189,7 +184,7 @@ function BoardColumn({ group, grouping, focusedId, selected, dropActive, context
       data-testid="board-column"
       onDragOver={(e) => {
         e.preventDefault();
-        onDragEnter(group.key);
+        onDragOver(group.key, null);
       }}
       onDrop={(e) => {
         e.preventDefault();
@@ -197,7 +192,7 @@ function BoardColumn({ group, grouping, focusedId, selected, dropActive, context
       }}
       className={clsx(
         'group/column flex h-full w-80 shrink-0 flex-col rounded-md border transition-colors duration-100',
-        dropActive ? 'border-primary bg-primary-subtle' : 'border-transparent',
+        drag !== null && drag.over === group.key ? 'border-primary bg-primary-subtle' : 'border-transparent',
       )}
     >
       <div className="flex h-10 shrink-0 items-center gap-2 px-2">
@@ -214,11 +209,29 @@ function BoardColumn({ group, grouping, focusedId, selected, dropActive, context
           {virtualizer.getVirtualItems().map((it) => {
             const issue = group.issues[it.index];
             if (!issue) return null;
+            const dragging = drag?.ids.includes(issue.id) ?? false;
             return (
               <div
                 key={issue.id}
-                style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: CARD_HEIGHT, transform: `translateY(${it.start}px)` }}
+                ref={virtualizer.measureElement}
+                data-index={it.index}
+                className={clsx(dragging && 'opacity-40')}
+                style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${it.start}px)` }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  onDragOver(group.key, { id: issue.id, below: e.clientY > rect.top + rect.height / 2 });
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onDrop(group.key);
+                }}
               >
+                {drag && drag.overId === issue.id && !dragging ? (
+                  <div className={clsx('pointer-events-none absolute inset-x-0 z-10 h-0.5 bg-primary', drag.below ? '-bottom-px' : '-top-px')} />
+                ) : null}
                 <BoardCard issue={issue} focused={issue.id === focusedId} selected={selected.has(issue.id)} onClick={onCardClick} onFocus={onCardFocus} onDragStart={onDragStart} onContextMenu={onCardContextMenu} />
               </div>
             );
@@ -240,18 +253,20 @@ export interface IssueBoardProps {
   listId: string;
   data: IssueListResult;
   grouping: GroupBy;
+  /** Manual ordering: a card dropped between two cards takes that position. */
+  reorderable?: boolean;
   context?: CreateDefaults;
   cycleNames?: ReadonlyMap<string, string>;
   empty: ReactNode;
 }
 
 /** Board layout (SPEC §4.11.1): columns per group, drag and drop, keyboard ←/→/↑/↓ and M. */
-export function IssueBoard({ listId, data, grouping, context, cycleNames, empty }: IssueBoardProps) {
+export function IssueBoard({ listId, data, grouping, reorderable, context, cycleNames, empty }: IssueBoardProps) {
   const groups = data.groups;
   const { ensureLoaded, loadedCount } = data;
   // Ask for a generous page: the columns that wait are the ones furthest down the server order.
   const loadMore = useCallback(() => ensureLoaded(loadedCount + BOARD_PAGE), [ensureLoaded, loadedCount]);
-  const update = useUpdateIssues();
+  const { drop } = useIssueDrop(data.issues, grouping, Boolean(reorderable));
   const openIssue = useOpenIssue();
   const closePanel = useClosePanel();
   const panelIssueId = usePanelIssueId();
@@ -265,7 +280,9 @@ export function IssueBoard({ listId, data, grouping, context, cycleNames, empty 
   const setFocused = useActiveList((s) => s.setFocused);
   const selected = useSelection((s) => s.selected);
   const toggle = useSelection((s) => s.toggle);
-  const [drag, setDrag] = useState<{ ids: string[]; over: string | null | undefined } | null>(null);
+  const range = useSelection((s) => s.range);
+  const setSelection = useSelection((s) => s.set);
+  const [drag, setDrag] = useState<BoardDrag | null>(null);
 
   const order = useMemo(() => groups.flatMap((g) => g.issues.map((i) => i.id)), [groups]);
   useEffect(() => {
@@ -387,6 +404,27 @@ export function IssueBoard({ listId, data, grouping, context, cycleNames, empty 
       },
     },
     {
+      id: 'board.range',
+      title: m.cmd.rangeSelect,
+      group: 'selection',
+      keys: ['shift+x'],
+      scope: 'list',
+      when: () => isActive() && Boolean(useActiveList.getState().focusedId),
+      run: () => {
+        const id = useActiveList.getState().focusedId;
+        if (id) range(id, order);
+      },
+    },
+    {
+      id: 'board.selectAll',
+      title: m.cmd.selectAll,
+      group: 'selection',
+      keys: ['mod+a'],
+      scope: 'list',
+      when: isActive,
+      run: () => setSelection(order),
+    },
+    {
       id: 'board.moveColumn',
       title: m.cmd.moveColumn,
       group: 'issue',
@@ -402,13 +440,21 @@ export function IssueBoard({ listId, data, grouping, context, cycleNames, empty 
     },
   ]);
 
+  // Same modifiers as the list rows: ⌘/Ctrl toggles, ⇧ selects from the anchor in board reading order.
   const onCardClick = useCallback(
     (issue: IssueRowFieldsFragment, e: ReactMouseEvent) => {
       setFocused(issue.id);
-      if (e.metaKey || e.ctrlKey || e.shiftKey) toggle(issue.id);
-      else openFull(issue.id);
+      if (e.metaKey || e.ctrlKey) {
+        toggle(issue.id);
+        return;
+      }
+      if (e.shiftKey) {
+        range(issue.id, order);
+        return;
+      }
+      openFull(issue.id);
     },
-    [setFocused, toggle, openFull],
+    [setFocused, toggle, range, order, openFull],
   );
   const onCardContextMenu = useCallback(
     (issue: IssueRowFieldsFragment, e: ReactMouseEvent<HTMLDivElement>) => {
@@ -417,25 +463,26 @@ export function IssueBoard({ listId, data, grouping, context, cycleNames, empty 
     },
     [setFocused],
   );
-  const onDragStart = useCallback(
-    (e: DragEvent, issue: IssueRowFieldsFragment) => {
-      const sel = useSelection.getState().selected;
-      const ids = sel.has(issue.id) ? [...sel] : [issue.id];
-      e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('text/plain', ids.join(','));
-      setDrag({ ids, over: undefined });
-    },
-    [],
-  );
-  const onDrop = (key: string | null) => {
+  const onDragStart = useCallback((e: DragEvent, issue: IssueRowFieldsFragment) => {
+    const sel = useSelection.getState().selected;
+    const ids = sel.has(issue.id) ? [...sel] : [issue.id];
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', ids.join(','));
+    setIssueDragPreview(e, issue, ids.length);
+    setDrag({ ids, over: undefined, overId: null, below: false });
+  }, []);
+  const onDragOverColumn = (key: string | null, slot: { id: string; below: boolean } | null) => {
     if (!drag) return;
-    const patch = columnPatch(grouping, key);
-    const ids = drag.ids.filter((id) => {
-      const pos = locate(id);
-      return !pos || groups[pos.c]?.key !== key;
-    });
+    const overId = slot?.id ?? null;
+    const below = slot?.below ?? false;
+    if (drag.over !== key || drag.overId !== overId || drag.below !== below) setDrag({ ...drag, over: key, overId, below });
+  };
+  const onDrop = (key: string | null) => {
+    const d = drag;
     setDrag(null);
-    if (patch && ids.length > 0) void update(ids, patch);
+    if (!d) return;
+    const members = groups.find((g) => g.key === key)?.issues.map((i) => i.id) ?? [];
+    drop(d.ids, { key, members, slot: d.overId ? { id: d.overId, below: d.below } : undefined });
   };
 
   if (data.initialLoading) return <ContentSkeleton rows={10} header={false} />;
@@ -455,16 +502,14 @@ export function IssueBoard({ listId, data, grouping, context, cycleNames, empty 
           grouping={grouping}
           focusedId={focusedId}
           selected={selected}
-          dropActive={drag !== null && drag.over === g.key}
+          drag={drag}
           context={context}
           cycleNames={cycleNames}
           onCardClick={onCardClick}
           onCardFocus={(issue) => setFocused(issue.id)}
           onCardContextMenu={onCardContextMenu}
           onDragStart={onDragStart}
-          onDragEnter={(key) => {
-            if (drag && drag.over !== key) setDrag({ ...drag, over: key });
-          }}
+          onDragOver={onDragOverColumn}
           onDrop={onDrop}
           onNeedMore={loadMore}
           loadedCount={loadedCount}

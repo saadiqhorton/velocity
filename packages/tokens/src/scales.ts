@@ -45,6 +45,16 @@ export const fontFamily = {
 
 export const duration = { '100': '100ms', '150': '150ms', '200': '200ms' } as const;
 
+/**
+ * Easing (A2 motion, SPEC §4.8): enters decelerate, exits accelerate, nothing bounces.
+ * Emitted as `--ds-ease-{name}`; theme.css exposes them as Tailwind `ease-*` utilities.
+ */
+export const easing = {
+  enter: 'cubic-bezier(0.16, 1, 0.3, 1)',
+  exit: 'cubic-bezier(0.4, 0, 1, 1)',
+  standard: 'cubic-bezier(0.2, 0, 0, 1)',
+} as const;
+
 export const zIndex = { sticky: 100, dropdown: 300, modal: 400, flag: 500, tooltip: 600 } as const;
 
 /** Shell geometry constants (SPEC §4.10.2) — exported so layout tests and CSS agree. */

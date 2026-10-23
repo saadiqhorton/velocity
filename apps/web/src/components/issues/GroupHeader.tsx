@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import clsx from 'clsx';
-import { Avatar, Icon, IconButton, PriorityIcon, StatusDot } from '@velocity/ui';
+import { Avatar, Icon, IconButton, PriorityIcon, StatusIcon } from '@velocity/ui';
 import type { WorkspaceData } from '@/app/workspace';
 import type { GroupBy } from '@/lib/grouping';
 import type { CreateDefaults } from '@/stores/ui';
@@ -21,7 +21,7 @@ export function groupInfo(groupBy: GroupBy, key: string | null, ws: WorkspaceDat
       const s = key ? ws.statusesById.get(key) : undefined;
       return {
         label: s?.name ?? m.common.unknown,
-        icon: <StatusDot color={s?.color ?? 'grey'} />,
+        icon: <StatusIcon category={s?.category ?? 'backlog'} color={s?.color ?? 'grey'} label="" />,
         defaults: s ? { statusId: s.id, teamId: s.teamId } : {},
       };
     }
@@ -72,17 +72,19 @@ export interface GroupHeaderProps {
   onToggle: () => void;
   onCreate?: () => void;
   sticky?: boolean;
+  /** A dragged row is over this header: show the hover fill instead of the raised surface. */
+  dropTarget?: boolean;
 }
 
-/** Sticky group header (SPEC §4.10.2): dot + name (12px semibold) + count + collapse chevron. */
-export function GroupHeader({ info, count, collapsed, rowIndex, onToggle, onCreate, sticky: _sticky }: GroupHeaderProps) {
+/** Sticky group header (SPEC §4.10.2): status or priority icon + name (13px medium) + count + collapse chevron. */
+export function GroupHeader({ info, count, collapsed, rowIndex, onToggle, onCreate, dropTarget = false }: GroupHeaderProps) {
   return (
     <div
       role="row"
       aria-rowindex={rowIndex + 1}
       aria-expanded={!collapsed}
       data-testid="group-header"
-      className="group/header flex h-9 items-center gap-2 bg-raised pl-2 pr-3 transition-colors duration-100 hover:bg-hover"
+      className={clsx('group/header flex h-9 items-center gap-2 pl-2 pr-3 transition-colors duration-100 hover:bg-hover', dropTarget ? 'bg-hover' : 'bg-raised')}
     >
       <div role="gridcell" className="flex min-w-0 flex-1 items-center">
         <button

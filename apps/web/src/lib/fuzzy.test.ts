@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fuzzyFilter, fuzzyScore } from './fuzzy';
+import { fuzzyFilter, fuzzyMatch, fuzzyScore, fuzzySearch, matchRuns } from './fuzzy';
 
 const score = (q: string, t: string): number => fuzzyScore(q, t) ?? Number.NEGATIVE_INFINITY;
 
@@ -51,5 +51,66 @@ describe('fuzzyFilter', () => {
   });
   it('respects limit', () => {
     expect(fuzzyFilter(items, 'o', (s) => s, 1)).toHaveLength(1);
+  });
+});
+
+describe('fuzzyMatch indices', () => {
+  it('marks the whole run for a substring hit', () => {
+    expect(fuzzyMatch('box', 'Open box')?.indices).toEqual([5, 6, 7]);
+  });
+  it('marks each subsequence character in order', () => {
+    // G(0) … t(3) … i(6): the chars of "gti" in "Go to inbox".
+    expect(fuzzyMatch('gti', 'Go to inbox')?.indices).toEqual([0, 3, 6]);
+  });
+  it('skips spaces in the query', () => {
+    expect(fuzzyMatch('g i', 'Go to inbox')?.indices).toEqual([0, 6]);
+  });
+  it('is case-insensitive and reports the original positions', () => {
+    expect(fuzzyMatch('INB', 'Go to Inbox')?.indices).toEqual([6, 7, 8]);
+  });
+  it('returns no indices for an empty query, and null for no match', () => {
+    expect(fuzzyMatch('  ', 'anything')).toEqual({ score: 0, indices: [] });
+    expect(fuzzyMatch('xyz', 'Inbox')).toBeNull();
+  });
+  it('agrees with fuzzyScore', () => {
+    for (const [q, t] of [
+      ['in', 'Inbox'],
+      ['cni', 'Create new issue'],
+      ['xob', 'Inbox'],
+    ] as const) {
+      expect(fuzzyMatch(q, t)?.score ?? null).toBe(fuzzyScore(q, t));
+    }
+  });
+});
+
+describe('fuzzySearch', () => {
+  it('returns ranked items with their indices', () => {
+    const results = fuzzySearch(['Open window', 'Inbox'], 'inb', (s) => s);
+    expect(results).toEqual([{ item: 'Inbox', indices: [0, 1, 2] }]);
+  });
+  it('gives empty indices when the query is empty, honouring the limit', () => {
+    expect(fuzzySearch(['a', 'b', 'c'], '', (s) => s, 2)).toEqual([
+      { item: 'a', indices: [] },
+      { item: 'b', indices: [] },
+    ]);
+  });
+});
+
+describe('matchRuns', () => {
+  it('splits text into matched and unmatched runs', () => {
+    expect(matchRuns('Set status', [4, 5, 6, 7])).toEqual([
+      { text: 'Set ', matched: false },
+      { text: 'stat', matched: true },
+      { text: 'us', matched: false },
+    ]);
+  });
+  it('returns one unmatched run when nothing matches', () => {
+    expect(matchRuns('Inbox', [])).toEqual([{ text: 'Inbox', matched: false }]);
+  });
+  it('ignores indices past the end of the text', () => {
+    expect(matchRuns('ab', [1, 9])).toEqual([
+      { text: 'a', matched: false },
+      { text: 'b', matched: true },
+    ]);
   });
 });

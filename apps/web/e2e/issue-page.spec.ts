@@ -115,11 +115,13 @@ test.describe('issue page (U1)', () => {
     await gotoTeam(page, 'ENG', 'backlog');
     const row = await createIssueViaKeyboard(page, title);
     await row.click();
+    // With no files the attachments section collapses into the actions row under the description (SPEC §4.19).
+    const actions = page.getByTestId('issue-empty-actions');
+    await expect(actions.getByRole('button', { name: 'Attach file' })).toBeVisible();
     const attachments = page.getByTestId('attachments');
-    await expect(attachments).toBeVisible();
 
     const content = 'Attachment round trip from the issue page.\n';
-    await attachments.locator('input[type="file"]').setInputFiles({
+    await actions.locator('input[type="file"]').setInputFiles({
       name: 'verification.txt',
       mimeType: 'text/plain',
       buffer: Buffer.from(content),

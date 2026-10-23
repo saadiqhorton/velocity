@@ -81,7 +81,7 @@ export const Radio = forwardRef<HTMLInputElement, RadioProps>(function Radio(
             group?.onChange(value);
           }}
           className={clsx(
-            'peer h-4 w-4 cursor-pointer appearance-none rounded-full border border-border-input bg-input transition-colors duration-100',
+            'peer h-4 w-4 cursor-pointer appearance-none rounded-full border border-border-input bg-input transition-colors duration-100 hover:border-fg-subtlest',
             'checked:border-primary disabled:cursor-not-allowed disabled:bg-sunken disabled:border-border',
             className,
           )}

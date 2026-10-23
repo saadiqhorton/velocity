@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CSSProperties, HTMLAttributes, ReactNode } from 'react';
 import clsx from 'clsx';
 import { Portal } from './Portal';
-import { useEnterStyle, useIsomorphicLayoutEffect } from '../utils/react';
+import { useEnterStyle, useIsomorphicLayoutEffect, usePresence } from '../utils/react';
 
 export type Placement =
   | 'bottom-start'
@@ -183,7 +183,9 @@ export function Popover({
   onMouseDown,
   ...rest
 }: PopoverProps) {
-  if (!open) return null;
+  // The surface stays mounted for the 120ms exit (ds-pop-out); focus has already moved on by then.
+  const { mounted, state } = usePresence(open);
+  if (!mounted) return null;
   return (
     <Portal>
       <PopoverSurface
@@ -196,6 +198,7 @@ export function Popover({
         className={className}
         style={style}
         onMouseDown={onMouseDown}
+        exiting={state === 'exit'}
         {...rest}
       >
         {children}
@@ -215,8 +218,9 @@ function PopoverSurface({
   style,
   children,
   onMouseDown,
+  exiting,
   ...rest
-}: Omit<PopoverProps, 'open'>) {
+}: Omit<PopoverProps, 'open'> & { exiting: boolean }) {
   const pos = usePopoverPosition(anchorEl, true, { placement, offset, matchWidth });
   const enter = useEnterStyle();
   const elRef = useRef<HTMLDivElement | null>(null);
@@ -227,6 +231,8 @@ function PopoverSurface({
   });
 
   useEffect(() => {
+    // A closing popover no longer reports outside clicks.
+    if (exiting) return undefined;
     const onDown = (e: MouseEvent) => {
       // React synthetic mousedown bubbles through portals; it flags nested popups as "inside".
       if (insideRef.current) {
@@ -239,7 +245,7 @@ function PopoverSurface({
     };
     document.addEventListener('mousedown', onDown);
     return () => document.removeEventListener('mousedown', onDown);
-  }, [anchorEl]);
+  }, [anchorEl, exiting]);
 
   return (
     <div
@@ -248,12 +254,25 @@ function PopoverSurface({
         elRef.current = el;
         pos.setFloating(el);
       }}
+      aria-hidden={exiting ? true : undefined}
       onMouseDown={(e) => {
         insideRef.current = true;
         onMouseDown?.(e);
       }}
-      className={clsx(!bare && 'bg-overlay border border-border rounded-md shadow-overlay text-fg', className)}
-      style={{ ...pos.style, zIndex: 'var(--ds-z-index-dropdown)', ...enter, ...style }}
+      className={clsx(
+        !bare && 'bg-overlay border border-border rounded-md shadow-overlay text-fg',
+        exiting && 'ds-pop-out pointer-events-none',
+        className,
+      )}
+      style={{
+        ...pos.style,
+        // Long menus scroll inside the surface instead of running off-screen (8px viewport padding top and bottom).
+        maxHeight: 'calc(100vh - 16px)',
+        overflowY: 'auto',
+        zIndex: 'var(--ds-z-index-dropdown)',
+        ...enter,
+        ...style,
+      }}
     >
       {children}
     </div>

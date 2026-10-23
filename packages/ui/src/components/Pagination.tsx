@@ -44,7 +44,7 @@ export function Pagination({ page, pageCount, onPageChange, siblings = 1, classN
             onClick={() => onPageChange(item)}
             className={clsx(
               'h-8 min-w-8 rounded-sm px-2 text-base transition-colors duration-100',
-              item === page ? 'bg-primary-subtle font-semibold text-fg-selected' : 'text-fg-subtle hover:bg-hover',
+              item === page ? 'bg-primary-subtle font-medium text-fg-selected' : 'text-fg-subtle hover:bg-hover active:bg-pressed',
             )}
           >
             {item}

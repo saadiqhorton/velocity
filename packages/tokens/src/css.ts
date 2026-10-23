@@ -1,7 +1,7 @@
 import { dark } from './dark';
 import { light } from './light';
 import { statusPalette, chartPalette } from './palette';
-import { space, radius, fontSize, fontFamily, duration, zIndex, layout } from './scales';
+import { space, radius, fontSize, fontFamily, duration, easing, zIndex, layout } from './scales';
 import type { ThemeName, ThemeTokens } from './types';
 import { STATUS_COLORS } from './types';
 
@@ -32,6 +32,7 @@ function foundations(): string {
   for (const [k, v] of Object.entries(fontSize)) lines.push(`  --ds-font-size-${k}: ${v};`);
   for (const [k, v] of Object.entries(fontFamily)) lines.push(`  --ds-font-${k}: ${v};`);
   for (const [k, v] of Object.entries(duration)) lines.push(`  --ds-duration-${k}: ${v};`);
+  for (const [k, v] of Object.entries(easing)) lines.push(`  --ds-ease-${k}: ${v};`);
   for (const [k, v] of Object.entries(zIndex)) lines.push(`  --ds-z-index-${k}: ${v};`);
   lines.push(`  --ds-layout-sidebar: ${layout.sidebarWidth}px;`);
   lines.push(`  --ds-layout-sidebar-compact: ${layout.sidebarWidthCompact}px;`);

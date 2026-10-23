@@ -1,6 +1,7 @@
-import { Suspense } from 'react';
+import { Suspense, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Icon, IconButton } from '@velocity/ui';
+import clsx from 'clsx';
+import { Icon, IconButton, usePresence } from '@velocity/ui';
 import { ChunkBoundary, retryableLazy } from '@/components/common/ChunkBoundary';
 import { useClosePanel, usePanelIssueId } from '@/lib/navigation';
 import { m } from '@/i18n';
@@ -41,17 +42,27 @@ function PanelFrame({ children, onClose }: { children: ReactNode; onClose: () =>
 export function DetailPanel() {
   const issueId = usePanelIssueId();
   const close = useClosePanel();
-  if (!issueId) return null;
+  // The last issue stays rendered while the panel animates out. The animation sits on the panel
+  // itself, so switching issues while open re-renders the content without any motion.
+  const [lastId, setLastId] = useState(issueId);
+  if (issueId && issueId !== lastId) setLastId(issueId);
+  const { mounted, state } = usePresence(Boolean(issueId));
+  const shownId = issueId || lastId;
+  if (!mounted || !shownId) return null;
   return (
     <aside
       data-region="panel"
       data-testid="detail-panel"
       aria-label={m.issue.title}
-      className="absolute inset-y-0 right-0 z-10 flex h-full w-full shrink-0 flex-col border-l border-border bg-surface md:w-(--ds-layout-panel-compact) lg:static xl:w-(--ds-layout-panel)"
+      className={clsx(
+        'absolute inset-y-0 right-0 z-10 flex h-full w-full shrink-0 flex-col border-l border-border bg-surface md:w-(--ds-layout-panel-compact) lg:static xl:w-(--ds-layout-panel)',
+        state === 'enter' && 'ds-panel-in',
+        state === 'exit' && 'ds-panel-out pointer-events-none',
+      )}
     >
       <ChunkBoundary onRetry={issueDetail.reset} message={m.shell.panelLoadError} frame={(message) => <PanelFrame onClose={() => close()}>{message}</PanelFrame>}>
         <Suspense fallback={<PanelSkeleton />}>
-          <IssueDetail key={issueId} id={issueId} mode="panel" onClose={() => close()} />
+          <IssueDetail key={shownId} id={shownId} mode="panel" onClose={() => close()} />
         </Suspense>
       </ChunkBoundary>
     </aside>

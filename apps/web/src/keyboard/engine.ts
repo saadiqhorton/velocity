@@ -6,10 +6,18 @@
  * Pure TypeScript: React bindings live in ./react.tsx.
  */
 
+import type { IconName } from '@velocity/ui';
+
 export type Scope = 'global' | 'list' | 'panel';
 export type Region = 'sidebar' | 'list' | 'panel' | 'other';
 
 export type CommandGroup = 'general' | 'navigation' | 'list' | 'issue' | 'selection';
+
+/**
+ * Palette sub-pages (SPEC §4.13): choosing a command with a `page` lists that property's
+ * options in the palette instead of running it. Keys are resolved in components/palette/pages.ts.
+ */
+export type CommandPageKey = 'status' | 'priority' | 'assignee' | 'labels' | 'project' | 'cycle' | 'estimate' | 'team';
 
 export interface Command {
   id: string;
@@ -32,6 +40,10 @@ export interface Command {
   palette?: boolean;
   /** Extra palette search terms. */
   keywords?: string[];
+  /** Icon in the palette. Falls back to a generic one. */
+  icon?: IconName;
+  /** Palette sub-page to open instead of running the command. `run` still backs the shortcut. */
+  page?: CommandPageKey;
 }
 
 export interface KeyLike {

@@ -25,7 +25,7 @@ export function Lozenge({ appearance = 'default', color, className, style, child
   return (
     <span
       {...rest}
-      className={clsx('inline-flex items-center whitespace-nowrap rounded-sm px-1 text-xs font-semibold', className)}
+      className={clsx('inline-flex items-center whitespace-nowrap rounded-xs px-1 text-xs font-medium', className)}
       style={{ backgroundColor: `var(--ds-status-${c}-bg)`, color: `var(--ds-status-${c}-text)`, ...style }}
     >
       {children}

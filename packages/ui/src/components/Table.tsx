@@ -193,9 +193,9 @@ export function Table<T>({
                   onClick={() => onRowClick?.(row)}
                   onKeyDown={(e) => onRowKeyDown(e, index, row)}
                   className={clsx(
-                    'group transition-colors duration-100 focus-visible:-outline-offset-2',
-                    onRowClick && 'cursor-pointer',
-                    selected ? 'bg-primary-subtle' : 'hover:bg-hover active:bg-pressed',
+                    'group cursor-default select-none transition-colors duration-100 focus-visible:-outline-offset-2',
+                    // The roving-focus row shows the focus fill and left bar only while it has keyboard focus (SPEC §4.10.2).
+                    selected ? 'bg-primary-subtle' : 'hover:bg-hover focus-visible:bg-neutral active:bg-pressed',
                   )}
                 >
                   {columns.map((col, ci) => (
@@ -209,7 +209,7 @@ export function Table<T>({
                         ci === 0 && 'border-l-2',
                         inset && ci === 0 && 'pl-4.5',
                         inset && ci === columns.length - 1 && 'pr-5',
-                        ci === 0 && (selected ? 'border-l-primary' : 'border-l-transparent'),
+                        ci === 0 && (selected ? 'border-l-primary' : 'border-l-transparent group-focus-visible:border-l-primary'),
                       )}
                     >
                       {col.render ? col.render(row) : String((row as Record<string, unknown>)[col.key] ?? '')}

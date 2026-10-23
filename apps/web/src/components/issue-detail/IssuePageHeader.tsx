@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button, DropdownMenu, Icon, IconButton, MenuItem, MenuSeparator } from '@velocity/ui';
 import { useWorkspace } from '@/app/workspace';
@@ -91,7 +90,6 @@ export function IssuePageHeader({ issue }: { issue: DetailIssue }) {
   const ai = useIssueAi();
   const stepper = useIssueStepper(issue);
   const setDrawerOpen = useSidebar((s) => s.setDrawerOpen);
-  const [moreEl, setMoreEl] = useState<HTMLButtonElement | null>(null);
 
   useCommands(() => [
     { id: 'page.next', title: m.cmd.nextIssue, group: 'list', keys: ['j', 'arrowdown'], repeat: true, when: () => stepper.canNext, run: stepper.next },
@@ -143,9 +141,9 @@ export function IssuePageHeader({ issue }: { issue: DetailIssue }) {
       <DropdownMenu
         aria-label={m.issuePage.actions}
         placement="bottom-start"
-        trigger={<IconButton ref={setMoreEl} label={m.issuePage.actions} size="sm" icon={<Icon name="more" />} data-testid="issue-more" />}
+        trigger={<IconButton label={m.issuePage.actions} size="sm" icon={<Icon name="more" />} data-testid="issue-more" />}
       >
-        <IssueMenuItems issueIds={[issue.id]} anchor={moreEl} />
+        <IssueMenuItems issueIds={[issue.id]} />
       </DropdownMenu>
       <span className="flex-1" />
       <div role="toolbar" aria-label={m.issuePage.toolbar} className="flex shrink-0 items-center gap-1">

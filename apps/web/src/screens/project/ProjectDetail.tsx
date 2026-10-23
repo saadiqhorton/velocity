@@ -1,24 +1,21 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import clsx from 'clsx';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@apollo/client';
-import { Button, ConfirmDialog, DropdownMenu, Icon, IconButton, Lozenge, MenuItem, Tabs } from '@velocity/ui';
+import { ConfirmDialog, DropdownMenu, Icon, IconButton, Lozenge, MenuItem, Tabs } from '@velocity/ui';
 import type { TabItem } from '@velocity/ui';
 import { DeleteProjectDocument, ProjectDetailDocument } from '@/gql/graphql';
 import { useWorkspace } from '@/app/workspace';
 import { ViewHeader } from '@/components/shell/ViewHeader';
 import { ContentSkeleton } from '@/components/shell/ShellSkeleton';
-import { ListScreen } from '@/components/issues/ListScreen';
 import { FavoriteButton } from '@/components/common/FavoriteButton';
 import { ProjectIcon, TeamIcon } from '@/components/common/EntityIcons';
 import { NotFound } from '@/screens/workspace/NotFound';
-import { DEFAULT_DISPLAY } from '@/lib/viewState';
-import type { ViewState } from '@/lib/viewState';
 import { useOptimisticMutation } from '@/lib/mutation';
-import { useUi } from '@/stores/ui';
 import { ProjectOverview } from './ProjectOverview';
 import { ProjectMilestones } from './ProjectMilestones';
 import { ProjectActivity } from './ProjectActivity';
+import { ProjectIssues } from './ProjectIssues';
 import { useArchiveProject, useUpdateProject } from './projectUi';
 import { m } from '@/i18n';
 
@@ -28,7 +25,6 @@ type Tab = (typeof TABS)[number];
 export function ProjectDetail() {
   const { id = '', tab } = useParams();
   const navigate = useNavigate();
-  const openCreate = useUi((s) => s.openCreate);
   const { teamsById } = useWorkspace();
   const { data, loading } = useQuery(ProjectDetailDocument, { variables: { id } });
   const project = data?.project ?? null;
@@ -40,7 +36,6 @@ export function ProjectDetail() {
     rollback: () => m.flags.rollback.delete,
     refetchQueries: ['Projects', 'Bootstrap'],
   });
-  const defaults = useMemo<ViewState>(() => ({ filter: '', display: DEFAULT_DISPLAY }), []);
   const current: Tab = (TABS as readonly string[]).includes(tab ?? '') ? (tab as Tab) : 'overview';
 
   if (!project) {
@@ -97,22 +92,7 @@ export function ProjectDetail() {
       </div>
       <div className={clsx("flex min-h-0 flex-1 flex-col", current !== "issues" && "overflow-y-auto")} role="region" aria-label={m[`project`][current]}>
         {current === 'overview' ? <ProjectOverview project={project} milestones={milestones} save={(i) => void save(i)} /> : null}
-        {current === 'issues' ? (
-          <ListScreen
-            embedded
-            listId={`project-${project.id}`}
-            title={project.name}
-            scope={{ projectId: project.id }}
-            defaults={defaults}
-            context={{ projectId: project.id, teamId }}
-            hiddenFilterFields={['project']}
-            actions={
-              <Button size="sm" variant="primary" iconBefore={<Icon name="add" />} onClick={() => openCreate({ projectId: project.id, teamId })}>
-                {m.issue.newIssue}
-              </Button>
-            }
-          />
-        ) : null}
+        {current === 'issues' ? <ProjectIssues projectId={project.id} projectName={project.name} teamId={teamId} milestones={milestones} /> : null}
         {current === 'milestones' ? <ProjectMilestones projectId={project.id} milestones={milestones} /> : null}
         {current === 'activity' ? <ProjectActivity projectId={project.id} /> : null}
       </div>

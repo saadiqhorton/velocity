@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import type { ReactNode } from 'react';
 import { Avatar, Icon } from '@velocity/ui';
 import type { LozengeAppearance, PopupOption } from '@velocity/ui';
@@ -91,21 +92,31 @@ const MILESTONE_TONE: Record<string, string> = {
   done: 'var(--ds-color-primary)',
 };
 
-/** Milestone glyph: a diamond — outlined while planned, half-filled in progress, solid when done. */
-export function MilestoneIcon({ status, size = 12 }: { status: string; size?: number }) {
-  const tone = MILESTONE_TONE[status] ?? MILESTONE_TONE.planned;
+/** Existing milestone diamond, filled by completed-issue area when a rollup is available. */
+export function MilestoneIcon({ status, percent, size = 12 }: { status: string; percent?: number; size?: number }) {
+  const clipId = useId();
+  const progress = percent === undefined ? (status === 'done' ? 100 : status === 'in_progress' ? 50 : 0) : Number.isFinite(percent) ? Math.max(0, Math.min(100, percent)) : 0;
+  const fraction = progress / 100;
+  // A diamond's width varies with height: convert percentage to area rather than linear height.
+  const top = fraction <= 0.5 ? 11 - Math.sqrt(50 * fraction) : 1 + Math.sqrt(50 * (1 - fraction));
+  const tone = progress === 100 ? MILESTONE_TONE.done : progress > 0 || status === 'in_progress' ? MILESTONE_TONE.in_progress : MILESTONE_TONE.planned;
   return (
     <svg viewBox="0 0 12 12" width={size} height={size} aria-hidden="true" className="shrink-0" style={{ color: tone }}>
+      {progress > 0 && progress < 100 ? <defs><clipPath id={clipId}><rect x="0" y={top} width="12" height={12 - top} /></clipPath></defs> : null}
+      {progress > 0 ? <path d="M6 1 11 6 6 11 1 6Z" fill="currentColor" clipPath={progress < 100 ? `url(#${clipId})` : undefined} /> : null}
       <path
         d="M6 1 11 6 6 11 1 6Z"
-        fill={status === 'done' ? 'currentColor' : 'none'}
+        fill="none"
         stroke="currentColor"
         strokeWidth="1.25"
         strokeLinejoin="round"
       />
-      {status === 'in_progress' ? <path d="M6 1 11 6 6 11Z" fill="currentColor" /> : null}
     </svg>
   );
+}
+
+export function milestoneIssuesHref(projectId: string, milestoneId: string): string {
+  return `/project/${projectId}/issues?${new URLSearchParams({ milestone: milestoneId })}`;
 }
 
 /** Health is color + dot + text, never color alone. */

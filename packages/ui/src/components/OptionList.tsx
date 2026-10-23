@@ -13,9 +13,23 @@ export interface PopupOption {
   disabled?: boolean;
   /** Extra strings matched by the search filter. */
   keywords?: string[];
+  /** Digit key (`'1'`) that selects this option while the filter is empty; shown at the trailing edge. */
+  shortcut?: string;
 }
 
 export const CREATE_VALUE = '__create__';
+
+/**
+ * The enabled option a bare digit key picks (`1`…`9`, `0`), or undefined. Modified keys and
+ * non-digits never match, so the caller can treat `undefined` as "not a quick select".
+ */
+export function digitQuickSelect(
+  options: PopupOption[],
+  e: { key: string; ctrlKey?: boolean; metaKey?: boolean; altKey?: boolean },
+): PopupOption | undefined {
+  if (!/^[0-9]$/.test(e.key) || e.ctrlKey || e.metaKey || e.altKey) return undefined;
+  return options.find((o) => o.shortcut === e.key && !o.disabled);
+}
 
 export function filterOptions(options: PopupOption[], query: string): PopupOption[] {
   const q = query.trim().toLowerCase();
@@ -168,9 +182,9 @@ export function OptionList({
 
   const rowClass = (active: boolean, disabled?: boolean) =>
     clsx(
-      'mx-1 flex min-h-8 cursor-pointer items-center gap-2 rounded-sm px-2 py-1 text-base',
+      'mx-1 flex min-h-8 items-center gap-2 rounded-sm px-2 py-1 text-base',
       active ? 'bg-neutral-hover' : '',
-      disabled ? 'cursor-not-allowed text-fg-disabled' : 'text-fg',
+      disabled ? 'text-fg-disabled' : 'text-fg active:bg-pressed',
     );
 
   const renderRow = (o: PopupOption) => {
@@ -203,6 +217,7 @@ export function OptionList({
             </span>
           </>
         )}
+        {o.shortcut ? <span className="shrink-0 text-sm text-fg-subtle">{o.shortcut}</span> : null}
         <span className="inline-flex w-4 shrink-0 justify-center text-fg-selected">
           {selected ? <Icon name="check" /> : null}
         </span>

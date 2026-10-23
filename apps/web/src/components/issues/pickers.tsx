@@ -12,21 +12,29 @@ import { m } from '@/i18n';
 
 export const NONE = '__none__';
 
+/** Statuses in display order; the first nine get digit shortcuts `1`…`9` (quick select, Linear-style). */
 export function statusOptions(team: Pick<TeamFieldsFragment, 'statuses'>): PopupOption[] {
   return [...team.statuses]
     .sort((a, b) => CATEGORY_RANK[a.category] - CATEGORY_RANK[b.category] || a.order - b.order)
-    .map((s) => ({ value: s.id, label: s.name, icon: <StatusIcon category={s.category} color={s.color} label="" /> }));
+    .map((s, i) => ({
+      value: s.id,
+      label: s.name,
+      icon: <StatusIcon category={s.category} color={s.color} label="" />,
+      shortcut: i < 9 ? String(i + 1) : undefined,
+    }));
 }
 
 /** Linear-parity order: No priority first, then Urgent → Low. */
 export const PRIORITY_ORDER = [4, 0, 1, 2, 3] as const;
 
+/** Digit shortcuts follow the display position: 0 No priority, 1 Urgent, 2 High, 3 Medium, 4 Low. */
 export function priorityOptions(): PopupOption[] {
   return PRIORITY_ORDER.map((p, i) => ({
     value: String(p),
     label: m.priority[p],
     icon: <PriorityIcon priority={PRIORITY_KEYS[p] ?? 'none'} />,
     keywords: [String(i)],
+    shortcut: String(i),
   }));
 }
 

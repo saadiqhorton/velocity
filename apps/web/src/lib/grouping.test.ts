@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
+  canDragIssues,
+  dropPlan,
   flattenGroups,
   groupIssues,
+  groupPatch,
   groupToken,
   makeIssueComparator,
   orderTermsFor,
+  slotNeighbours,
 } from './grouping';
 import type {
   CatalogStatus,
@@ -548,5 +552,109 @@ describe('groupToken', () => {
     expect(groupToken(null)).toBe('∅');
     expect(groupToken('abc')).toBe('abc');
     expect(groupToken(null)).not.toBe(groupToken(''));
+  });
+});
+
+describe('groupPatch', () => {
+  it('sets the field of the target group', () => {
+    expect(groupPatch('status', 's1')).toEqual({ statusId: 's1' });
+    expect(groupPatch('priority', '1')).toEqual({ priority: 1 });
+    expect(groupPatch('assignee', 'u1')).toEqual({ assigneeId: 'u1' });
+    expect(groupPatch('project', 'p1')).toEqual({ projectId: 'p1' });
+    expect(groupPatch('cycle', 'c1')).toEqual({ cycleId: 'c1' });
+    expect(groupPatch('label', 'l1')).toEqual({ addLabelIds: ['l1'] });
+  });
+
+  it('the none group clears the field, except status and label which have no empty value', () => {
+    expect(groupPatch('priority', null)).toEqual({ priority: 4 });
+    expect(groupPatch('assignee', null)).toEqual({ assigneeId: null });
+    expect(groupPatch('project', null)).toEqual({ projectId: null });
+    expect(groupPatch('cycle', null)).toEqual({ cycleId: null });
+    expect(groupPatch('status', null)).toBeNull();
+    expect(groupPatch('label', null)).toBeNull();
+  });
+
+  it('groupings with no field to set have no patch', () => {
+    expect(groupPatch('team', 't1')).toBeNull();
+    expect(groupPatch('team', null)).toBeNull();
+    expect(groupPatch('none', null)).toBeNull();
+  });
+});
+
+describe('canDragIssues', () => {
+  it('needs manual ordering for groupings whose field a drop cannot set', () => {
+    expect(canDragIssues('label', false)).toBe(false);
+    expect(canDragIssues('team', false)).toBe(false);
+    expect(canDragIssues('none', false)).toBe(false);
+    expect(canDragIssues('label', true)).toBe(true);
+    expect(canDragIssues('none', true)).toBe(true);
+  });
+
+  it('is always on for groupings whose field the drop sets', () => {
+    for (const g of ['status', 'priority', 'assignee', 'project', 'cycle'] as const) {
+      expect(canDragIssues(g, false)).toBe(true);
+    }
+  });
+});
+
+describe('slotNeighbours', () => {
+  const ids = ['a', 'b', 'c'];
+
+  it('places the slot above or below a card', () => {
+    expect(slotNeighbours(ids, 'b', false)).toEqual({ beforeId: 'a', afterId: 'b' });
+    expect(slotNeighbours(ids, 'b', true)).toEqual({ beforeId: 'b', afterId: 'c' });
+  });
+
+  it('the first and last slots have a null side', () => {
+    expect(slotNeighbours(ids, 'a', false)).toEqual({ beforeId: null, afterId: 'a' });
+    expect(slotNeighbours(ids, 'c', true)).toEqual({ beforeId: 'c', afterId: null });
+  });
+
+  it('is null when the card is not in the group', () => {
+    expect(slotNeighbours(ids, 'x', true)).toBeNull();
+  });
+});
+
+describe('dropPlan', () => {
+  const base = { manual: false, moving: 1, count: 1, onSlot: true } as const;
+
+  it('changes the group on a cross-group drop without manual ordering, and does not reorder', () => {
+    expect(dropPlan({ ...base, grouping: 'status', targetKey: 's2' })).toEqual({ patch: { statusId: 's2' }, reorder: false });
+  });
+
+  it('reorders within the target group under manual ordering', () => {
+    expect(dropPlan({ ...base, manual: true, grouping: 'status', targetKey: 's2' })).toEqual({ patch: { statusId: 's2' }, reorder: true });
+  });
+
+  it('a drop within the same group only reorders, and only under manual ordering', () => {
+    expect(dropPlan({ ...base, moving: 0, grouping: 'status', targetKey: 's1' })).toEqual({ patch: null, reorder: false });
+    expect(dropPlan({ ...base, moving: 0, manual: true, grouping: 'status', targetKey: 's1' })).toEqual({ patch: null, reorder: true });
+  });
+
+  it('a drop on the group header or column body changes the group but places nothing', () => {
+    expect(dropPlan({ ...base, manual: true, onSlot: false, grouping: 'assignee', targetKey: null })).toEqual({
+      patch: { assigneeId: null },
+      reorder: false,
+    });
+  });
+
+  it('a multi-selection moves groups but does not reorder', () => {
+    expect(dropPlan({ ...base, manual: true, count: 3, moving: 3, grouping: 'priority', targetKey: '0' })).toEqual({
+      patch: { priority: 0 },
+      reorder: false,
+    });
+  });
+
+  it('a cross-group drop onto a group with no field value is a no-op, even under manual ordering', () => {
+    expect(dropPlan({ ...base, manual: true, grouping: 'label', targetKey: null })).toEqual({ patch: null, reorder: false });
+    expect(dropPlan({ ...base, manual: true, grouping: 'team', targetKey: 't2' })).toEqual({ patch: null, reorder: false });
+  });
+
+  it('a drop with nothing to move and no slot does nothing', () => {
+    expect(dropPlan({ ...base, moving: 0, onSlot: false, manual: true, grouping: 'status', targetKey: 's1' })).toEqual({ patch: null, reorder: false });
+  });
+
+  it('the none group keeps the manual slot without a field patch', () => {
+    expect(dropPlan({ ...base, moving: 0, manual: true, grouping: 'none', targetKey: null })).toEqual({ patch: null, reorder: true });
   });
 });

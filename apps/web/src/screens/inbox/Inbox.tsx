@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@apollo/client';
 import type { ApolloCache, Reference } from '@apollo/client';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import clsx from 'clsx';
 import { Avatar, Button, EmptyState, Icon, IconButton, InlineMessage, Skeleton, StatusIcon, useFlags } from '@velocity/ui';
 import {
@@ -86,7 +86,7 @@ function InboxSkeleton() {
   return (
     <div role="status" aria-label={m.common.loading} className="flex flex-col">
       {Array.from({ length: 10 }, (_, i) => (
-        <div key={i} className="flex h-10 items-center gap-3 px-5">
+        <div key={i} className="flex h-9 items-center gap-3 px-5">
           <Skeleton width={8} height={8} />
           <Skeleton width={16} height={16} />
           <Skeleton width={20} height={20} />
@@ -105,6 +105,7 @@ function rowKey(id: string): string {
 /** Inbox: unread-first, day-grouped notification feed with keyboard triage (SPEC §4.11.10). */
 export function Inbox() {
   const [params, setParams] = useSearchParams();
+  const navigate = useNavigate();
   const raw = params.get('preset');
   const preset: Preset = PRESETS.includes(raw as Preset) ? (raw as Preset) : 'all';
   const { showFlag } = useFlags();
@@ -337,7 +338,22 @@ export function Inbox() {
             </InlineMessage>
           </div>
         ) : sections.length === 0 ? (
-          <EmptyState icon="inbox" message={m.inbox.emptyPreset[preset]} fill />
+          <EmptyState
+            icon="inbox"
+            message={m.inbox.emptyPreset[preset]}
+            action={
+              preset === 'all' ? (
+                <Button size="sm" onClick={() => navigate('/issues')}>
+                  {m.cmd.goAll}
+                </Button>
+              ) : (
+                <Button size="sm" onClick={() => setPreset('all')}>
+                  {m.inbox.showAll}
+                </Button>
+              )
+            }
+            fill
+          />
         ) : (
           <div ref={listRef} role="grid" aria-label={m.inbox.list} aria-rowcount={order.length}>
             {sections.map((s) => (
@@ -395,8 +411,11 @@ function NotificationRow({ n, tabStop, selected, onFocus, onOpen, onToggleRead, 
       onFocus={onFocus}
       onClick={onOpen}
       className={clsx(
-        'group relative flex h-10 cursor-pointer items-center gap-3 border-b border-border px-5 transition-colors duration-100 hover:bg-hover focus-visible:bg-hover',
-        selected && 'bg-primary-subtle hover:bg-primary-subtle',
+        // Focused row = neutral fill + 2px left primary bar, as in the issue list (SPEC §4.10.2).
+        'group relative flex h-9 cursor-default select-none items-center gap-3 border-b border-border px-5 transition-colors duration-100 outline-none focus-visible:outline-none',
+        'before:absolute before:inset-y-1 before:left-0 before:w-0.5 before:rounded-full',
+        selected ? 'bg-primary-subtle hover:bg-primary-subtle' : tabStop ? 'bg-neutral' : 'hover:bg-hover',
+        tabStop ? 'before:bg-primary' : 'before:bg-transparent',
       )}
     >
       <div role="gridcell" className="flex min-w-0 flex-1 items-center gap-3">

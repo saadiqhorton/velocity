@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 import clsx from 'clsx';
-import { Avatar, Icon, IconButton, PopupSelect, PriorityIcon, StatusIcon } from '@velocity/ui';
+import { Avatar, Button, Icon, IconButton, PopupSelect, PriorityIcon, StatusIcon, Tooltip } from '@velocity/ui';
 import type { PopupOption, PopupSelectTriggerProps } from '@velocity/ui';
 import type { FilterChip } from '@velocity/graphql/dsl';
 import type { FilterField } from '@velocity/schema/filter-ast';
@@ -23,6 +23,8 @@ import type { ChipField } from '@/lib/chips';
 import { ColorDot, ProjectIcon, TeamIcon } from '@/components/common/EntityIcons';
 import { PRIORITY_KEYS } from '@/components/issues/IssueRow';
 import { useFeatures } from '@/lib/features';
+import { useShortcutKeys } from '@/lib/shortcutKeys';
+import { useCommands } from '@/keyboard/react';
 import { m } from '@/i18n';
 
 const FIELD_ICON: Record<ChipField, ReactNode> = {
@@ -266,6 +268,18 @@ export function FilterBar({ chips, onChange, teamId, hiddenFields = [] }: Filter
   const [adding, setAdding] = useState<FilterField | null>(null);
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const [fieldOpen, setFieldOpen] = useState(false);
+  // F opens the field picker. Registered here so the tooltip hint reads a real binding.
+  useCommands(() => [
+    {
+      id: 'view.filter',
+      title: m.view.addFilter,
+      group: 'list',
+      keys: ['f'],
+      when: () => chips !== null,
+      run: () => setFieldOpen(true),
+    },
+  ]);
+  const addKeys = useShortcutKeys('view.filter');
 
   const features = useFeatures();
   const offFields: FilterField[] = [...(features.cycles ? [] : (['cycle'] as const)), ...(features.estimates ? [] : (['estimate'] as const))];
@@ -311,25 +325,45 @@ export function FilterBar({ chips, onChange, teamId, hiddenFields = [] }: Filter
         onChange={(f: string) => {
           setAdding(f as FilterField);
         }}
-        renderTrigger={(t) => (
-          <button
-            type="button"
-            ref={(el) => {
-              (t.ref as (el: HTMLElement | null) => void)(el);
-              setAnchor(el);
-            }}
-            onClick={t.onClick}
-            onKeyDown={t.onKeyDown}
-            aria-haspopup="listbox"
-            aria-expanded={t.open}
-            data-testid="add-filter"
-            className="inline-flex h-7 shrink-0 items-center gap-1 rounded-sm px-2 text-sm text-fg-subtle transition-colors duration-100 hover:bg-hover hover:text-fg"
-          >
-            <Icon name="filter" />
-            {chips.length === 0 ? m.view.addFilter : null}
-          </button>
-        )}
+        renderTrigger={(t) => {
+          const setRef = (el: HTMLElement | null) => {
+            (t.ref as (el: HTMLElement | null) => void)(el);
+            setAnchor(el);
+          };
+          // With chips the trigger is icon-only, so it needs an accessible name (SPEC §4.17.6).
+          return chips.length > 0 ? (
+            <IconButton
+              ref={setRef}
+              label={m.view.addFilterLabel}
+              shortcut={addKeys}
+              size="sm"
+              icon={<Icon name="filter" />}
+              onClick={t.onClick}
+              onKeyDown={t.onKeyDown}
+              aria-haspopup="listbox"
+              aria-expanded={t.open}
+              data-testid="add-filter"
+            />
+          ) : (
+            <Tooltip content={m.view.addFilterLabel} shortcut={addKeys}>
+              <button
+                type="button"
+                ref={setRef}
+                onClick={t.onClick}
+                onKeyDown={t.onKeyDown}
+                aria-haspopup="listbox"
+                aria-expanded={t.open}
+                data-testid="add-filter"
+                className="inline-flex h-7 shrink-0 items-center gap-1 rounded-sm px-2 text-sm text-fg-subtle transition-colors duration-100 hover:bg-hover hover:text-fg"
+              >
+                <Icon name="filter" />
+                {m.view.addFilter}
+              </button>
+            </Tooltip>
+          );
+        }}
       />
+      {chips.length > 0 ? <ClearFiltersButton onClick={() => onChange([])} /> : null}
       {adding ? (
         <ValuePicker
           label={fieldLabel(adding)}
@@ -356,6 +390,11 @@ export function FilterBar({ chips, onChange, teamId, hiddenFields = [] }: Filter
   );
 }
 
+/** Subtle "Clear" at the end of the chip row; drops every chip (SPEC §4.17.6). */
 export function ClearFiltersButton({ onClick }: { onClick: () => void }) {
-  return <IconButton label={m.list.clearFilters} size="sm" icon={<Icon name="close" />} onClick={onClick} />;
+  return (
+    <Button variant="subtle" size="sm" onClick={onClick}>
+      {m.common.clear}
+    </Button>
+  );
 }

@@ -1,4 +1,5 @@
-import { Suspense, lazy } from 'react';
+import { Suspense, lazy, useState } from 'react';
+import { usePresence } from '@velocity/ui';
 import { useUi } from '@/stores/ui';
 import { PickerHost } from '@/components/overlays/PickerHost';
 import { SelectionBar } from '@/components/overlays/SelectionBar';
@@ -13,6 +14,14 @@ const CreateIssueModal = lazy(() => import('@/components/overlays/CreateIssueMod
 /** App-level overlays. Heavy ones load on first use. */
 export function Overlays() {
   const paletteOpen = useUi((s) => s.paletteOpen);
+  const palette = usePresence(paletteOpen);
+  // Every opening gets a fresh palette, including one reopened while the last is still closing.
+  const [paletteSession, setPaletteSession] = useState(0);
+  const [paletteWasOpen, setPaletteWasOpen] = useState(paletteOpen);
+  if (paletteOpen !== paletteWasOpen) {
+    setPaletteWasOpen(paletteOpen);
+    if (paletteOpen) setPaletteSession((n) => n + 1);
+  }
   const shortcutsOpen = useUi((s) => s.shortcutsOpen);
   const createOpen = useUi((s) => s.createOpen);
   return (
@@ -26,7 +35,7 @@ export function Overlays() {
       <SelectionBar />
       <DeleteConfirmHost />
       <Suspense fallback={null}>
-        {paletteOpen ? <CommandPalette /> : null}
+        {palette.mounted ? <CommandPalette key={paletteSession} state={palette.state} /> : null}
         {shortcutsOpen ? <ShortcutsHelp /> : null}
         {createOpen ? <CreateIssueModal /> : null}
       </Suspense>

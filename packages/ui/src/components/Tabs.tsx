@@ -75,7 +75,10 @@ export function Tabs({ items, value, defaultValue, onChange, variant = 'underlin
                       'h-7 rounded-full px-3',
                       selected ? 'bg-neutral-hover text-fg' : 'text-fg-subtle hover:bg-hover hover:text-fg active:bg-pressed',
                     )
-                  : clsx('-mb-px h-8 border-b-2', selected ? 'border-primary text-fg' : 'border-transparent text-fg-subtle hover:text-fg'),
+                  : clsx(
+                      '-mb-px h-8 rounded-t-sm border-b-2 active:bg-pressed',
+                      selected ? 'border-primary text-fg' : 'border-transparent text-fg-subtle hover:text-fg',
+                    ),
               )}
             >
               {item.label}

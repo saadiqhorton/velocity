@@ -245,13 +245,15 @@ test.describe('issue detail panel', () => {
     const panel = PANEL(page);
     await expect(panel).toBeVisible();
 
+    // Adding opens an inline title field, not the create form (SPEC §4.19); Enter adds and keeps the field open.
     await panel.getByRole('button', { name: 'Add sub-issue' }).click();
-    const modal = page.getByTestId('create-issue-modal');
-    await expect(modal).toBeVisible();
-    await page.getByTestId('create-issue-title').fill(childTitle);
-    await page.getByTestId('create-issue-submit').click();
-    await expect(modal).toBeHidden();
+    const quickAdd = panel.getByTestId('sub-issue-quick-add');
+    await expect(quickAdd).toBeFocused();
+    await quickAdd.fill(childTitle);
+    await quickAdd.press('Enter');
     await expect(panel.getByTestId('sub-issues')).toContainText(childTitle);
+    await quickAdd.press('Escape');
+    await expect(quickAdd).toBeHidden();
 
     await panel.getByRole('button', { name: 'Add relation' }).click();
     await page.getByRole('combobox', { name: 'Search' }).fill(targetTitle);

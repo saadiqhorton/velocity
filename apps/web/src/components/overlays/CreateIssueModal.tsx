@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { useQuery } from '@apollo/client';
-import { Avatar, Button, Icon, Modal, PopupSelect, PriorityIcon, StatusIcon, Switch, useFlags } from '@velocity/ui';
+import { useApolloClient, useQuery } from '@apollo/client';
+import { Avatar, Button, Icon, IconButton, Modal, PopupSelect, PriorityIcon, StatusIcon, Switch, useFlags } from '@velocity/ui';
 import type { PopupOption } from '@velocity/ui';
 import { TeamCyclesDocument } from '@/gql/graphql';
 import { useWorkspace } from '@/app/workspace';
@@ -10,6 +10,7 @@ import { useOpenIssue } from '@/lib/navigation';
 import { LazyEditor } from '@/components/editor/LazyEditor';
 import type { MarkdownEditorHandle } from '@/components/editor/LazyEditor';
 import { ColorDot, ProjectIcon, TeamIcon } from '@/components/common/EntityIcons';
+import { ShortcutHint } from '@/components/common/ShortcutHint';
 import { defaultStatusFor, useCreateIssue } from '@/components/issues/actions';
 import {
   NONE,
@@ -25,6 +26,7 @@ import {
 } from '@/components/issues/pickers';
 import { PRIORITY_KEYS } from '@/components/issues/IssueRow';
 import { teamUsesCycles, useFeatures } from '@/lib/features';
+import { readIssueRow } from '@/lib/issueCache';
 import { m } from '@/i18n';
 
 interface ChipPickerProps {
@@ -73,6 +75,7 @@ export function CreateIssueModal() {
   const { showFlag } = useFlags();
   const openIssue = useOpenIssue();
   const [create] = useCreateIssue();
+  const client = useApolloClient();
   const editor = useRef<MarkdownEditorHandle>(null);
 
   const initialTeam = (defaults.teamId && ws.teamsById.get(defaults.teamId)) || ws.teams[0];
@@ -85,6 +88,7 @@ export function CreateIssueModal() {
   const [assigneeId, setAssigneeId] = useState<string | null>(defaults.assigneeId ?? null);
   const [labelIds, setLabelIds] = useState<string[]>(defaults.labelIds ?? []);
   const [projectId, setProjectId] = useState<string | null>(defaults.projectId ?? null);
+  const [milestoneId, setMilestoneId] = useState<string | null>(defaults.milestoneId ?? null);
   const [cycleId, setCycleId] = useState<string | null>(defaults.cycleId ?? null);
   const [estimate, setEstimate] = useState<number | null>(null);
   const [more, setMore] = useState(false);
@@ -98,11 +102,14 @@ export function CreateIssueModal() {
   const cycle = cyclesQ.data?.cycles.find((c) => c.id === cycleId);
   const labels = useMemo(() => labelIds.map((id) => ws.labelsById.get(id)).filter((l) => l !== undefined), [labelIds, ws.labelsById]);
   const dirty = title.trim() !== '' || description.trim() !== '';
+  // Sub-issue creation shows the parent's key; omitted when the parent is not in the cache.
+  const parentIdentifier = defaults.parentId ? readIssueRow(client.cache, defaults.parentId)?.identifier : undefined;
 
   const submit = () => {
     const t = title.trim();
     if (!t) {
-      setError(m.issue.title);
+      setError(m.issue.titleRequired);
+      document.getElementById('create-issue-title')?.focus();
       return;
     }
     if (!team) return;
@@ -118,7 +125,7 @@ export function CreateIssueModal() {
       cycleId: cycleId ?? undefined,
       estimate: estimate ?? undefined,
       parentId: defaults.parentId ?? undefined,
-      milestoneId: defaults.milestoneId ?? undefined,
+      milestoneId: milestoneId ?? undefined,
     };
     void create(input).then((res) => {
       const issue = res.data?.createIssue;
@@ -148,19 +155,8 @@ export function CreateIssueModal() {
       size="lg"
       isDirty={dirty}
       onSubmit={submit}
-      footer={
-        <div className="flex w-full items-center gap-3">
-          <Switch label={m.issue.createMore} checked={more} onChange={setMore} />
-          <span className="flex-1" />
-          <Button onClick={close}>{m.common.cancel}</Button>
-          <Button variant="primary" onClick={submit} data-testid="create-issue-submit">
-            {m.issue.createIssue}
-          </Button>
-        </div>
-      }
-    >
-      <div className="flex flex-col gap-3" data-testid="create-issue-modal">
-        <div className="flex items-center gap-2">
+      header={(requestClose) => (
+        <div className="flex flex-wrap items-center gap-2" data-testid="create-issue-header">
           <ChipPicker
             label={m.issue.team}
             testId="create-team"
@@ -175,22 +171,55 @@ export function CreateIssueModal() {
             icon={team ? <TeamIcon team={team} /> : null}
             text={team?.key ?? ''}
           />
+          <span aria-hidden="true" className="text-fg-subtlest">
+            ›
+          </span>
+          <span className="text-base text-fg-subtle">{m.issue.newIssue}</span>
+          {parentIdentifier ? (
+            <span className="inline-flex h-7 max-w-48 items-center rounded-sm border border-border px-2 text-sm text-fg-subtle" data-testid="create-parent">
+              <span className="truncate">{m.issue.subIssueOf(parentIdentifier)}</span>
+            </span>
+          ) : null}
+          <IconButton label={m.common.close} icon={<Icon name="close" size={20} />} onClick={requestClose} className="ml-auto" />
         </div>
-        <input
-          id="create-issue-title"
-          data-autofocus
-          aria-label={m.issue.title}
-          aria-invalid={error ? true : undefined}
-          placeholder={m.issue.titlePlaceholder}
-          value={title}
-          onChange={(e) => {
-            setTitle(e.target.value);
-            setError(null);
-          }}
-          className="w-full border-b border-transparent bg-transparent pb-1 text-xl font-semibold text-fg placeholder:text-fg-subtlest focus-visible:border-primary focus-visible:outline-none"
-          data-testid="create-issue-title"
-          autoComplete="off"
-        />
+      )}
+      footer={
+        <div className="flex w-full items-center gap-3">
+          <Switch label={m.issue.createMore} checked={more} onChange={setMore} />
+          <span className="flex-1" />
+          <div className="flex items-center gap-2">
+            <ShortcutHint binding="mod+enter" />
+            <Button variant="primary" onClick={submit} data-testid="create-issue-submit">
+              {m.issue.createIssue}
+            </Button>
+          </div>
+        </div>
+      }
+    >
+      <div className="flex flex-col gap-3 pt-1" data-testid="create-issue-modal">
+        <div className="flex flex-col gap-1">
+          <input
+            id="create-issue-title"
+            data-autofocus
+            aria-label={m.issue.title}
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error ? 'create-issue-title-error' : undefined}
+            placeholder={m.issue.titlePlaceholder}
+            value={title}
+            onChange={(e) => {
+              setTitle(e.target.value);
+              setError(null);
+            }}
+            className="w-full bg-transparent text-xl font-medium text-fg outline-none placeholder:text-fg-subtlest"
+            data-testid="create-issue-title"
+            autoComplete="off"
+          />
+          {error ? (
+            <p id="create-issue-title-error" role="alert" className="text-sm text-danger-fg">
+              {error}
+            </p>
+          ) : null}
+        </div>
         <div className="min-h-24">
           <LazyEditor handle={editor} value="" ariaLabel={m.common.description} placeholder={m.issue.descriptionPlaceholder} onChange={setDescription} onSubmit={submit} />
         </div>
@@ -262,7 +291,11 @@ export function CreateIssueModal() {
             testId="create-project"
             options={projectOptions(ws)}
             value={projectId ?? NONE}
-            onChange={(v) => setProjectId(v === NONE ? null : v)}
+            onChange={(v) => {
+              const next = v === NONE ? null : v;
+              if (next !== projectId) setMilestoneId(null);
+              setProjectId(next);
+            }}
             icon={project ? <ProjectIcon project={project} /> : <Icon name="project" />}
             text={project?.name ?? m.issue.project}
           />

@@ -5,12 +5,13 @@
 | Field | Value |
 |---|---|
 | Project name | Velocity (working title — see §1.6 Naming) |
-| Version | Spec v1.1 (2026-10-03) |
+| Version | Spec v1.2 (2026-10-15) |
 | Status | Approved for implementation |
 | License | AGPL-3.0-or-later |
 | Repository | Monorepo, single SPEC.md as source of truth |
 
 **Changelog**
+- v1.2 — Record the A1/A2 interface amendments and editable project milestone document rows, progress diamonds, and shareable milestone issue drill-downs (§4.18–4.19).
 - v1.1 — Refocus: single-user/small-team product ("solo-first"). Removed: triage, 4-role RBAC, guest accounts, email/SMTP, OAuth client registry, team admin flags, insights dashboards (trimmed), Redis/MinIO/separate worker from stack. Simplified: auth, workspace model (single workspace), deployment (3 containers). Added: explicit Linear-layout-parity shell spec (§4.10).
 - v1.0 — Initial full-team specification.
 
@@ -436,6 +437,7 @@ Tokens are the single source of styling truth. Implementation: CSS custom proper
 --ds-font-size-{n}          100 (11px), 200 (12px), 300 (13px), 400 (15px), 500 (18px), 600 (20px), 700 (24px)   (A1)
 --ds-shadow-{n}            none, card, overlay (minimal usage)
 --ds-duration-{n}           100ms, 150ms, 200ms
+--ds-ease-{n}               enter, exit, standard   (A2)
 --ds-z-index-{n}           sticky=100, dropdown=300, modal=400, flag=500, tooltip=600
 ```
 
@@ -513,7 +515,7 @@ Dark is the default theme (Linear-class feel), built on ADS dark theme semantics
 
 ## 4.7 Iconography
 
-- **@atlaskit/icon** preferred; fallback per skill rule: **Font Awesome 6** free (self-hosted subset) with a semantic mapping table.
+- **Library (A2):** **Lucide** (ISC) stroke icons, 1.5px absolute stroke, `currentColor`, no fill except to show state (the favorited star). Font Awesome is removed. `PriorityIcon` and `StatusIcon` are custom components.
 - Sizes: 16px inline, 20px buttons, 24px nav; stroke/currentColor.
 - Icon-only buttons banned without `aria-label` (binding skill rule); each carries a tooltip with its accessible name.
 - Fixed priority mapping (A1): Urgent = filled rounded square with `!` (danger color), High/Medium/Low = three signal bars with 3/2/1 filled (subtle text color, unfilled bars at 30%), None = three dashes.
@@ -525,7 +527,7 @@ ADS foundation rules (binding):
 - **Spacing:** 4px base grid via `--ds-space-*` tokens (§4.2.1). Component paddings from the token scale only — no ad-hoc pixel values.
 - **Radius (A1):** `4px` lozenges/checkboxes/kbd, `6px` controls/inputs/nav items, `8px` cards/panels/dropdowns/content panel, `12px` modals only. Pill radius only on badges, avatars, label chips and pill tabs.
 - **Elevation:** shadows minimal — dropdowns and modals get the `overlay` shadow; everything else separates via surface value shifts (`surface` vs `surface-sunken`) and 1px borders. No shadow stacking on nested elements; no depth theatrics.
-- **Motion:** 100–200ms transitions on color/background only; the only movement animations are dropdown/modal enter (150ms opacity + 4px translate), toast slide (200ms) and disclosure chevron rotation (150ms, A1). Tooltips fade in (150ms opacity). `prefers-reduced-motion` disables all transform/opacity animation.
+- **Motion (A2):** functional only; durations, easings and per-surface timings are in §4.19. `prefers-reduced-motion` disables all transform/opacity animation.
 
 ## 4.9 Component Specifications
 
@@ -550,7 +552,7 @@ Signature status display: variant-tinted (status color at 15% bg / full-color te
 Header (A1): `surface`, 12px sentence-case medium `text-subtlest`, a single bottom hairline; sortable columns with ↑/↓ indicator via `aria-sort` (never raw sort text — skill rule). Rows 44px with no separators, hover = `surface-hover`, selected = `primary-subtle` + 2px left primary border, roving tabindex, sticky header. Empty state: icon + one sentence + primary action.
 
 ### 4.9.7 Flag (toast)
-Bottom-left stack, max 3, auto-dismiss 5s (errors persist), 200ms slide-in, dismiss ×, optional action link, severity dot. Never for critical errors (those become inline messages/banners — skill rule).
+Bottom-left stack, newest 3 shown, auto-dismiss 5s (errors persist), 200ms slide-in from the left, dismiss ×, optional action link, severity dot. Inside the app shell the stack starts right of the sidebar from `md` (A2). Never for critical errors (those become inline messages/banners — skill rule).
 
 ### 4.9.8 Modal dialog
 Destructive confirms, issue-create modal (Linear-parity `C`), focused secondary tasks; NEVER routine inline edits (skill rule). Widths sm 400 / md 560 / lg 760; `surface-raised`, 12px radius, focus trapped, Esc closes (dirty confirm), Enter submits primary.
@@ -568,7 +570,7 @@ Skeletons for route-level loads; small spinners (16px) adjacent for component fe
 Views default to infinite scroll (Linear-parity, `J/K` page-through); explicit ADS pagination where chunking aids orientation (imports report, audit log).
 
 ### 4.9.13 Menu (dropdown)
-Overflow menus (⋯): grouped items, danger text for destructive, submenu for moves; keyboard navigable; primary actions never buried in menus (skill rule).
+Overflow menus (⋯): grouped items, danger text for destructive, submenu for moves; keyboard navigable; primary actions never buried in menus (skill rule). Property submenus show the picker's own options (A2): check on the current value, filter input on long lists, digit quick-select.
 
 ### 4.9.14 Tabs
 ADS tabs (bottom border active `primary`) for issue detail (Comments/Activity/GitHub) and settings sections, 32px height. Object-page siblings in a page toolbar (project Overview/Issues/Milestones/Activity) and view presets use the pill variant (A1): 28px, pill radius, selected = `neutral-hover` fill.
@@ -625,7 +627,7 @@ Only where depth exists (Settings paths). Subtle links, current = text + semibol
 | Content | (A1) An inset panel on the app chrome: 8px gap top/right/bottom, 8px radius, 1px `border`, `surface` fill; the detail panel lives inside it. View header (44px): optional breadcrumb trail, title (13px medium), muted count, filter chips, display options menu, `+ New issue` primary button (28px). |
 | Issue rows | 36px height (A1), single-line: priority icon, team-key+number (12px medium subtle), title (13px medium), right-aligned metadata (pill label chips, assignee avatar 20px). Row hover = `surface-hover`; focused row = `neutral` fill + 2px left primary bar; selected = `primary-subtle`. |
 | Status groups | Section header (36px, `surface-raised`, no rules): status icon + name (13px medium) + count (subtlest) + collapse chevron; sticky within scroll. |
-| Detail panel | 400px fixed right panel, opens on issue focus (`Enter`); `Esc` closes and returns focus to list; full-page issue view available via `⌘Enter`; panel = `surface` with 1px left border. |
+| Detail panel | 400px fixed right panel, opens on issue focus (`Space` peek, A2); `Esc` closes and returns focus to list; full-page issue view via `Enter` or `⌘Enter` (A2); panel = `surface` with 1px left border. |
 | Empty states | Centered in content: icon + one sentence + primary action. |
 | Modal | Issue-create modal centered (per §4.9.8), Linear-parity `C` flow. |
 | Density | Lists dense (Linear-like); settings/forms medium (ADS). |
@@ -698,7 +700,8 @@ Keyboard model is Linear-parity. All shortcuts work regardless of focus (except 
 | `G` then `S` | Settings |
 | `G` then `T` | Cycle (current team) |
 | `↑/↓` | Navigate issue rows / palette / menu items |
-| `Enter` | Open focused issue in right panel / `⌘Enter` full page |
+| `Enter` / `⌘Enter` | Open focused issue full page; inbox: `Enter` opens the peek panel (A2) |
+| `Space` | Peek focused issue in right panel; `Space` again closes it (A2) |
 | `Esc` | Close panel/menu/modal/clear selection |
 | `X` | Toggle selection; `⇧X` range; selection action bar (bottom) |
 | `E` | Mark done (toggle; when inbox-focused: mark read) |
@@ -714,6 +717,9 @@ Keyboard model is Linear-parity. All shortcuts work regardless of focus (except 
 | `#` | Delete (confirm) |
 | `B` | Toggle board/list |
 | `⌥/Alt`+`↑/↓` | Reorder within group |
+| `F` | Open the filter menu (A2) |
+| `Cmd/Ctrl+Z` | Undo the most recent reversible issue edit (A2, §4.19) |
+| `0`–`9` | Pick a numbered option in an open picker or menu while its filter is empty (A2) |
 | `Tab` | Between regions (sidebar / content / panel) |
 | `Cmd/Ctrl+Enter` | Submit comment |
 
@@ -730,6 +736,7 @@ Keyboard model is Linear-parity. All shortcuts work regardless of focus (except 
 - Grouped results: Actions (context-aware), Navigation ("Go to: ENG Active"), Issues (fuzzy on `ENG-123 — Title`), Recent.
 - Keyboard-complete: ↑↓, Enter, Esc, Tab between groups; fuzzy match actions + issue IDs/titles.
 - Mode prefixes: `>` commands; `#` issue-ID jump; `@` member. Same grammar as text fields.
+- Property commands open nested pages with a target chip (`ENG-123` for one issue, `3 issues` for several); `Backspace` on empty input or `Esc` goes back; matched characters are highlighted; issue actions come first when there are targets (A2).
 - Palette never the only path — every action has a shortcut or visible control.
 
 ## 4.14 Copy & Content Rules
@@ -791,6 +798,38 @@ Approved by the repo owner. Where this amendment and earlier §4 text disagree, 
 - **In-place editing.** Every property shown on an issue row, board card or sub-issue row (status, priority, assignee, labels, project, cycle, estimate) is itself a trigger: a click opens the same picker as its keyboard shortcut, anchored to the property, and never opens or selects the issue. Projects-list Status, Health and Lead cells edit in place the same way. Triggers stay out of the tab order; keyboard users keep the row shortcuts (§4.12).
 - **Navigation.** The sidebar's Workspace group links to all projects and all views from every screen (§4.10.3).
 - **Project page.** Breadcrumb header (team › Projects › project), pill section tabs, a centered document column (≤760px: icon tile, 24px title, interactive property summary chips that edit in place the same way as the Properties rail, description, milestone list) and a right rail of collapsible cards (Properties, Milestones, Progress). Projects list columns: Name, Health, Lead, Target date, Teams, Issues, Status (status ring with progress pie + percent).
+- **Milestone overview.** Borderless document rows have a status dropdown beside the name, an editable description below, target-date control, issue-count/percentage pill with completion details, and hover/focus actions for reordering and deletion (with confirmation). A drag handle and keyboard-accessible Move up/Move down actions share the same ordering. The diamond fills from the bottom by the completed-issue percentage, including partial progress; overview and rail use the same glyph. The count pill and rail entry open the project's Issues tab with a removable milestone filter, serialized as `?milestone=<id>` and applied on the server alongside project scope. New issues inherit that milestone until their project changes. Stale or foreign milestone links show a recoverable message rather than an unfiltered list. The Milestones tab retains the planning timeline.
+
+---
+
+## 4.19 Amendment A2 — Interaction depth, motion and stroke icons (2026-10-15)
+
+Approved by the repo owner. Where this amendment and earlier §4 text disagree, this amendment wins; the earlier sections have been updated inline and marked "(A2)".
+
+- **Motion.** Functional only. Durations `--ds-duration-100`, `-150`, `-200` (100/150/200ms). Easings `--ds-ease-enter` `cubic-bezier(0.16, 1, 0.3, 1)`, `--ds-ease-exit` `cubic-bezier(0.4, 0, 1, 1)`, `--ds-ease-standard` `cubic-bezier(0.2, 0, 0, 1)`.
+  - Popovers, menus and submenus enter in 150ms (opacity, 4px rise) and exit in 120ms (opacity, scale .98). The command palette pops in in 150ms and exits in 120ms (opacity, scale .98).
+  - The peek panel slides in in 180ms and out in 120ms (opacity, 12px). Layout width snaps; content changes inside an open panel are instant.
+  - The selection bar rises in (160ms) and out (120ms). Toasts slide in from the left (200ms) and leave to the left (120ms).
+  - Tooltips fade in (150ms, opacity). Disclosure chevrons rotate in 150ms.
+  - Issue rows glide 150ms to a new slot when order or group changes. Never on scroll, mount or during a drag.
+  - Skeletons pulse (opacity only; no gradient).
+  - Exiting popovers, the palette and toasts are `aria-hidden` and ignore pointer events.
+  - `prefers-reduced-motion: reduce` disables all transform and opacity animation. Still banned: bounce or overshoot, gradient shimmer, decorative motion.
+- **Icons.** Lucide (ISC) stroke icons, 1.5px absolute stroke at every size, `currentColor`, no fill except to show state (the favorited star). Font Awesome is removed. `PriorityIcon` and `StatusIcon` stay custom components.
+- **Context menu.** Opens on right-click (rows, board cards), `Shift+F10` or the menu key, `V`, and the `⋯` button in the issue header. Status, Priority, Assignee, Labels, Project, Cycle (when the team uses cycles) and Estimate (when enabled) are submenus showing the picker's options: check on the current value, a filter input on Assignee, Labels and Project, digit quick-select. The menu also offers Copy (ID, link, branch, prompt), Open in (new tab, configured coding tools), Move to team, Duplicate, Subscribe or Unsubscribe (once the issue detail is loaded), Archive and Delete. Shortcut hints come from the command registry.
+- **Pickers.** While the filter is empty, digits pick a numbered option. Priority: `0` No priority, `1` Urgent, `2` High, `3` Medium, `4` Low (display order). Statuses: `1`–`9` in display order. With text in the filter, digits type into it.
+- **Command palette (extends §4.13).** Property commands open nested pages inside the palette with a target chip (`ENG-123` for one issue, `3 issues` for several). `Backspace` on empty input or `Esc` goes back. Matched characters are highlighted, commands carry icons, and issue actions are listed first when there are targets.
+- **Undo (new §4.12 row).** `Cmd/Ctrl+Z` undoes the most recent reversible issue edit: property edits, done toggle, archive and delete. Team moves and description edits are not reversible. Bulk edits and `E` show a flag with an Undo action; single in-place edits are silent. Undo runs optimistically and syncs like any edit.
+- **Drag and drop.** Rows drag between groups when grouped by status, priority, assignee, project or cycle. Under manual ordering every grouping drags, and a single row dropped on a slot takes that position. Board cards drop between cards under manual ordering. A drag shows a compact preview (identifier and title, or "N issues" for a multi-selection), dims the source, draws a 2px insertion line at the drop slot and highlights the target group or column.
+- **Selection.** The board matches the list: `X` toggles, `Shift+X` selects a range, `Mod+A` selects all, `⌘/Ctrl`-click toggles and `Shift`-click selects a range. Selection clears when the view changes (new list, route or scope).
+- **Tooltips and keys.** Tooltips for registered commands show their shortcut from the command registry. `F` opens the filter menu.
+- **Editor (text-field rules, §4.12).** A selection shows a toolbar: bold, italic, strike, code, link. `/` opens the block menu (headings, lists, task list, quote, code block, divider). `#` searches issues and inserts a markdown link to the issue. `@` inserts `@username`; the server parses that syntax for comment mentions (§3.5.4).
+- **Issue detail.** Empty sub-issue, relation and attachment sections collapse into one row of actions under the description. Sub-issue quick-add is an inline title field: Enter adds the sub-issue optimistically and keeps the field open. Activity rows carry glyphs (status, priority, assignee, labels, relations) and include the issue-created entry. Consecutive same-actor edits of the same property within 10 minutes collapse into one activity row.
+- **Create-issue modal.** Header breadcrumb `team › New issue`, plus a sub-issue chip when created under a parent. Borderless title. No Cancel button: `Esc` or × closes. The primary button carries a `⌘/Ctrl+Enter` hint. An empty title shows an inline error.
+- **Enter and Space.** `Enter` opens the focused issue's full page. `Space` peeks it in the side panel; `Space` again or `Esc` closes the peek. `⌘/Ctrl+Enter` opens the full page. In the inbox, `Enter` opens the peek panel. This supersedes "Enter opens the panel" in §4.10.2 and §4.12 and promotes the recorded U1 deviation to specification.
+- **Toasts.** Stacked bottom-left of the viewport; from `md` inside the app shell the stack starts right of the sidebar. The newest three are shown.
+- **Sidebar.** Team rows reveal `+` (new issue in that team) and `⋯` (New issue, Team settings) on hover or focus.
+- **Group and column headers.** Status and priority groups show their status or priority glyph, not a dot. Other groupings show their own icon or avatar.
 
 # 5. Architecture
 

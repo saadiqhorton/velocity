@@ -3,13 +3,15 @@ import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import clsx from 'clsx';
 import { Spinner } from './Spinner';
 import { Tooltip } from './Tooltip';
+import type { TooltipShortcut } from './Tooltip';
 
 export type ButtonVariant = 'primary' | 'default' | 'subtle' | 'link' | 'danger';
 export type ButtonSize = 'sm' | 'md' | 'lg';
 
 export const buttonVariantClass: Record<ButtonVariant, string> = {
+  // No primary-pressed token exists; `primary-hover` is the darkest primary, so pressed differs from rest.
   primary:
-    'bg-primary text-fg-inverse hover:bg-primary-hover active:bg-primary disabled:bg-neutral disabled:text-fg-disabled',
+    'bg-primary text-fg-inverse hover:bg-primary-hover active:bg-primary-hover disabled:bg-neutral disabled:text-fg-disabled',
   default:
     'border border-border bg-neutral text-fg hover:bg-neutral-hover active:bg-pressed disabled:bg-transparent disabled:text-fg-disabled',
   subtle: 'bg-transparent text-fg-subtle hover:bg-hover hover:text-fg active:bg-pressed disabled:text-fg-disabled',
@@ -33,6 +35,10 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   fullWidth?: boolean;
   /** Square icon-only sizing (used by IconButton). */
   square?: boolean;
+  /** Tooltip text. Without it, `shortcut` has nothing to attach to and is not rendered. */
+  tooltip?: string;
+  /** Key caps shown in the tooltip after its text, e.g. ['C'] or ['Ctrl', 'K']. */
+  shortcut?: TooltipShortcut;
 }
 
 const squareSizeClass: Record<ButtonSize, string> = {
@@ -50,6 +56,8 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     iconAfter,
     fullWidth,
     square,
+    tooltip,
+    shortcut,
     disabled,
     className,
     children,
@@ -60,7 +68,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
   ref,
 ) {
   const isLink = variant === 'link';
-  return (
+  const button = (
     <button
       {...rest}
       ref={ref}
@@ -95,23 +103,31 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       ) : null}
     </button>
   );
+  if (tooltip === undefined) return button;
+  return (
+    <Tooltip content={tooltip} shortcut={shortcut}>
+      {button}
+    </Tooltip>
+  );
 });
 
-type IconButtonOwnProps = Omit<ButtonProps, 'children' | 'iconBefore' | 'iconAfter' | 'aria-label' | 'fullWidth' | 'square'>;
+type IconButtonOwnProps = Omit<ButtonProps, 'children' | 'iconBefore' | 'iconAfter' | 'aria-label' | 'fullWidth' | 'square' | 'tooltip'>;
 
 export interface IconButtonProps extends IconButtonOwnProps {
   /** Required: becomes the aria-label and the tooltip text. */
   label: string;
   icon: ReactNode;
+  /** Key caps shown in the tooltip after the label, e.g. ['C']. */
+  shortcut?: TooltipShortcut;
   'aria-label'?: never;
 }
 
 export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton(
-  { label, icon, variant = 'subtle', size = 'md', className, ...rest },
+  { label, icon, shortcut, variant = 'subtle', size = 'md', className, ...rest },
   ref,
 ) {
   return (
-    <Tooltip content={label}>
+    <Tooltip content={label} shortcut={shortcut}>
       <Button
         {...rest}
         ref={ref}

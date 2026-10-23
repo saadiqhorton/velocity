@@ -35,7 +35,7 @@ export const Switch = forwardRef<HTMLButtonElement, SwitchProps>(function Switch
       style={{ width: 32, height: 18 }}
       className={clsx(
         'relative inline-flex shrink-0 items-center rounded-full transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-60',
-        on ? 'bg-primary' : 'bg-neutral-hover',
+        on ? 'bg-primary hover:bg-primary-hover' : 'bg-neutral hover:bg-neutral-hover',
         className,
       )}
     >

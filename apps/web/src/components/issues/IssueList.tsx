@@ -3,7 +3,6 @@ import type { DragEvent, MouseEvent, ReactNode } from 'react';
 import { defaultRangeExtractor, useVirtualizer } from '@tanstack/react-virtual';
 import type { Range } from '@tanstack/react-virtual';
 import clsx from 'clsx';
-import { ReorderIssueDocument } from '@/gql/graphql';
 import type { IssueRowFieldsFragment } from '@/gql/graphql';
 import { useWorkspace } from '@/app/workspace';
 import { useCommands } from '@/keyboard/react';
@@ -11,17 +10,18 @@ import { useActiveList } from '@/stores/list';
 import { useSelection } from '@/stores/selection';
 import { useUi } from '@/stores/ui';
 import type { CreateDefaults } from '@/stores/ui';
-import { groupToken } from '@/lib/grouping';
+import { canDragIssues, groupToken } from '@/lib/grouping';
 import type { GroupBy, ListRow } from '@/lib/grouping';
 import type { DisplayState } from '@/lib/viewState';
 import { useClosePanel, useOpenIssue, usePanelIssueId } from '@/lib/navigation';
 import { forgetListMemory, listReturnPath, peekListMemory } from '@/lib/issueNav';
 import { useLocation } from 'react-router-dom';
 import { spaceTargetOk, openRowContextMenu } from './rowActions';
-import { useOptimisticMutation } from '@/lib/mutation';
+import { setIssueDragPreview } from '@/lib/dragPreview';
 import { ContentSkeleton } from '@/components/shell/ShellSkeleton';
 import { IssueRow, PlaceholderRow } from './IssueRow';
 import { GroupHeader, groupInfo } from './GroupHeader';
+import { useIssueDrop } from './useIssueDrop';
 import type { IssueListResult } from './useIssueList';
 import { m } from '@/i18n';
 
@@ -35,7 +35,7 @@ export interface IssueListProps {
   /** Create-issue defaults for this list (team, project, cycle). */
   context?: CreateDefaults;
   empty: ReactNode;
-  /** Enable drag and ⌥↑/↓ reordering (manual ordering). */
+  /** Manual ordering: enables ⌥↑/↓ and dropping a row into a position within its group. */
   reorderable?: boolean;
   /** Group names for cycles (cycle grouping) when not in the workspace catalog. */
   cycleNames?: ReadonlyMap<string, string>;
@@ -51,6 +51,12 @@ function lastHeaderAtOrBefore(headerIndexes: readonly number[], index: number): 
     else break;
   }
   return found;
+}
+
+/** The group a row drops into (placeholders are not drop targets). */
+function dropGroupOf(row: ListRow<IssueRowFieldsFragment>): string | null | undefined {
+  if (row.type === 'placeholder') return undefined;
+  return row.type === 'issue' ? row.groupKey : row.key;
 }
 
 export function IssueList({ listId, data, display, onToggleGroup, context, empty, reorderable, cycleNames, addedAfterStartIds, className }: IssueListProps) {
@@ -117,13 +123,20 @@ export function IssueList({ listId, data, display, onToggleGroup, context, empty
     getItemKey: (index) => {
       const r = rows[index];
       if (!r) return index;
-      if (r.type === 'issue') return `i:${r.groupKey ?? ''}:${r.issue.id}`;
+      // Issues key by id so a row keeps its element when it moves to another group and glides there.
+      // Label grouping repeats an issue under each of its labels, so those keys also carry the group.
+      if (r.type === 'issue') return grouping === 'label' ? `i:${r.groupKey ?? ''}:${r.issue.id}` : `i:${r.issue.id}`;
       if (r.type === 'header') return `h:${groupToken(r.key)}`;
       return `p:${r.globalIndex}`;
     },
   });
   const items = virtualizer.getVirtualItems();
   const activeSticky = lastHeaderAtOrBefore(headerIndexes, virtualizer.range?.startIndex ?? 0);
+  // The sticky header of the last commit. Its transform changes type when it stops sticking, so it must not glide.
+  const stickyBefore = useRef<number | null>(null);
+  useEffect(() => {
+    stickyBefore.current = activeSticky;
+  });
 
   // Load pages as placeholders (or the end of the list) scroll into view.
   const lastItemIndex = items[items.length - 1]?.index ?? -1;
@@ -200,17 +213,7 @@ export function IssueList({ listId, data, display, onToggleGroup, context, empty
     if (panelIssueId && panelIssueId !== next) openIssue(next);
   };
 
-  const [reorder] = useOptimisticMutation(ReorderIssueDocument, {
-    optimistic: (vars) => {
-      const before = issues.find((i) => i.id === vars.beforeId);
-      const after = issues.find((i) => i.id === vars.afterId);
-      const sortOrder =
-        before && after ? (before.sortOrder + after.sortOrder) / 2 : before ? before.sortOrder + 1 : after ? after.sortOrder - 1 : 1000;
-      return { __typename: 'Mutation' as const, reorderIssue: { __typename: 'Issue' as const, id: vars.id, sortOrder } };
-    },
-    rollback: () => m.flags.rollback.reorder,
-    pulse: (vars) => [vars.id],
-  });
+  const { drop, reorder } = useIssueDrop(issues, grouping, Boolean(reorderable));
 
   /** Neighbors of `id` inside its group after moving it by `delta`. */
   const reorderBy = (id: string, delta: 1 | -1) => {
@@ -368,36 +371,40 @@ export function IssueList({ listId, data, display, onToggleGroup, context, empty
   );
   const onFocusRow = useCallback((issue: IssueRowFieldsFragment) => setFocused(issue.id), [setFocused]);
 
-  // Drag reordering (manual ordering).
-  const [drag, setDrag] = useState<{ id: string; overId: string | null; below: boolean } | null>(null);
-  const onDragStart = (e: DragEvent, id: string) => {
-    if (!reorderable) return;
+  // Drag: rows reorder under manual ordering, and move between groups when the grouping field is set by the drop.
+  const draggable = canDragIssues(grouping, Boolean(reorderable));
+  // Dragged ids (the whole selection when the dragged row is in it), the group under the pointer, and the slot above/below its row.
+  const [drag, setDrag] = useState<{ ids: string[]; over: string | null | undefined; overId: string | null; below: boolean } | null>(null);
+  const membersOf = (key: string | null) => rows.flatMap((r) => (r.type === 'issue' && r.groupKey === key ? [r.issue.id] : []));
+  const onDragStart = (e: DragEvent, issue: IssueRowFieldsFragment) => {
+    if (!draggable) return;
+    const ids = selected.has(issue.id) ? [...selected] : [issue.id];
     e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', id);
-    setDrag({ id, overId: null, below: false });
+    e.dataTransfer.setData('text/plain', ids.join(','));
+    setIssueDragPreview(e, issue, ids.length);
+    setDrag({ ids, over: undefined, overId: null, below: false });
   };
-  const onDragOver = (e: DragEvent, id: string) => {
-    if (!drag) return;
+  const onItemDragOver = (e: DragEvent<HTMLDivElement>, row: ListRow<IssueRowFieldsFragment>) => {
+    const key = dropGroupOf(row);
+    if (!drag || key === undefined) return;
     e.preventDefault();
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const below = e.clientY > rect.top + rect.height / 2;
-    if (drag.overId !== id || drag.below !== below) setDrag({ ...drag, overId: id, below });
+    const overId = row.type === 'issue' ? row.issue.id : null;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const below = overId !== null && e.clientY > rect.top + rect.height / 2;
+    if (drag.over !== key || drag.overId !== overId || drag.below !== below) setDrag({ ...drag, over: key, overId, below });
   };
-  const onDrop = (e: DragEvent) => {
-    e.preventDefault();
-    if (!drag?.overId || drag.overId === drag.id) {
-      setDrag(null);
-      return;
-    }
-    const targetIdx = indexById.get(drag.overId);
-    const target = targetIdx !== undefined ? rows[targetIdx] : undefined;
-    if (target?.type === 'issue') {
-      const groupIds = rows.flatMap((r) => (r.type === 'issue' && r.groupKey === target.groupKey && r.issue.id !== drag.id ? [r.issue.id] : []));
-      const at = groupIds.indexOf(drag.overId) + (drag.below ? 1 : 0);
-      void reorder({ id: drag.id, beforeId: groupIds[at - 1] ?? null, afterId: groupIds[at] ?? null });
-    }
+  const onItemDrop = (e: DragEvent<HTMLDivElement>, row: ListRow<IssueRowFieldsFragment>) => {
+    const key = dropGroupOf(row);
+    const d = drag;
     setDrag(null);
+    if (!d || key === undefined) return;
+    e.preventDefault();
+    if (row.type === 'issue') drop(d.ids, { key, members: membersOf(key), slot: { id: row.issue.id, below: d.below } });
+    else drop(d.ids, { key, members: membersOf(key) });
   };
+
+  /** The pointer is over this row's group (its drop target). */
+  const overGroup = (row: ListRow<IssueRowFieldsFragment>) => drag !== null && drag.over !== undefined && drag.over === dropGroupOf(row);
 
   if (data.initialLoading) return <ContentSkeleton rows={16} header={false} />;
   if (rows.length === 0 || (data.total === 0 && !data.hasMore && issues.length === 0)) {
@@ -416,6 +423,7 @@ export function IssueList({ listId, data, display, onToggleGroup, context, empty
           collapsed={row.collapsed}
           rowIndex={index}
           sticky={sticky}
+          dropTarget={overGroup(row)}
           onToggle={() => onToggleGroup(groupToken(row.key))}
           onCreate={() => openCreate({ ...context, ...info.defaults })}
         />
@@ -423,17 +431,10 @@ export function IssueList({ listId, data, display, onToggleGroup, context, empty
     }
     if (row.type === 'placeholder') return <PlaceholderRow />;
     const issue = row.issue;
-    const dropLine = drag && drag.overId === issue.id && drag.id !== issue.id;
+    const dragging = drag?.ids.includes(issue.id) ?? false;
     return (
-      <div
-        draggable={reorderable}
-        onDragStart={(e) => onDragStart(e, issue.id)}
-        onDragOver={(e) => onDragOver(e, issue.id)}
-        onDrop={onDrop}
-        onDragEnd={() => setDrag(null)}
-        className={clsx('relative', drag?.id === issue.id && 'opacity-50')}
-      >
-        {dropLine ? (
+      <div draggable={draggable} onDragStart={(e) => onDragStart(e, issue)} onDragEnd={() => setDrag(null)} className={clsx('relative', dragging && 'opacity-40')}>
+        {drag && drag.overId === issue.id && !dragging ? (
           <div className={clsx('pointer-events-none absolute inset-x-0 z-10 h-0.5 bg-primary', drag.below ? '-bottom-px' : '-top-px')} />
         ) : null}
         <IssueRow
@@ -472,10 +473,16 @@ export function IssueList({ listId, data, display, onToggleGroup, context, empty
           const row = rows[it.index];
           if (!row) return null;
           const isSticky = it.index === activeSticky;
+          // Rows glide to a new slot when the list reorders (a drop, a status change, a collapse above). Slots only change
+          // on reorders: scrolling leaves them alone, and a fresh element never transitions. Off mid-drag and for sticky headers.
+          const glide = drag === null && !isSticky && it.index !== stickyBefore.current;
           return (
             <div
               key={it.key}
               data-index={it.index}
+              onDragOver={drag ? (e) => onItemDragOver(e, row) : undefined}
+              onDrop={drag ? (e) => onItemDrop(e, row) : undefined}
+              className={clsx(overGroup(row) && 'bg-hover', glide && 'issue-row-glide')}
               style={
                 isSticky
                   ? { position: 'sticky', top: 0, zIndex: 2, height: ROW_HEIGHT }

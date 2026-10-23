@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@apollo/client';
 import { Button, DropdownMenu, EmptyState, Icon, IconButton, Lozenge, Skeleton, StatusIcon, Tabs } from '@velocity/ui';
-import { IssueDetailDocument, SetIssueSubscribedDocument, UpdateIssueDescriptionDocument } from '@/gql/graphql';
+import { IssueDetailDocument, UpdateIssueDescriptionDocument } from '@/gql/graphql';
 import type { IssueDetailQuery } from '@/gql/graphql';
 import { useWorkspace } from '@/app/workspace';
 import { useOptimisticMutation } from '@/lib/mutation';
@@ -15,16 +14,14 @@ import { useMediaQuery } from '@/lib/useMediaQuery';
 import { LazyEditor } from '@/components/editor/LazyEditor';
 import { IssueProperties } from '@/components/issues/IssueProperties';
 import { TeamIcon } from '@/components/common/EntityIcons';
-import { useUpdateIssues } from '@/components/issues/actions';
+import { useSetSubscribed, useUpdateIssues } from '@/components/issues/actions';
 import { useIssueAi } from '@/components/issues/useIssueAi';
 import { IssueMenuItems } from '@/components/overlays/IssueMenuItems';
-import { SubIssues } from './SubIssues';
-import { Relations } from './Relations';
 import { Comments } from './Comments';
 import { ActivityFeed } from './ActivityFeed';
 import { GithubLinks } from './GithubLinks';
 import { ActivityTimeline } from './ActivityTimeline';
-import { Attachments } from './Attachments';
+import { IssueSections, Section } from './IssueSections';
 import { IssuePageHeader, PromptSplitButton } from './IssuePageHeader';
 import { m } from '@/i18n';
 
@@ -150,10 +147,7 @@ function DescriptionEditor({ issue }: { issue: DetailIssue }) {
 
 /** The page's Activity subscribe toggle: a labelled button rather than a bare bell. */
 function SubscribeToggle({ issue }: { issue: DetailIssue }) {
-  const [set] = useOptimisticMutation(SetIssueSubscribedDocument, {
-    optimistic: (vars) => ({ __typename: 'Mutation' as const, setIssueSubscribed: { __typename: 'Issue' as const, id: vars.id, subscribed: vars.subscribed } }),
-    rollback: () => m.flags.rollback.generic,
-  });
+  const set = useSetSubscribed();
   return (
     <Button
       size="sm"
@@ -169,10 +163,7 @@ function SubscribeToggle({ issue }: { issue: DetailIssue }) {
 }
 
 function SubscribeButton({ issue }: { issue: DetailIssue }) {
-  const [set] = useOptimisticMutation(SetIssueSubscribedDocument, {
-    optimistic: (vars) => ({ __typename: 'Mutation' as const, setIssueSubscribed: { __typename: 'Issue' as const, id: vars.id, subscribed: vars.subscribed } }),
-    rollback: () => m.flags.rollback.generic,
-  });
+  const set = useSetSubscribed();
   return (
     <IconButton
       label={issue.subscribed ? m.issue.unsubscribe : m.issue.subscribe}
@@ -189,7 +180,6 @@ function SubscribeButton({ issue }: { issue: DetailIssue }) {
 function DetailHeader({ issue, onClose }: { issue: DetailIssue; onClose?: () => void }) {
   const openIssue = useOpenIssue();
   const ai = useIssueAi();
-  const [moreEl, setMoreEl] = useState<HTMLButtonElement | null>(null);
   return (
     <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4">
       <button
@@ -213,9 +203,9 @@ function DetailHeader({ issue, onClose }: { issue: DetailIssue; onClose?: () => 
       <DropdownMenu
         aria-label={m.issuePage.actions}
         placement="bottom-end"
-        trigger={<IconButton ref={setMoreEl} label={m.issuePage.actions} size="sm" icon={<Icon name="more" />} />}
+        trigger={<IconButton label={m.issuePage.actions} size="sm" icon={<Icon name="more" />} />}
       >
-        <IssueMenuItems issueIds={[issue.id]} anchor={moreEl} />
+        <IssueMenuItems issueIds={[issue.id]} />
       </DropdownMenu>
       <IconButton
         label={m.issue.openFullPage}
@@ -225,21 +215,6 @@ function DetailHeader({ issue, onClose }: { issue: DetailIssue; onClose?: () => 
       />
       <IconButton label={m.issue.closePanel} size="sm" icon={<Icon name="close" />} onClick={onClose} data-testid="close-panel" />
     </div>
-  );
-}
-
-function Section({ title, children, action, count }: { title: string; children: ReactNode; action?: ReactNode; count?: string }) {
-  return (
-    <section className="flex flex-col gap-1">
-      <div className="flex h-7 items-center justify-between px-1">
-        <h2 className="flex items-center gap-2 text-base font-medium text-fg-subtle">
-          {title}
-          {count ? <span className="font-normal text-fg-subtlest">{count}</span> : null}
-        </h2>
-        {action}
-      </div>
-      {children}
-    </section>
   );
 }
 
@@ -311,11 +286,15 @@ export function IssueDetail({ id, mode, onClose }: IssueDetailProps) {
   }
 
   const creator = issue.creator?.name ?? m.common.unknown;
+  const creation = issue.creator ? { actor: issue.creator, at: issue.createdAt } : null;
   const team = ws.teamsById.get(issue.teamId);
   const parent = issue.parent;
+  // The page's activity timeline already opens with the creation line, so the footer keeps only the update time there.
+  const createdLine = mode === 'page' && creation ? null : m.issue.createdBy(creator, formatRelative(issue.createdAt));
   const footer = (
     <div className="px-1 pb-6 text-sm text-fg-subtlest">
-      {m.issue.createdBy(creator, formatRelative(issue.createdAt))} · {m.issue.updatedAt(formatRelative(issue.updatedAt))}
+      {createdLine ? `${createdLine} · ` : null}
+      {m.issue.updatedAt(formatRelative(issue.updatedAt))}
     </div>
   );
   const heading = (
@@ -334,7 +313,7 @@ export function IssueDetail({ id, mode, onClose }: IssueDetailProps) {
   if (mode === 'panel') {
     const tabs = [
       { id: 'comments', label: `${m.issue.comments}${issue.commentCount ? ` ${issue.commentCount}` : ''}`, panel: <Comments issueId={issue.id} /> },
-      { id: 'activity', label: m.issue.activity, panel: <ActivityFeed issueId={issue.id} /> },
+      { id: 'activity', label: m.issue.activity, panel: <ActivityFeed issueId={issue.id} created={creation} /> },
       ...(issue.githubLinks.length > 0 ? [{ id: 'github', label: m.issue.github, panel: <GithubLinks issue={issue} /> }] : []),
     ];
     return (
@@ -345,12 +324,7 @@ export function IssueDetail({ id, mode, onClose }: IssueDetailProps) {
             {heading}
             <IssueProperties issue={issue} layout="inline" />
             <DescriptionEditor issue={issue} />
-            <Section title={m.issue.subIssues}>
-              <SubIssues issue={issue} />
-            </Section>
-            <Section title={m.issue.relations}>
-              <Relations issue={issue} />
-            </Section>
+            <IssueSections key={issue.id} issue={issue} />
             <div className="px-1">
               <Tabs aria-label={m.issue.activity} items={tabs} defaultValue="comments" />
             </div>
@@ -362,7 +336,6 @@ export function IssueDetail({ id, mode, onClose }: IssueDetailProps) {
   }
 
   // Full page (U1): header in the content region, a ≈720px reading column, a 300px sidebar.
-  const rollup = issue.subIssueRollup;
   return (
     <div className="flex h-full min-h-0 flex-col" data-testid="issue-detail">
       <IssuePageHeader issue={issue} />
@@ -373,15 +346,7 @@ export function IssueDetail({ id, mode, onClose }: IssueDetailProps) {
             {/* Below lg the sidebar folds into the main column, under the title. */}
             {!wide ? <IssueProperties issue={issue} layout="inline" /> : null}
             <DescriptionEditor issue={issue} />
-            <Section title={m.issue.subIssues} count={rollup.total > 0 ? m.issue.subIssueRollup(rollup.done, rollup.total) : undefined}>
-              <SubIssues issue={issue} />
-            </Section>
-            <Section title={m.issue.relations}>
-              <Relations issue={issue} />
-            </Section>
-            <Section title={m.issuePage.attachments}>
-              <Attachments issue={issue} />
-            </Section>
+            <IssueSections key={issue.id} issue={issue} showCount />
             {issue.githubLinks.length > 0 ? (
               <Section title={m.issuePage.linkedCode}>
                 <GithubLinks issue={issue} />
@@ -394,7 +359,7 @@ export function IssueDetail({ id, mode, onClose }: IssueDetailProps) {
                 </h2>
                 <SubscribeToggle issue={issue} />
               </div>
-              <ActivityTimeline issueId={issue.id} />
+              <ActivityTimeline issueId={issue.id} created={creation} />
             </section>
             {footer}
           </div>

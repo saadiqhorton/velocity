@@ -12,7 +12,7 @@ export interface SkeletonProps {
 /** Route-level loading placeholder. */
 export function Skeleton({ width, height = 16, rows, className }: SkeletonProps) {
   const block = (style: CSSProperties, key?: number) => (
-    <div key={key} aria-hidden="true" className={clsx('rounded-sm bg-neutral', className)} style={style} />
+    <div key={key} aria-hidden="true" className={clsx('ds-pulse rounded-sm bg-neutral', className)} style={style} />
   );
   if (rows && rows > 0) {
     return (

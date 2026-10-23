@@ -3,7 +3,7 @@ import type { KeyboardEvent, ReactNode } from 'react';
 import { useQuery } from '@apollo/client';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import clsx from 'clsx';
-import { Avatar, Button, EmptyState, Icon, InlineMessage, Skeleton, Spinner, StatusIcon, TextField } from '@velocity/ui';
+import { Avatar, Button, EmptyState, Icon, InlineMessage, Kbd, Skeleton, Spinner, StatusIcon, TextField } from '@velocity/ui';
 import { GlobalSearchDocument } from '@/gql/graphql';
 import type { GlobalSearchQuery, SearchType } from '@/gql/graphql';
 import { useWorkspace } from '@/app/workspace';
@@ -229,7 +229,7 @@ export function SearchScreen() {
           </ul>
         </div>
       ) : (
-        <EmptyState icon="search" message={m.search.empty} fill />
+        <EmptyState icon="search" message={m.search.empty} hint={<Kbd>/</Kbd>} fill />
       );
   } else if (firstLoad || (!shown && !error)) {
     body = <SearchSkeleton />;
@@ -242,7 +242,18 @@ export function SearchScreen() {
       </div>
     );
   } else if (groups.length === 0) {
-    body = <EmptyState icon="search" message={m.search.noResults(debounced)} fill />;
+    body = (
+      <EmptyState
+        icon="search"
+        message={m.search.noResults(debounced)}
+        action={
+          <Button size="sm" onClick={() => setQ('')}>
+            {m.search.clearQuery}
+          </Button>
+        }
+        fill
+      />
+    );
   } else {
     body = (
       <div ref={listRef} role="grid" aria-label={m.search.results} onKeyDown={onListKeyDown} className={clsx('pb-4', pending && 'opacity-80')}>
@@ -332,7 +343,7 @@ function ResultRow({ r, query, tabStop, selected, onFocus, onOpen, teamIcon }: R
       onFocus={onFocus}
       onClick={onOpen}
       className={clsx(
-        'flex h-8 cursor-pointer items-center gap-3 px-5 hover:bg-hover focus-visible:bg-hover',
+        'flex h-8 cursor-default select-none items-center gap-3 px-5 hover:bg-hover focus-visible:bg-hover',
         selected && 'bg-primary-subtle hover:bg-primary-subtle',
       )}
     >

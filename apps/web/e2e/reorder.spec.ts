@@ -1,5 +1,5 @@
 // SPEC §4.8 (issue reordering): Alt+ArrowUp/Down keyboard shortcuts and drag/drop for manual ordering.
-import { expect, test, createIssueViaKeyboard, uniqueTitle, gotoTeam } from './support/fixtures';
+import { expect, test, createIssueViaKeyboard, rowByTitle, uniqueTitle, gotoTeam } from './support/fixtures';
 
 test.describe('issue reordering', () => {
   test('Alt+ArrowDown swaps focused row within its group and persists after reload', async ({ page }) => {
@@ -154,5 +154,23 @@ test.describe('issue reordering', () => {
     });
     const [indexAReload, indexBReload] = rowIndexesAfterReload;
     expect(indexAReload).toBeGreaterThan(indexBReload);
+  });
+
+  test('drag a row onto another status group changes its status and persists, without manual ordering', async ({ page }) => {
+    // Regression: the drop set the position but not the group, so the row snapped back.
+    const title = uniqueTitle('Drag group');
+    await gotoTeam(page, 'ENG', 'backlog');
+    await createIssueViaKeyboard(page, title);
+    // Narrow the list to this issue: a full team list virtualizes the empty Done group out of reach.
+    await page.goto(`/team/ENG/all?group=status&done=all&empty=1&filter=${encodeURIComponent(`title:"${title}"`)}`);
+    await expect(rowByTitle(page, title)).toBeVisible();
+
+    const done = page.getByTestId('group-header').filter({ hasText: 'Done' });
+    await expect(done).toBeVisible();
+    await rowByTitle(page, title).dragTo(done);
+
+    await expect(rowByTitle(page, title).getByRole('button', { name: 'Status: Done' })).toBeVisible();
+    await page.reload();
+    await expect(rowByTitle(page, title).getByRole('button', { name: 'Status: Done' })).toBeVisible();
   });
 });

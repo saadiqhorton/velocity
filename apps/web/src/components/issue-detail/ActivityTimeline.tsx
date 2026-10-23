@@ -3,8 +3,8 @@ import { useQuery } from '@apollo/client';
 import { Skeleton } from '@velocity/ui';
 import { IssueActivityDocument, IssueCommentsDocument } from '@/gql/graphql';
 import type { CommentFieldsFragment } from '@/gql/graphql';
-import { ActivityItem } from './ActivityFeed';
-import type { ActivityEntry } from './ActivityFeed';
+import { ActivityItem, collapseBursts, withCreation } from './ActivityFeed';
+import type { ActivityEntry, CreationFact } from './ActivityFeed';
 import { CommentItem, Composer } from './Comments';
 import { m } from '@/i18n';
 
@@ -14,7 +14,7 @@ type Item = { kind: 'comment'; at: string; comment: CommentFieldsFragment } | { 
  * The issue page's Activity (U1): comments and history in one chronological stream,
  * oldest first so the newest sits right above the comment box.
  */
-export function ActivityTimeline({ issueId }: { issueId: string }) {
+export function ActivityTimeline({ issueId, created }: { issueId: string; created?: CreationFact | null }) {
   const comments = useQuery(IssueCommentsDocument, { variables: { id: issueId }, fetchPolicy: 'cache-and-network' });
   const activity = useQuery(IssueActivityDocument, { variables: { id: issueId }, fetchPolicy: 'cache-and-network' });
   const emoji = comments.data?.reactionEmoji ?? [];
@@ -22,10 +22,10 @@ export function ActivityTimeline({ issueId }: { issueId: string }) {
   const items = useMemo<Item[]>(() => {
     const out: Item[] = [
       ...(comments.data?.issue?.comments ?? []).map((c) => ({ kind: 'comment' as const, at: c.createdAt, comment: c })),
-      ...(activity.data?.issue?.activity ?? []).map((e) => ({ kind: 'event' as const, at: e.createdAt, entry: e })),
+      ...collapseBursts(withCreation(activity.data?.issue?.activity ?? [], issueId, created)).map((e) => ({ kind: 'event' as const, at: e.createdAt, entry: e })),
     ];
     return out.sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
-  }, [comments.data, activity.data]);
+  }, [comments.data, activity.data, issueId, created]);
 
   const loading = (comments.loading && !comments.data) || (activity.loading && !activity.data);
 

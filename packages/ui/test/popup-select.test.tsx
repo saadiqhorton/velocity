@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { PopupSelect } from '../src';
 import type { PopupOption } from '../src';
 
@@ -50,6 +50,16 @@ describe('PopupSelect', () => {
     fireEvent.click(trigger);
     fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Escape' });
     expect(screen.queryByRole('listbox')).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it('keeps focus on the trigger once the exit animation has unmounted the popup', async () => {
+    render(<PopupSelect label="Pick" options={options} />);
+    const trigger = screen.getByRole('button', { name: /select/i });
+    trigger.focus();
+    fireEvent.click(trigger);
+    fireEvent.click(screen.getByRole('option', { name: 'Bravo' }));
+    await waitFor(() => expect(document.querySelector('[role="listbox"]')).toBeNull());
     expect(document.activeElement).toBe(trigger);
   });
 

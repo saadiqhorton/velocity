@@ -106,4 +106,26 @@ test.describe('board layout', () => {
     const reloadedCard = reloadedDoneColumn.getByTestId('board-card').filter({ hasText: title });
     await expect(reloadedCard).toBeVisible();
   });
+
+  test('card titles are not clipped by the card', async ({ page }) => {
+    // Regression: cards had a fixed height, so the title was squeezed to a sliver.
+    const title = uniqueTitle('Board card title');
+    await page.goto('/team/ENG/backlog');
+    await expect(page.getByTestId('view-header')).toBeVisible();
+    await createIssueViaKeyboard(page, title);
+
+    await page.goto('/team/ENG/all?group=status&layout=board&done=all&order=manual');
+    await expect(page.getByTestId('issue-board')).toBeVisible();
+    const card = page.getByTestId('board-card').first();
+    await expect(card).toBeVisible();
+
+    const cardTitle = card.getByTestId('board-card-title');
+    expect(await cardTitle.evaluate((el) => el.scrollHeight <= el.clientHeight + 1)).toBe(true);
+    const [titleBox, cardBox] = await Promise.all([cardTitle.boundingBox(), card.boundingBox()]);
+    expect(titleBox).not.toBeNull();
+    expect(cardBox).not.toBeNull();
+    if (!titleBox || !cardBox) return;
+    expect(titleBox.y).toBeGreaterThanOrEqual(cardBox.y);
+    expect(titleBox.y + titleBox.height).toBeLessThanOrEqual(cardBox.y + cardBox.height + 1);
+  });
 });

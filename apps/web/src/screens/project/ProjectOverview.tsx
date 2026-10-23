@@ -11,8 +11,10 @@ import { ColorDot, ProjectIcon } from '@/components/common/EntityIcons';
 import { sortMilestones } from './ProjectMilestones';
 import type { Milestone } from './ProjectMilestones';
 import { ProjectSummaryChips } from './ProjectSummaryChips';
+import { ProjectOverviewMilestones } from './ProjectOverviewMilestones';
 import {
   MilestoneIcon,
+  milestoneIssuesHref,
   NONE,
   ProjectStatusIcon,
   PropertyRow,
@@ -273,47 +275,7 @@ export function ProjectOverview({ project, milestones, save }: { project: Projec
           <h2 className="text-base font-medium text-fg-subtle">{m.common.description}</h2>
           <DescriptionEditor project={project} save={save} />
         </div>
-        <section aria-label={m.project.milestones} className="flex flex-col gap-1 border-t border-border pt-6">
-          <div className="flex items-center justify-between pb-1">
-            <h2 className="text-base font-medium text-fg-subtle">{m.project.milestones}</h2>
-            <Link
-              to={milestonesHref}
-              className="rounded-sm px-1.5 py-0.5 text-sm text-fg-subtle transition-colors duration-100 hover:bg-hover hover:text-fg"
-            >
-              {m.project.viewAll}
-            </Link>
-          </div>
-          {sorted.length === 0 ? (
-            <p className="text-base text-fg-subtlest">{m.project.noMilestones}</p>
-          ) : (
-            <ul className="-mx-2 flex flex-col">
-              {sorted.map((x) => (
-                <li key={x.id}>
-                  <Link
-                    to={milestonesHref}
-                    className="group/ms flex flex-col gap-1 rounded-md px-2 py-2.5 transition-colors duration-100 hover:bg-hover"
-                  >
-                    <span className="flex items-center gap-2.5">
-                      <MilestoneIcon status={x.status} />
-                      <span className="min-w-0 flex-1 truncate text-base font-medium text-fg">{x.name}</span>
-                      <span className="shrink-0 text-sm tabular-nums text-fg-subtle">
-                        {m.project.issueCount(x.progress.total)} · {Math.round(x.progress.percent)}%
-                      </span>
-                    </span>
-                    {x.description ? <span className="line-clamp-2 pl-5.5 text-base text-fg-subtle">{x.description}</span> : null}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-          <Link
-            to={milestonesHref}
-            className="-mx-2 flex h-8 items-center gap-2 rounded-sm px-2 text-base text-fg-subtlest transition-colors duration-100 hover:bg-hover hover:text-fg"
-          >
-            <Icon name="add" className="h-3.5 w-3.5" />
-            {m.project.addMilestone}
-          </Link>
-        </section>
+        <ProjectOverviewMilestones projectId={project.id} milestones={milestones} />
       </div>
       <aside className="flex w-full min-w-0 flex-col gap-3 lg:sticky lg:top-0 lg:w-90 lg:shrink-0" aria-label={m.project.properties}>
         <RailCard title={m.project.properties}>
@@ -338,11 +300,12 @@ export function ProjectOverview({ project, milestones, save }: { project: Projec
               {sorted.map((x) => (
                 <li key={x.id}>
                   <Link
-                    to={milestonesHref}
+                    to={milestoneIssuesHref(project.id, x.id)}
+                    aria-label={m.project.viewMilestoneIssues(x.name)}
                     className="flex h-8 items-center gap-2.5 rounded-sm px-2 transition-colors duration-100 hover:bg-hover"
                   >
-                    <MilestoneIcon status={x.status} />
-                    <span className="min-w-0 truncate text-base font-medium text-fg">{x.name}</span>
+                    <MilestoneIcon status={x.status} percent={x.progress.percent} />
+                    <span className="min-w-0 flex-1 truncate text-base font-medium text-fg">{x.name}</span>
                     <span className="shrink-0 text-sm tabular-nums text-fg-subtle">
                       {m.project.milestoneProgress(Math.round(x.progress.percent), x.progress.total)}
                     </span>

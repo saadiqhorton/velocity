@@ -1,5 +1,6 @@
 import { cloneElement, useCallback, useEffect, useId, useState } from 'react';
 import type { FocusEvent, MouseEvent, ReactElement } from 'react';
+import { Kbd } from './Kbd';
 import { Portal } from './Portal';
 import { usePopoverPosition } from './Popover';
 import type { Placement } from './Popover';
@@ -13,8 +14,13 @@ interface TooltipChildProps {
   'aria-describedby'?: string;
 }
 
+/** Key caps for a shortcut hint: one key ('C') or several ([`Ctrl`, `K`]). */
+export type TooltipShortcut = string | string[];
+
 export interface TooltipProps {
   content: string;
+  /** Shown as key caps after the label, e.g. "Create issue  C" (Linear-style hint). */
+  shortcut?: TooltipShortcut;
   /** A single element that receives DOM event props. Its own ref is left untouched. */
   children: ReactElement<TooltipChildProps>;
   /** Show delay in ms (SPEC §4.9.10: 300). */
@@ -27,7 +33,7 @@ export interface TooltipProps {
  * Tooltip: 300ms delay, 12px text, max-width 240px, linked via aria-describedby. Esc/blur dismiss.
  * The anchor is captured from the hover/focus event target, so the child's ref is never read.
  */
-export function Tooltip({ content, children, delay = 300, placement = 'top', disabled }: TooltipProps) {
+export function Tooltip({ content, shortcut, children, delay = 300, placement = 'top', disabled }: TooltipProps) {
   const id = useId();
   // `pending` arms the show delay; the effect owns the timer so no ref is touched during render.
   const [pending, setPending] = useState(false);
@@ -90,7 +96,7 @@ export function Tooltip({ content, children, delay = 300, placement = 'top', dis
       {trigger}
       {visible ? (
         <Portal>
-          <TooltipBubble id={id} anchor={anchor} placement={placement}>
+          <TooltipBubble id={id} anchor={anchor} placement={placement} shortcut={shortcut}>
             {content}
           </TooltipBubble>
         </Portal>
@@ -103,23 +109,27 @@ function TooltipBubble({
   id,
   anchor,
   placement,
+  shortcut,
   children,
 }: {
   id: string;
   anchor: HTMLElement | null;
   placement: Placement;
+  shortcut?: TooltipShortcut;
   children: string;
 }) {
   const { setFloating, style } = usePopoverPosition(anchor, true, { placement, offset: 6 });
+  const keys = typeof shortcut === 'string' ? [shortcut] : shortcut;
   return (
     <div
       id={id}
       role="tooltip"
       ref={setFloating}
-      className="ds-fade-in pointer-events-none max-w-60 rounded-sm border border-border bg-overlay px-2 py-1 text-sm text-fg shadow-overlay"
+      className="ds-fade-in pointer-events-none flex max-w-60 items-center gap-2 rounded-sm border border-border bg-overlay px-2 py-1 text-sm text-fg shadow-overlay"
       style={{ ...style, zIndex: 'var(--ds-z-index-tooltip)' }}
     >
       {children}
+      {keys?.length ? <Kbd keys={keys} /> : null}
     </div>
   );
 }

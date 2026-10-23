@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { Modal } from '../src';
@@ -75,5 +76,82 @@ describe('Modal', () => {
     expect(onSubmit).not.toHaveBeenCalled();
     fireEvent.keyDown(screen.getByLabelText('Name'), { key: 'Enter' });
     expect(onSubmit).toHaveBeenCalledTimes(1);
+  });
+});
+
+function HeaderHarness({ isDirty = false, custom = (close: () => void) => <button onClick={close}>Custom close</button> }: { isDirty?: boolean; custom?: (close: () => void) => ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button onClick={() => setOpen(true)}>open</button>
+      <Modal
+        open={open}
+        onClose={() => setOpen(false)}
+        title="New thing"
+        isDirty={isDirty}
+        header={custom}
+        footer={<button>Save</button>}
+      >
+        <input aria-label="Name" />
+      </Modal>
+    </>
+  );
+}
+
+describe('Modal header slot', () => {
+  it('replaces the default title row: the header renders and the default × does not', () => {
+    render(<HeaderHarness custom={() => <span>Team chip</span>} />);
+    fireEvent.click(screen.getByText('open'));
+    expect(screen.getByText('Team chip')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Close' })).toBeNull();
+  });
+
+  it('keeps the dialog labelled by the title, now visually hidden', () => {
+    render(<HeaderHarness custom={() => <span>Team chip</span>} />);
+    fireEvent.click(screen.getByText('open'));
+    const dialog = screen.getByRole('dialog', { name: 'New thing' });
+    expect(dialog.getAttribute('aria-labelledby')).toBeTruthy();
+    const heading = screen.getByRole('heading', { name: 'New thing' });
+    expect(heading.className).toContain('sr-only');
+  });
+
+  it('passes the close action to a header function, which closes through the same path', () => {
+    render(<HeaderHarness />);
+    fireEvent.click(screen.getByText('open'));
+    fireEvent.click(screen.getByRole('button', { name: 'Custom close' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('asks to confirm when a header close is clicked while dirty', () => {
+    render(<HeaderHarness isDirty />);
+    fireEvent.click(screen.getByText('open'));
+    fireEvent.click(screen.getByRole('button', { name: 'Custom close' }));
+    expect(screen.getByRole('dialog', { name: 'Discard changes?' })).toBeTruthy();
+    fireEvent.click(screen.getByText('Keep editing'));
+    expect(screen.getByRole('dialog', { name: 'New thing' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Custom close' }));
+    fireEvent.click(screen.getByText('Discard'));
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('still closes on Escape', () => {
+    const onClose = vi.fn();
+    render(
+      <Modal open onClose={onClose} title="New thing" header={<span>Team chip</span>}>
+        <input aria-label="Name" />
+      </Modal>,
+    );
+    fireEvent.keyDown(screen.getByLabelText('Name'), { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the description under the header, linked to the dialog', () => {
+    render(
+      <Modal open onClose={() => undefined} title="New thing" description="Details here" header={<span>Team chip</span>}>
+        <input aria-label="Name" />
+      </Modal>,
+    );
+    expect(screen.getByRole('dialog', { name: 'New thing' }).getAttribute('aria-describedby')).toBeTruthy();
+    expect(screen.getByText('Details here')).toBeTruthy();
   });
 });

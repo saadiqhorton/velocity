@@ -6,6 +6,7 @@ import type { FilterField } from '@velocity/schema/filter-ast';
 import { useWorkspace } from '@/app/workspace';
 import { useCommands } from '@/keyboard/react';
 import { useCollapsedGroups, useListPrefs } from '@/stores/listPrefs';
+import { useSelection } from '@/stores/selection';
 import type { CreateDefaults } from '@/stores/ui';
 import type { GroupBy } from '@/lib/grouping';
 import { chipsFromDsl, completedClause, composeFilter, dslFromChips, parseViewState, writeViewState } from '@/lib/viewState';
@@ -83,6 +84,8 @@ export function ListScreen(props: ListScreenProps) {
     (board && state.display.grouping === 'none') || (!features.cycles && state.display.grouping === 'cycle') ? 'status' : state.display.grouping;
   const ordering = !features.estimates && state.display.ordering === 'estimate' ? 'priority' : state.display.ordering;
   const display: DisplayState = useMemo(() => ({ ...state.display, grouping, ordering }), [state.display, grouping, ordering]);
+  // Drag-to-place needs a screen that allows manual order and the manual ordering itself (list rows and board cards).
+  const reorderable = Boolean(props.reorderable) && display.ordering === 'manual';
 
   const filter = useMemo(
     () => composeFilter(state.filter, [...(props.extraFilters ?? []), completedClause(display.showCompleted)].filter((x): x is string => Boolean(x))),
@@ -119,6 +122,11 @@ export function ListScreen(props: ListScreenProps) {
   }, [register, listId, navLabel, returnTo, scope, filter, display, allGroupKeys, collapsed, eagerLimit]);
   useEffect(() => () => unregister(listId), [unregister, listId]);
 
+  // Selection belongs to the view it was made in: a new list, route or scope, or leaving the screen, drops it.
+  // Keyed on the serialized scope so an unchanged scope object on re-render keeps the selection.
+  const scopeKey = JSON.stringify(scope);
+  useEffect(() => () => useSelection.getState().clear(), [listId, location.pathname, scopeKey]);
+
   useCommands(() => [
     {
       id: 'view.toggleLayout',
@@ -148,7 +156,15 @@ export function ListScreen(props: ListScreenProps) {
       </InlineMessage>
     </div>
   ) : board ? (
-    <IssueBoard listId={listId} data={data} grouping={grouping} context={props.context} cycleNames={props.cycleNames} empty={empty} />
+    <IssueBoard
+      listId={listId}
+      data={data}
+      grouping={grouping}
+      context={props.context}
+      cycleNames={props.cycleNames}
+      empty={empty}
+      reorderable={reorderable}
+    />
   ) : (
     <IssueList
       listId={listId}
@@ -157,7 +173,7 @@ export function ListScreen(props: ListScreenProps) {
       onToggleGroup={(token) => toggleGroup(listId, token)}
       context={props.context}
       empty={empty}
-      reorderable={props.reorderable && display.ordering === 'manual'}
+      reorderable={reorderable}
       cycleNames={props.cycleNames}
       addedAfterStartIds={props.addedAfterStartIds}
     />

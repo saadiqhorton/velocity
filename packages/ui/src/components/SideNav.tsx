@@ -140,6 +140,8 @@ export function SideNavGroup({
             variant === 'section'
               ? 'h-6 text-sm font-medium text-fg-subtlest hover:text-fg-subtle'
               : 'h-7 gap-2 text-base text-fg-subtle hover:text-fg active:bg-pressed',
+            // Keeps the title clear of the actions (two 28px buttons) only while they are revealed; at rest the title uses the full width.
+            actions ? 'group-hover/navgroup:pr-16 group-has-[[data-navgroup-actions]:focus-within]/navgroup:pr-16' : undefined,
           )}
         >
           {icon ? <span className="inline-flex w-4 shrink-0 items-center justify-center">{icon}</span> : null}
@@ -153,7 +155,12 @@ export function SideNavGroup({
             )}
           />
         </button>
-        {actions ? <div className="absolute right-1 flex items-center">{actions}</div> : null}
+        {/* Hidden until the row is hovered or holds focus; hidden actions take no pointer events so the toggle underneath still works. */}
+        {actions ? (
+          <div data-navgroup-actions="" className="absolute right-1 flex items-center opacity-0 pointer-events-none transition-opacity duration-100 group-hover/navgroup:pointer-events-auto group-hover/navgroup:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100">
+            {actions}
+          </div>
+        ) : null}
       </div>
       <div id={id} role="group" aria-label={name} hidden={isCollapsed} className="flex flex-col gap-px">
         {isCollapsed ? null : children}

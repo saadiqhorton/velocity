@@ -38,7 +38,7 @@ export function Field({ label, htmlFor, helperText, error, required = false, cla
   return (
     <FieldContext.Provider value={{ id, describedBy, invalid: Boolean(error), required }}>
       <div className={clsx('flex flex-col', className)}>
-        <label htmlFor={id} className="mb-1 text-sm font-semibold text-fg-subtle">
+        <label htmlFor={id} className="mb-1 text-sm font-medium text-fg-subtle">
           {label}
           {required ? (
             <span aria-hidden="true" className="ml-1 text-danger-fg">

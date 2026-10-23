@@ -12,8 +12,14 @@ const widths: Record<ModalSize, number> = { sm: 400, md: 560, lg: 760 };
 export interface ModalProps {
   open: boolean;
   onClose: () => void;
+  /** The dialog's accessible name. Shown in the title row, or kept visually hidden when `header` replaces that row. */
   title: string;
   description?: ReactNode;
+  /**
+   * Replaces the default title row (title, description and ×). A function receives the close
+   * action, which takes the same path as Esc and the default × (so the dirty confirm applies).
+   */
+  header?: ReactNode | ((requestClose: () => void) => ReactNode);
   size?: ModalSize;
   children?: ReactNode;
   /** Footer actions (Buttons). */
@@ -34,7 +40,7 @@ export function Modal(props: ModalProps) {
   );
 }
 
-function ModalInner({ onClose, title, description, size = 'md', children, footer, onSubmit, isDirty, className }: ModalProps) {
+function ModalInner({ onClose, title, description, header, size = 'md', children, footer, onSubmit, isDirty, className }: ModalProps) {
   const titleId = useId();
   const descId = useId();
   const dialogRef = useRef<HTMLDivElement | null>(null);
@@ -119,19 +125,33 @@ function ModalInner({ onClose, title, description, size = 'md', children, footer
         className={clsx('relative flex w-full max-w-full flex-col rounded-lg border border-border bg-raised text-fg shadow-overlay', className)}
         style={{ width: widths[size], ...enter }}
       >
-        <div className="flex items-start justify-between gap-2 px-6 pb-2 pt-5">
-          <div className="min-w-0">
-            <h2 id={titleId} className="text-lg font-semibold">
+        {header !== undefined && header !== null ? (
+          <div className="px-6 pt-5">
+            <h2 id={titleId} className="sr-only">
               {title}
             </h2>
+            {typeof header === 'function' ? header(requestClose) : header}
             {description ? (
               <p id={descId} className="mt-1 text-base text-fg-subtle">
                 {description}
               </p>
             ) : null}
           </div>
-          <IconButton label="Close" icon={<Icon name="close" size={20} />} onClick={requestClose} />
-        </div>
+        ) : (
+          <div className="flex items-start justify-between gap-2 px-6 pb-2 pt-5">
+            <div className="min-w-0">
+              <h2 id={titleId} className="text-lg font-semibold">
+                {title}
+              </h2>
+              {description ? (
+                <p id={descId} className="mt-1 text-base text-fg-subtle">
+                  {description}
+                </p>
+              ) : null}
+            </div>
+            <IconButton label="Close" icon={<Icon name="close" size={20} />} onClick={requestClose} />
+          </div>
+        )}
         <div ref={bodyRef} className="px-6 py-2">
           {children}
         </div>

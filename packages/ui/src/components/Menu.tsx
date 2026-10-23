@@ -4,6 +4,8 @@ import clsx from 'clsx';
 import { Icon } from './Icon';
 import { Popover } from './Popover';
 import type { Placement } from './Popover';
+import { PopupSelectPanel } from './PopupSelect';
+import type { PopupOption } from './OptionList';
 import { mergeRefs, useControllableState } from '../utils/react';
 
 interface MenuContextValue {
@@ -193,10 +195,10 @@ const itemClass = (danger: boolean | undefined, disabled: boolean | undefined) =
   clsx(
     'flex h-8 w-full items-center gap-2 rounded-sm px-2 text-left transition-colors duration-100 focus-visible:outline-none',
     disabled
-      ? 'cursor-not-allowed text-fg-disabled'
+      ? 'text-fg-disabled'
       : danger
-        ? 'text-danger-fg hover:bg-danger-subtle focus:bg-danger-subtle'
-        : 'text-fg hover:bg-neutral-hover focus:bg-neutral-hover',
+        ? 'text-danger-fg hover:bg-danger-subtle focus:bg-danger-subtle active:bg-pressed'
+        : 'text-fg hover:bg-neutral-hover focus:bg-neutral-hover active:bg-pressed',
   );
 
 export function MenuItem({ children, onSelect, icon, shortcut, danger, disabled, keepOpen, current }: MenuItemProps) {
@@ -234,14 +236,29 @@ export function MenuSeparator({ className }: MenuSeparatorProps) {
 export interface SubMenuProps {
   label: string;
   icon?: ReactNode;
+  /** Trailing shortcut hint on the trigger, before the chevron. */
+  shortcut?: ReactNode;
   children: ReactNode;
 }
 
-export function SubMenu({ label, icon, children }: SubMenuProps) {
+interface SubMenuFrameProps {
+  label: string;
+  icon?: ReactNode;
+  shortcut?: ReactNode;
+  /** The popup content. `focusFirst` is true when the submenu was opened from the keyboard. */
+  children: (panel: { focusFirst: boolean; closeSelf: () => void }) => ReactNode;
+}
+
+/** The trigger row and its popup; SubMenu and OptionSubMenu differ only in the panel they render. */
+function SubMenuFrame({ label, icon, shortcut, children }: SubMenuFrameProps) {
   const ctx = useContext(MenuContext);
   const id = useId();
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const open = ctx.activeSub === id;
+  const closeSelf = () => {
+    ctx.setActiveSub(null);
+    anchor?.focus();
+  };
   return (
     <>
       <button
@@ -258,24 +275,139 @@ export function SubMenu({ label, icon, children }: SubMenuProps) {
       >
         {icon ? <span className="inline-flex w-5 shrink-0 justify-center">{icon}</span> : null}
         <span className="min-w-0 flex-1 truncate">{label}</span>
+        {shortcut ? <span className="text-sm text-fg-subtle">{shortcut}</span> : null}
         <Icon name="chevron-right" className="text-fg-subtle" />
       </button>
       <Popover anchorEl={anchor} open={open} placement="right-start" offset={0} onKeyDown={(e) => e.stopPropagation()}>
-        <MenuContext.Provider
-          value={{
-            ...ctx,
-            closeSelf: () => {
-              ctx.setActiveSub(null);
-              anchor?.focus();
-            },
-          }}
-        >
-          <Menu aria-label={label} autoFocus={ctx.focusSub}>
-            {children}
-          </Menu>
-        </MenuContext.Provider>
+        <MenuContext.Provider value={{ ...ctx, closeSelf }}>{children({ focusFirst: ctx.focusSub, closeSelf })}</MenuContext.Provider>
       </Popover>
     </>
+  );
+}
+
+export function SubMenu({ label, icon, shortcut, children }: SubMenuProps) {
+  return (
+    <SubMenuFrame label={label} icon={icon} shortcut={shortcut}>
+      {({ focusFirst }) => (
+        <Menu aria-label={label} autoFocus={focusFirst}>
+          {children}
+        </Menu>
+      )}
+    </SubMenuFrame>
+  );
+}
+
+interface OptionSubMenuBase {
+  label: string;
+  icon?: ReactNode;
+  shortcut?: ReactNode;
+  options: PopupOption[];
+  /** Adds a type-to-filter input above the list. */
+  searchable?: boolean;
+  searchPlaceholder?: string;
+  emptyMessage?: string;
+}
+
+export type OptionSubMenuProps = OptionSubMenuBase &
+  (
+    | { multiple?: false; value: string | null; onChange: (value: string) => void }
+    | { multiple: true; value: string[]; onChange: (values: string[]) => void }
+  );
+
+/**
+ * A submenu whose panel is a picker list (check marks, digit quick select, optional filter).
+ * Single select applies and closes the whole menu; multiple select reports each toggle and stays open.
+ */
+export function OptionSubMenu(props: OptionSubMenuProps) {
+  const { label, icon, shortcut, options, searchable = false, searchPlaceholder = 'Search', emptyMessage } = props;
+  const selected = Array.isArray(props.value) ? props.value : props.value ? [props.value] : [];
+  const onPick = (values: string[]) => {
+    if (props.multiple === true) props.onChange(values);
+    else props.onChange(values[0] ?? '');
+  };
+  return (
+    <SubMenuFrame label={label} icon={icon} shortcut={shortcut}>
+      {({ focusFirst, closeSelf }) => (
+        <OptionSubMenuPanel
+          label={label}
+          options={options}
+          selected={selected}
+          multiple={props.multiple === true}
+          searchable={searchable}
+          searchPlaceholder={searchPlaceholder}
+          emptyMessage={emptyMessage}
+          focusFirst={focusFirst}
+          closeSelf={closeSelf}
+          onPick={onPick}
+        />
+      )}
+    </SubMenuFrame>
+  );
+}
+
+interface OptionSubMenuPanelProps {
+  label: string;
+  options: PopupOption[];
+  selected: string[];
+  multiple: boolean;
+  searchable: boolean;
+  searchPlaceholder: string;
+  emptyMessage?: string;
+  focusFirst: boolean;
+  closeSelf: () => void;
+  onPick: (values: string[]) => void;
+}
+
+function OptionSubMenuPanel({
+  label,
+  options,
+  selected: initial,
+  multiple,
+  searchable,
+  searchPlaceholder,
+  emptyMessage,
+  focusFirst,
+  closeSelf,
+  onPick,
+}: OptionSubMenuPanelProps) {
+  const ctx = useContext(MenuContext);
+  const listId = useId();
+  // Local state so the checks follow multi-select toggles. The panel mounts on each open, so it starts from `initial`.
+  const [selected, setSelected] = useState(initial);
+  const choose = (option: PopupOption) => {
+    if (!multiple) {
+      onPick([option.value]);
+      ctx.closeAll(true);
+      return;
+    }
+    const next = selected.includes(option.value) ? selected.filter((v) => v !== option.value) : [...selected, option.value];
+    setSelected(next);
+    onPick(next);
+  };
+  return (
+    <div
+      onKeyDown={(e) => {
+        // ArrowLeft closes the submenu, except while the filter has text (then it moves the caret).
+        if (e.key !== 'ArrowLeft' || (e.target instanceof HTMLInputElement && e.target.value !== '')) return;
+        e.preventDefault();
+        e.stopPropagation();
+        closeSelf();
+      }}
+    >
+      <PopupSelectPanel
+        listId={listId}
+        label={label}
+        options={options}
+        selected={selected}
+        multiple={multiple}
+        searchable={searchable}
+        searchPlaceholder={searchPlaceholder}
+        emptyMessage={emptyMessage}
+        onSelectOption={choose}
+        onClose={() => closeSelf()}
+        autoFocus={focusFirst}
+      />
+    </div>
   );
 }
 

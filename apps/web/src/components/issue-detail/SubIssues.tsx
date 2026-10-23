@@ -1,15 +1,59 @@
+import { useEffect, useRef, useState } from 'react';
 import { Avatar, Button, Icon, PriorityIcon, StatusIcon, priorityNames } from '@velocity/ui';
+import { useCreateIssue } from '@/components/issues/actions';
 import { useOpenIssue } from '@/lib/navigation';
-import { useUi } from '@/stores/ui';
 import { PRIORITY_KEYS } from '@/components/issues/IssueRow';
 import { InlineProp } from '@/components/issues/InlineProp';
 import type { DetailIssue } from './IssueDetail';
 import { m } from '@/i18n';
 
-/** Sub-issue tree with done/total rollup (SPEC §3.5.2). */
-export function SubIssues({ issue }: { issue: DetailIssue }) {
+/**
+ * Single-line title field at the end of the list. Enter adds a sub-issue and keeps the field open
+ * for the next one; Esc, or leaving the field while it is empty, closes it.
+ */
+function QuickAdd({ issue, onClose }: { issue: DetailIssue; onClose: () => void }) {
+  const [create] = useCreateIssue();
+  const [title, setTitle] = useState('');
+  const input = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    input.current?.focus();
+  }, []);
+  return (
+    <div className="flex h-8 min-w-0 items-center gap-2 px-1 text-base">
+      <Icon name="sub-issue" className="shrink-0 text-fg-subtlest" />
+      <input
+        ref={input}
+        value={title}
+        aria-label={m.issue.subIssueTitle}
+        placeholder={m.issue.subIssueTitle}
+        data-testid="sub-issue-quick-add"
+        className="min-w-0 flex-1 bg-transparent font-medium text-fg outline-none placeholder:font-normal placeholder:text-fg-subtlest"
+        onChange={(e) => setTitle(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+            e.preventDefault();
+            const next = title.trim();
+            if (!next) return;
+            setTitle('');
+            void create({ title: next, parentId: issue.id, teamId: issue.teamId });
+          }
+          if (e.key === 'Escape') {
+            e.preventDefault();
+            e.stopPropagation();
+            onClose();
+          }
+        }}
+        onBlur={() => {
+          if (!title.trim()) onClose();
+        }}
+      />
+    </div>
+  );
+}
+
+/** Sub-issue tree with done/total rollup (SPEC §3.5.2). Adding opens an inline title field, not the full create form. */
+export function SubIssues({ issue, adding, onAddingChange }: { issue: DetailIssue; adding: boolean; onAddingChange: (adding: boolean) => void }) {
   const openIssue = useOpenIssue();
-  const openCreate = useUi((s) => s.openCreate);
   const children = issue.children;
   const rollup = issue.subIssueRollup;
   return (
@@ -59,16 +103,14 @@ export function SubIssues({ issue }: { issue: DetailIssue }) {
           </InlineProp>
         </div>
       ))}
-      <div>
-        <Button
-          size="sm"
-          variant="subtle"
-          iconBefore={<Icon name="add" />}
-          onClick={() => openCreate({ teamId: issue.teamId, parentId: issue.id, projectId: issue.projectId, cycleId: issue.cycleId })}
-        >
-          {m.issue.addSubIssue}
-        </Button>
-      </div>
+      {adding ? <QuickAdd issue={issue} onClose={() => onAddingChange(false)} /> : null}
+      {adding ? null : (
+        <div>
+          <Button size="sm" variant="subtle" iconBefore={<Icon name="add" />} onClick={() => onAddingChange(true)}>
+            {m.issue.addSubIssue}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

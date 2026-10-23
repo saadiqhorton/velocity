@@ -6,6 +6,7 @@
  * priority, assignee…) move rows immediately; the next server refresh is then a no-op.
  * Labels are grouped client-side (an issue appears under each of its labels).
  */
+import type { UpdateIssueInput } from '@/gql/graphql';
 
 export type GroupBy = 'status' | 'assignee' | 'priority' | 'label' | 'project' | 'cycle' | 'team' | 'none';
 export type Ordering = 'priority' | 'status' | 'created' | 'updated' | 'estimate' | 'manual';
@@ -340,4 +341,76 @@ export function flattenGroups<T extends GroupableIssue>(
 /** Stable string for a group key (null → "∅"), used for collapse state. */
 export function groupToken(key: string | null): string {
   return key ?? '∅';
+}
+
+/**
+ * Field update that moves an issue into group `key` of `grouping` (drag and drop). Null when
+ * the drop cannot set a field: an empty status, the "no label" group, or a team group.
+ */
+export function groupPatch(grouping: GroupBy, key: string | null): UpdateIssueInput | null {
+  switch (grouping) {
+    case 'status':
+      return key ? { statusId: key } : null;
+    case 'priority':
+      return { priority: key === null ? 4 : Number(key) };
+    case 'assignee':
+      return { assigneeId: key };
+    case 'project':
+      return { projectId: key };
+    case 'cycle':
+      return { cycleId: key };
+    case 'label':
+      return key ? { addLabelIds: [key] } : null;
+    default:
+      return null;
+  }
+}
+
+/** Groupings whose field a drag between groups sets, so rows can be dragged without manual ordering. */
+const DRAG_SETS_FIELD: ReadonlySet<GroupBy> = new Set<GroupBy>(['status', 'priority', 'assignee', 'project', 'cycle']);
+
+/** Rows can be dragged under manual ordering, or when a drop between groups sets the group field. */
+export function canDragIssues(grouping: GroupBy, manual: boolean): boolean {
+  return manual || DRAG_SETS_FIELD.has(grouping);
+}
+
+/** The ids on either side of the insertion point above or below `overId`; null if it is not in the group. */
+export function slotNeighbours(orderedIds: readonly string[], overId: string, below: boolean): { beforeId: string | null; afterId: string | null } | null {
+  const idx = orderedIds.indexOf(overId);
+  if (idx < 0) return null;
+  const at = idx + (below ? 1 : 0);
+  return { beforeId: orderedIds[at - 1] ?? null, afterId: orderedIds[at] ?? null };
+}
+
+export interface DropInput {
+  grouping: GroupBy;
+  /** Manual ordering: a drop on a row or card places the issue in that slot. */
+  manual: boolean;
+  /** Group the drop landed in. */
+  targetKey: string | null;
+  /** Dragged issues that are not already in the target group. */
+  moving: number;
+  /** Dragged issues in total (the whole selection when the dragged row is selected). */
+  count: number;
+  /** The drop landed on a row or card of the target group, not on the group header or column body. */
+  onSlot: boolean;
+}
+
+export interface DropPlan {
+  /** Field update that moves the dragged issues into the target group; null when none moves. */
+  patch: UpdateIssueInput | null;
+  /** Place the single dragged issue at the slot (manual ordering only). */
+  reorder: boolean;
+}
+
+/**
+ * What a drop does (SPEC §4.10.2 list, §4.11.1 board). The group field follows the drop when the
+ * target is a field value. The slot only matters under manual ordering and for a single issue:
+ * a multi-selection moves groups, not positions. A single issue that would leave its group with
+ * no field to set is left alone, since the group-first order would snap it back.
+ */
+export function dropPlan(input: DropInput): DropPlan {
+  const patch = input.moving > 0 ? groupPatch(input.grouping, input.targetKey) : null;
+  const landsInGroup = input.moving === 0 || patch !== null;
+  return { patch, reorder: input.manual && input.onSlot && input.count === 1 && landsInGroup };
 }

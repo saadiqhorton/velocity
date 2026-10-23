@@ -1,10 +1,11 @@
 import { useMemo } from 'react';
 import type { ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@apollo/client';
-import { EmptyState, Icon, Skeleton, InlineMessage, Button } from '@velocity/ui';
+import { EmptyState, Icon, Kbd, Skeleton, InlineMessage, Button } from '@velocity/ui';
 import { InsightsDocument } from '@/gql/graphql';
 import { useWorkspace } from '@/app/workspace';
+import { useUi } from '@/stores/ui';
 import { ViewHeader } from '@/components/shell/ViewHeader';
 import { DualLineChart, DualLineLegend } from '@/components/charts/DualLineChart';
 import { VelocityBars } from '@/components/charts/VelocityBars';
@@ -23,7 +24,7 @@ function Card({ title, help, action, children, testId }: { title: string; help: 
     <section aria-label={title} data-testid={testId} className="rounded-md border border-border bg-raised">
       <div className="flex items-start justify-between gap-4 border-b border-border px-5 py-3">
         <div className="min-w-0">
-          <h2 className="text-base font-semibold text-fg">{title}</h2>
+          <h2 className="text-base font-medium text-fg">{title}</h2>
           <p className="text-sm text-fg-subtle">{help}</p>
         </div>
         {action}
@@ -41,6 +42,8 @@ export function Insights() {
 
 function InsightsScreen() {
   const ws = useWorkspace();
+  const navigate = useNavigate();
+  const openCreate = useUi((s) => s.openCreate);
   const { data, loading, error, refetch } = useQuery(InsightsDocument, { variables: { weeks: 12, cycles: 6 } });
 
   const weeks = useMemo(() => data?.createdVsCompleted ?? [], [data]);
@@ -88,7 +91,16 @@ function InsightsScreen() {
                 }
               >
                 {weeks.length === 0 ? (
-                  <EmptyState icon="chart" message={m.insights.noData} />
+                  <EmptyState
+                    icon="chart"
+                    message={m.insights.noData}
+                    action={
+                      <Button size="sm" variant="primary" onClick={() => openCreate()}>
+                        {m.issue.newIssue}
+                      </Button>
+                    }
+                    hint={<Kbd>C</Kbd>}
+                  />
                 ) : (
                   <div className="flex flex-col gap-3">
                     <DualLineLegend aLabel={m.insights.created} bLabel={m.insights.completed} />
@@ -103,7 +115,15 @@ function InsightsScreen() {
               </Card>
               <Card testId="insights-velocity" title={m.insights.velocity} help={m.insights.velocityHelp}>
                 {teams.length === 0 ? (
-                  <EmptyState icon="cycle" message={m.insights.noCycles} />
+                  <EmptyState
+                    icon="cycle"
+                    message={m.insights.noCycles}
+                    action={
+                      <Button size="sm" onClick={() => navigate('/settings/teams')}>
+                        {m.insights.openTeamSettings}
+                      </Button>
+                    }
+                  />
                 ) : (
                   <div className={teams.length > 1 ? 'grid grid-cols-1 gap-x-8 gap-y-6 md:grid-cols-2' : 'flex flex-col'}>
                     {teams.map((t) => {

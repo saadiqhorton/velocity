@@ -75,3 +75,63 @@ export function useEnterStyle(options?: {
     transition: `opacity ${duration} ease-out, transform ${duration} ease-out`,
   };
 }
+
+const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
+
+/** Live `prefers-reduced-motion: reduce` flag. False where matchMedia is unavailable (SSR, jsdom). */
+export function usePrefersReducedMotion(): boolean {
+  const [reduced, setReduced] = useState(
+    () => typeof window !== 'undefined' && !!window.matchMedia && window.matchMedia(REDUCED_MOTION_QUERY).matches,
+  );
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return undefined;
+    const mql = window.matchMedia(REDUCED_MOTION_QUERY);
+    const onChange = () => setReduced(mql.matches);
+    mql.addEventListener('change', onChange);
+    return () => mql.removeEventListener('change', onChange);
+  }, []);
+  return reduced;
+}
+
+/** Enter animations last at most 200ms (SPEC §4.8); after that the element is 'open'. */
+const PRESENCE_ENTER_MS = 200;
+/** Exit animations run 120ms with an accelerating ease (A2 motion). */
+const PRESENCE_EXIT_MS = 120;
+
+export type PresenceState = 'enter' | 'open' | 'exit';
+
+/**
+ * Keeps an element mounted through its exit animation. Render while `mounted`; use `state` to
+ * pick the enter/exit class. `state` reads 'exit' whenever the element is closing or closed.
+ * Under prefers-reduced-motion the exit collapses to an immediate unmount.
+ */
+export function usePresence(open: boolean, opts?: { exitMs?: number }): { mounted: boolean; state: PresenceState } {
+  const exitMs = opts?.exitMs ?? PRESENCE_EXIT_MS;
+  const reduced = usePrefersReducedMotion();
+  const [mounted, setMounted] = useState(open);
+  const [state, setState] = useState<PresenceState>(open ? (reduced ? 'open' : 'enter') : 'exit');
+  const [prevOpen, setPrevOpen] = useState(open);
+  // Adjust state during render when `open` flips (no extra commit with stale values).
+  if (open !== prevOpen) {
+    setPrevOpen(open);
+    if (open) {
+      setMounted(true);
+      setState(reduced ? 'open' : 'enter');
+    } else {
+      setState('exit');
+      if (reduced || exitMs <= 0) setMounted(false);
+    }
+  }
+  useEffect(() => {
+    if (state === 'enter') {
+      const id = setTimeout(() => setState('open'), PRESENCE_ENTER_MS);
+      return () => clearTimeout(id);
+    }
+    if (state === 'exit' && mounted) {
+      const id = setTimeout(() => setMounted(false), exitMs);
+      return () => clearTimeout(id);
+    }
+    return undefined;
+  }, [state, mounted, exitMs]);
+  return { mounted, state };
+}

@@ -66,6 +66,14 @@
   --font-sans: var(--ds-font-body);
   --font-mono: var(--ds-font-code);
 
+  /* Motion (A2): `ease-enter` decelerates in, `ease-exit` accelerates out, `ease-standard` is the default. */
+  --ease-enter: var(--ds-ease-enter);
+  --ease-exit: var(--ds-ease-exit);
+  --ease-standard: var(--ds-ease-standard);
+  /* Bare `transition` utilities take the ADS duration and easing (zeroed under reduced motion by tokens.css). */
+  --default-transition-duration: var(--ds-duration-150);
+  --default-transition-timing-function: var(--ds-ease-standard);
+
   --text-*: initial;
   --text-xs: var(--ds-font-size-100);
   --text-xs--line-height: 16px;
@@ -134,4 +142,115 @@
 }
 .ds-fade-in {
   animation: ds-fade-in var(--ds-duration-150) ease-out;
+}
+
+/*
+ * Motion (A2): brief and functional. Enters decelerate (ease-enter), exits accelerate
+ * (ease-exit), nothing bounces. Pair exits with usePresence(), which unmounts after 120ms.
+ * Every transform/opacity animation below is off under prefers-reduced-motion.
+ */
+@keyframes ds-panel-in {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes ds-panel-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+}
+@keyframes ds-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes ds-rise-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+@keyframes ds-pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes ds-pop-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+}
+/* Skeleton pulse: opacity only (no gradient shimmer, SPEC §4.17). */
+@keyframes ds-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+/* Exits hold their end frame (`forwards`) until the element unmounts. */
+.ds-panel-in {
+  animation: ds-panel-in 180ms var(--ds-ease-enter);
+}
+.ds-panel-out {
+  animation: ds-panel-out 120ms var(--ds-ease-exit) forwards;
+}
+.ds-rise-in {
+  animation: ds-rise-in 160ms var(--ds-ease-enter);
+}
+.ds-rise-out {
+  animation: ds-rise-out 120ms var(--ds-ease-exit) forwards;
+}
+.ds-pop-in {
+  animation: ds-pop-in 150ms var(--ds-ease-enter);
+}
+.ds-pop-out {
+  animation: ds-pop-out 120ms var(--ds-ease-exit) forwards;
+}
+.ds-pulse {
+  animation: ds-pulse 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ds-panel-in,
+  .ds-panel-out,
+  .ds-rise-in,
+  .ds-rise-out,
+  .ds-pop-in,
+  .ds-pop-out,
+  .ds-pulse {
+    animation: none;
+  }
 }

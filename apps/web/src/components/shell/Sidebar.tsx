@@ -14,6 +14,7 @@ import { useTheme } from '@/stores/theme';
 import { useSetTheme } from './theme';
 import { ProjectIcon, TeamIcon } from '@/components/common/EntityIcons';
 import { teamUsesCycles, useFeatures } from '@/lib/features';
+import { useShortcutKeys } from '@/lib/shortcutKeys';
 import { m } from '@/i18n';
 
 const MAX_PROJECTS = 8;
@@ -31,6 +32,7 @@ function SidebarSearch() {
   // Typing navigates to /search?q=…, so the URL is the source of truth for the value.
   const value = onSearch ? (params.get('q') ?? '') : '';
   const inputRef = useRef<HTMLInputElement>(null);
+  const searchKeys = useShortcutKeys('search.focus');
 
   return (
     <div className="group/search relative px-2">
@@ -59,9 +61,37 @@ function SidebarSearch() {
         className="peer h-7 w-full rounded-sm border border-transparent bg-transparent pl-7 pr-8 text-base text-fg transition-colors duration-100 placeholder:text-fg-subtle hover:bg-hover focus:border-primary focus:bg-input focus-visible:outline-none [&::-webkit-search-cancel-button]:hidden"
       />
       <Kbd className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 opacity-0 transition-opacity duration-100 group-hover/search:opacity-100 peer-focus:opacity-100">
-        /
+        {searchKeys?.join(' ')}
       </Kbd>
     </div>
+  );
+}
+
+/** Hover-revealed row actions on a team: create an issue in it, or open its menu. */
+function TeamActions({ team }: { team: TeamFieldsFragment }) {
+  const openCreate = useUi((s) => s.openCreate);
+  const navigate = useNavigate();
+  return (
+    <>
+      <IconButton
+        label={m.nav.newIssueIn(team.name)}
+        size="sm"
+        icon={<Icon name="add" />}
+        onClick={() => openCreate({ teamId: team.id })}
+      />
+      <DropdownMenu
+        aria-label={m.nav.teamActions(team.name)}
+        placement="bottom-end"
+        trigger={<IconButton label={m.nav.teamActions(team.name)} size="sm" icon={<Icon name="more" />} />}
+      >
+        <MenuItem icon={<Icon name="list" />} onSelect={() => openCreate({ teamId: team.id })}>
+          {m.issue.newIssue}
+        </MenuItem>
+        <MenuItem icon={<Icon name="settings" />} onSelect={() => navigate(`/settings/teams/${team.key}`)}>
+          {m.nav.teamSettings}
+        </MenuItem>
+      </DropdownMenu>
+    </>
   );
 }
 
@@ -79,6 +109,7 @@ function TeamGroup({ team }: { team: TeamFieldsFragment }) {
       icon={<TeamIcon team={team} />}
       collapsed={collapsed}
       onCollapsedChange={(c) => setCollapsed(`team:${team.id}`, c)}
+      actions={<TeamActions team={team} />}
     >
       <SideNavItem as={Link} to={`${base}/active`} level={1} icon={<Icon name="active" />} selected={isActive(`${base}/active`)}>
         {features.solo ? m.nav.issues : m.nav.active}
@@ -195,6 +226,7 @@ function Favorites() {
 function NewMenu() {
   const openCreate = useUi((s) => s.openCreate);
   const navigate = useNavigate();
+  const newIssueKeys = useShortcutKeys('issue.create');
   return (
     <DropdownMenu
       aria-label={m.nav.newMenu}
@@ -209,7 +241,7 @@ function NewMenu() {
         </button>
       }
     >
-      <MenuItem icon={<Icon name="list" />} shortcut={<Kbd>C</Kbd>} onSelect={() => openCreate()}>
+      <MenuItem icon={<Icon name="list" />} shortcut={newIssueKeys ? <Kbd keys={newIssueKeys} /> : undefined} onSelect={() => openCreate()}>
         {m.nav.newIssue}
       </MenuItem>
       <MenuItem icon={<Icon name="team" />} onSelect={() => navigate('/settings/teams/new')}>
@@ -294,6 +326,7 @@ export function Sidebar({ className }: { className?: string }) {
   const workspaceCollapsed = useSidebar((s) => s.collapsed.workspace ?? false);
   const setCollapsed = useSidebar((s) => s.setCollapsed);
   const navigate = useNavigate();
+  const settingsKeys = useShortcutKeys('go.settings');
   const shownProjects = projects.filter((p) => p.status !== 'completed' && p.status !== 'canceled').slice(0, MAX_PROJECTS);
   const overflow = projects.length - shownProjects.length;
 
@@ -395,6 +428,7 @@ export function Sidebar({ className }: { className?: string }) {
           <IconButton
             label={m.nav.settings}
             size="sm"
+            shortcut={settingsKeys}
             icon={<Icon name="settings" />}
             onClick={() => navigate('/settings')}
             className={clsx(isActive('/settings') && 'bg-neutral text-fg')}

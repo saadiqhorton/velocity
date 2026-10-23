@@ -83,7 +83,7 @@ packages/ui components + apps/web/src/styles/app.css (@import tailwindcss, token
 | Actions | `Button`, `IconButton`, `DropdownMenu` / `Menu` / `MenuGroup` / `MenuItem` / `SubMenu` / `MenuSeparator` |
 | Forms | `Field`, `TextField`, `TextArea`, `Select` (native, 15 options or fewer), `PopupSelect` + `OptionList` (searchable, multi, creatable), `Checkbox`, `Radio` / `RadioGroup`, `Switch` |
 | Feedback | `FlagProvider` / `Flag` (toasts), `InlineMessage`, `Banner`, `Modal`, `ConfirmDialog`, `Spinner`, `Skeleton`, `ProgressBar`, `EmptyState`, `Tooltip` |
-| Display | `Avatar`, `Badge`, `Lozenge`, `StatusDot`, `Kbd`, `Icon` (Font Awesome subset, `iconMap`), `PriorityIcon`, `StatusIcon`, `Table`, `Pagination`, `Tabs` |
+| Display | `Avatar`, `Badge`, `Lozenge`, `StatusDot`, `Kbd`, `Icon` (Lucide stroke set, `iconMap`), `PriorityIcon`, `StatusIcon`, `Table`, `Pagination`, `Tabs` |
 | Navigation | `SideNav` / `SideNavItem` / `SideNavGroup`, `Breadcrumbs` |
 | Primitives | `Portal`, `Popover` (+ `computePosition`), `useControllableState`, `useEnterStyle` |
 
@@ -115,6 +115,7 @@ packages/ui components + apps/web/src/styles/app.css (@import tailwindcss, token
 - `apps/web/e2e/0-visual.spec.ts` snapshots the component gallery and the shell (`/team/ENG/active`) in both themes at 1440×900 and 1024×768, on Chromium only. The baselines are in `e2e/0-visual.spec.ts-snapshots/` and the tolerance is `maxDiffPixelRatio` 0.002.
 - The shell shots compare real content: the E2E seed runs `seed-cli --deterministic`, and the spec's `0-` prefix makes it the first file to run, before any spec adds randomly named data. Only relative times and absolute dates are masked, because they follow the run date.
 - Without approved baselines the spec skips. A normal run never writes baselines.
+- After SPEC A2 (§4.19), the design owner regenerates these baselines with `apps/web/scripts/visual-docker.sh <n> --update`, inside the Playwright image and never from a host run, then reviews each changed PNG.
 - Font rasterization differs between hosts, so the baselines are captured and checked only inside the official Playwright image (`mcr.microsoft.com/playwright:v1.63.0-noble`, matching `@playwright/test`). CI's `visual` job runs the spec in that image; the `e2e` job runs everything else on ubuntu-latest with `--grep-invert @visual` (the spec is tagged `@visual`). Locally, `apps/web/scripts/visual-docker.sh <slot>` runs the spec in the same image; host runs use `--grep-invert @visual`.
 - To update after an intended visual change:
   1. Rebuild (`pnpm --filter @velocity/web build`).
@@ -159,7 +160,7 @@ This table is checked against the command registry: the `useCommands` registrati
 | `#` | Delete with confirmation (inbox: `#` or `Delete` removes the notification) | issue |
 | `Mod+Enter` | Submit comment | markdown editor |
 
-Roadmap v1.2 (U1/U2) changed `Enter` from the panel to the full page, added `Space` peek and the copy and menu keys; `.` and `,` under a modifier are read by physical key (`event.code`), so `Mod+Shift+.` never collapses into `Mod+.`. Compared with SPEC §4.12, the registry adds `G` `C` (Active), `G` `V` (Views), `Mod+A`, the board's arrow keys and `M` for move to column. Inside menus, listboxes and popups, arrow keys, `Home`/`End` and typeahead belong to that widget, which the engine does not intercept.
+The U1 deviation (`Enter` opens the full page, `Space` peeks) is resolved: SPEC §4.19 (A2) specifies it. Roadmap v1.2 (U1/U2) changed `Enter` from the panel to the full page, added `Space` peek and the copy and menu keys; `.` and `,` under a modifier are read by physical key (`event.code`), so `Mod+Shift+.` never collapses into `Mod+.`. Compared with SPEC §4.12, the registry adds `G` `C` (Active), `G` `V` (Views), `Mod+A`, the board's arrow keys and `M` for move to column. Inside menus, listboxes and popups, arrow keys, `Home`/`End` and typeahead belong to that widget, which the engine does not intercept.
 
 ## Recorded deviations from the specification
 

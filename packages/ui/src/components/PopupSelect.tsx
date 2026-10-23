@@ -7,6 +7,7 @@ import type { Placement } from './Popover';
 import {
   CREATE_VALUE,
   OptionList,
+  digitQuickSelect,
   filterOptions,
   useOptionListNavigation,
 } from './OptionList';
@@ -98,14 +99,17 @@ export function PopupSelect(props: PopupSelectProps) {
   const wasOpen = useRef(false);
   const previousFocus = useRef<HTMLElement | null>(null);
   const restoreFocus = useRef(false);
+  // The popup's own content: focus inside it is never a restore target (it is still mounted during the exit animation).
+  const popupRef = useRef<HTMLDivElement | null>(null);
 
   useIsomorphicLayoutEffect(() => {
     if (isOpen && !wasOpen.current) {
       const a = document.activeElement;
-      previousFocus.current = a instanceof HTMLElement && a !== document.body ? a : null;
+      previousFocus.current = a instanceof HTMLElement && a !== document.body && !popupRef.current?.contains(a) ? a : null;
     }
     if (!isOpen && wasOpen.current && restoreFocus.current) {
-      const target = previousFocus.current && document.contains(previousFocus.current) ? previousFocus.current : triggerEl;
+      const prev = previousFocus.current;
+      const target = prev && document.contains(prev) && !popupRef.current?.contains(prev) ? prev : triggerEl;
       target?.focus();
       restoreFocus.current = false;
     }
@@ -189,27 +193,29 @@ export function PopupSelect(props: PopupSelectProps) {
         onDismiss={() => close(false)}
         onKeyDown={(e) => e.stopPropagation()}
       >
-        <PopupSelectPanel
-          listId={listId}
-          options={options}
-          label={label}
-          searchable={searchable}
-          searchPlaceholder={searchPlaceholder}
-          emptyMessage={emptyMessage}
-          renderOption={renderOption}
-          selected={selected}
-          multiple={multiple}
-          onCreate={onCreate}
-          createLabel={createLabel}
-          onSelectOption={onSelectOption}
-          onClose={close}
-        />
+        <div ref={popupRef}>
+          <PopupSelectPanel
+            listId={listId}
+            options={options}
+            label={label}
+            searchable={searchable}
+            searchPlaceholder={searchPlaceholder}
+            emptyMessage={emptyMessage}
+            renderOption={renderOption}
+            selected={selected}
+            multiple={multiple}
+            onCreate={onCreate}
+            createLabel={createLabel}
+            onSelectOption={onSelectOption}
+            onClose={close}
+          />
+        </div>
       </Popover>
     </>
   );
 }
 
-interface PanelProps {
+export interface PopupSelectPanelProps {
   listId: string;
   options: PopupOption[];
   label: string;
@@ -220,12 +226,16 @@ interface PanelProps {
   selected: string[];
   multiple: boolean;
   onCreate?: (query: string) => void;
-  createLabel: (query: string) => string;
+  createLabel?: (query: string) => string;
   onSelectOption: (option: PopupOption) => void;
   onClose: (restoreFocus: boolean) => void;
+  /** Move focus into the panel on mount (false for hover-opened submenus). Default true. */
+  autoFocus?: boolean;
 }
 
-function PopupSelectPanel(p: PanelProps) {
+/** The search field and listbox of a picker. Shared by PopupSelect and the menu's OptionSubMenu. */
+export function PopupSelectPanel(p: PopupSelectPanelProps) {
+  const { autoFocus = true, createLabel = (q: string) => `Create "${q}"` } = p;
   const [query, setQuery] = useState('');
   const inputRef = useRef<HTMLInputElement | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -256,8 +266,8 @@ function PopupSelectPanel(p: PanelProps) {
   });
 
   useIsomorphicLayoutEffect(() => {
-    (inputRef.current ?? listRef.current)?.focus();
-  }, []);
+    if (autoFocus) (inputRef.current ?? listRef.current)?.focus();
+  }, [autoFocus]);
 
   const onKeyDown = (e: KeyboardEvent<HTMLElement>) => {
     if (e.key === 'Escape') {
@@ -270,6 +280,15 @@ function PopupSelectPanel(p: PanelProps) {
       e.preventDefault();
       p.onClose(true);
       return;
+    }
+    // Digits pick a numbered option while the filter is empty; with text, they type into the filter.
+    if (query === '') {
+      const digit = digitQuickSelect(filtered, e);
+      if (digit) {
+        e.preventDefault();
+        p.onSelectOption(digit);
+        return;
+      }
     }
     nav.handleKeyDown(e);
   };
@@ -306,23 +325,23 @@ function PopupSelectPanel(p: PanelProps) {
         multiple={p.multiple}
         renderOption={p.renderOption}
         emptyMessage={p.emptyMessage}
-        create={showCreate ? { label: p.createLabel(trimmed), onSelect: doCreate } : null}
+        create={showCreate ? { label: createLabel(trimmed), onSelect: doCreate } : null}
         focusable={!p.searchable}
         activeDescendant={nav.activeDescendant}
       />
-      {!p.searchable ? <ListFocusBridge listRef={listRef} listId={p.listId} /> : null}
+      {!p.searchable ? <ListFocusBridge listRef={listRef} listId={p.listId} autoFocus={autoFocus} /> : null}
     </div>
   );
 }
 
 /** Finds the (focusable) listbox element so the panel can focus it when there is no search input. */
-function ListFocusBridge({ listRef, listId }: { listRef: { current: HTMLDivElement | null }; listId: string }) {
+function ListFocusBridge({ listRef, listId, autoFocus }: { listRef: { current: HTMLDivElement | null }; listId: string; autoFocus: boolean }) {
   useIsomorphicLayoutEffect(() => {
     const el = document.getElementById(listId);
     if (el instanceof HTMLDivElement) {
       listRef.current = el;
-      el.focus();
+      if (autoFocus) el.focus();
     }
-  }, [listRef, listId]);
+  }, [listRef, listId, autoFocus]);
   return null;
 }

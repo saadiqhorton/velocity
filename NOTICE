@@ -29,11 +29,12 @@ Atlassian Design System tokens
   Velocity uses the openly published tokens only; it is not affiliated with or
   endorsed by Atlassian, and does not use Atlassian logos or trademarks.
 
-Font Awesome Free
-  Icons are from Font Awesome Free (https://fontawesome.com/), (C) Fonticons,
-  Inc. Icon artwork is licensed under CC BY 4.0
-  (https://creativecommons.org/licenses/by/4.0/); any Font Awesome code is
-  licensed under the MIT License.
+Lucide
+  Icons are from Lucide (https://lucide.dev/), (C) 2026 Lucide Icons and
+  Contributors, licensed under the ISC License
+  (https://opensource.org/licenses/ISC). Some icons are derived from Feather
+  (https://feathericons.com/), (C) 2013-present Cole Bemis, licensed under the
+  MIT License.
 
 Inter
   The Inter typeface (https://rsms.me/inter/), Copyright (c) The Inter Project

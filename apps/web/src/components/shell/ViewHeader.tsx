@@ -6,6 +6,7 @@ import { Button, Icon, IconButton } from '@velocity/ui';
 import { useSidebar } from '@/stores/sidebar';
 import { useUi } from '@/stores/ui';
 import type { CreateDefaults } from '@/stores/ui';
+import { useShortcutKeys } from '@/lib/shortcutKeys';
 import { m } from '@/i18n';
 
 export interface ViewHeaderCrumb {
@@ -37,6 +38,7 @@ export interface ViewHeaderProps {
 export function ViewHeader({ title, icon, breadcrumbs, count, children, actions, create = {}, className }: ViewHeaderProps) {
   const openCreate = useUi((s) => s.openCreate);
   const setDrawerOpen = useSidebar((s) => s.setDrawerOpen);
+  const createKeys = useShortcutKeys('issue.create');
   return (
     <header
       data-testid="view-header"
@@ -85,6 +87,8 @@ export function ViewHeader({ title, icon, breadcrumbs, count, children, actions,
             size="sm"
             iconBefore={<Icon name="add" />}
             onClick={() => openCreate(create)}
+            tooltip={m.issue.newIssue}
+            shortcut={createKeys}
             aria-keyshortcuts="C"
             className="ml-1"
           >

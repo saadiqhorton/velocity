@@ -1,11 +1,12 @@
 import { useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { EmptyState, Icon } from '@velocity/ui';
+import { Button, EmptyState, Icon, Kbd } from '@velocity/ui';
 import { useWorkspace } from '@/app/workspace';
 import { PresetTabs } from '@/components/common/PresetTabs';
 import { ListScreen } from '@/components/issues/ListScreen';
 import { DEFAULT_DISPLAY } from '@/lib/viewState';
 import type { ViewState } from '@/lib/viewState';
+import { useUi } from '@/stores/ui';
 import { m } from '@/i18n';
 
 type Preset = 'assigned' | 'created' | 'subscribed';
@@ -19,6 +20,7 @@ export function MyIssues() {
   const defaults = useMemo<ViewState>(() => ({ filter: '', display: { ...DEFAULT_DISPLAY, grouping: 'status', showCompleted: preset === 'assigned' ? 'none' : 'all' } }), [preset]);
   const extra = preset === 'assigned' ? ['assignee:me'] : preset === 'created' ? ['creator:me'] : [];
   const navigate = useNavigate();
+  const openCreate = useUi((s) => s.openCreate);
   const tabs = (
     <PresetTabs
       aria-label={m.myIssues.presetTabs}
@@ -39,7 +41,18 @@ export function MyIssues() {
       context={{ assigneeId: preset === 'assigned' ? viewer.id : undefined }}
       headerExtra={tabs}
       hiddenFilterFields={preset === 'assigned' ? ['assignee'] : preset === 'created' ? ['creator'] : []}
-      empty={<EmptyState icon="my-issues" message={preset === 'created' ? m.myIssues.emptyCreated : preset === 'subscribed' ? m.myIssues.emptySubscribed : m.list.emptyMine} />}
+      empty={
+        <EmptyState
+          icon="my-issues"
+          message={preset === 'created' ? m.myIssues.emptyCreated : preset === 'subscribed' ? m.myIssues.emptySubscribed : m.list.emptyMine}
+          action={
+            <Button size="sm" variant="primary" onClick={() => openCreate(preset === 'assigned' ? { assigneeId: viewer.id } : {})}>
+              {m.issue.newIssue}
+            </Button>
+          }
+          hint={<Kbd>C</Kbd>}
+        />
+      }
     />
   );
 }

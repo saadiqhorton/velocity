@@ -30,7 +30,7 @@ export interface SettingsPageProps {
 }
 
 /**
- * A settings page inside the content region (SPEC §4.11.9): a 48px breadcrumb header,
+ * A settings page inside the content region (SPEC §4.11.9): a 44px breadcrumb header,
  * then a scrolling body with the page title and ADS form sections. No separate shell.
  */
 export function SettingsPage({ title, parents = [], description, actions, wide, children, testId }: SettingsPageProps) {
@@ -43,7 +43,7 @@ export function SettingsPage({ title, parents = [], description, actions, wide, 
   ];
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col" data-testid={testId ?? 'settings-page'}>
-      <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-5" data-testid="view-header">
+      <header className="flex h-11 shrink-0 items-center gap-2 border-b border-border px-5" data-testid="view-header">
         <IconButton label={m.nav.openMenu} size="sm" icon={<Icon name="sidebar" />} className="md:hidden" onClick={() => setDrawerOpen(true)} />
         <Breadcrumbs items={crumbs} className="min-w-0" />
         <SettingsSectionMenu />
@@ -79,13 +79,13 @@ export interface SettingsSectionProps {
   testId?: string;
 }
 
-/** ADS form section: 14px semibold title, optional 12px helper, then the body. */
+/** ADS form section: 14px medium title, optional 12px helper, then the body. */
 export function SettingsSection({ title, description, actions, children, danger, className, testId }: SettingsSectionProps) {
   return (
     <section className={clsx('flex flex-col gap-3', className)} data-testid={testId} aria-label={title}>
       <div className="flex items-end gap-4">
         <div className="min-w-0 flex-1">
-          <h2 className="text-base font-semibold text-fg">{title}</h2>
+          <h2 className="text-base font-medium text-fg">{title}</h2>
           {description ? <p className="mt-0.5 text-sm text-fg-subtle">{description}</p> : null}
         </div>
         {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}

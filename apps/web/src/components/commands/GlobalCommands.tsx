@@ -55,6 +55,7 @@ export function GlobalCommands() {
       title: m.palette.goTo(`${t.name} · ${m.nav.active}`),
       group: 'navigation' as const,
       keywords: [t.key],
+      icon: 'active' as const,
       run: () => navigate(`/team/${t.key}/active`),
     },
     {
@@ -62,6 +63,7 @@ export function GlobalCommands() {
       title: m.palette.goTo(`${t.name} · ${m.nav.backlog}`),
       group: 'navigation' as const,
       keywords: [t.key],
+      icon: 'backlog' as const,
       run: () => navigate(`/team/${t.key}/backlog`),
     },
     ...(teamUsesCycles(features, t)
@@ -71,6 +73,7 @@ export function GlobalCommands() {
             title: m.palette.goTo(`${t.name} · ${m.nav.cycles}`),
             group: 'navigation' as const,
             keywords: [t.key],
+            icon: 'cycle' as const,
             run: () => navigate(`/team/${t.key}/cycles`),
           },
         ]
@@ -93,6 +96,7 @@ export function GlobalCommands() {
         title: m.cmd.createIssue,
         group: 'general',
         keys: ['c'],
+        icon: 'add',
         run: () => {
           const ctx = useActiveList.getState().context;
           ui.openCreate({ teamId: ctx?.teamId ?? useDetailIssue.getState().teamId ?? undefined, projectId: ctx?.projectId, cycleId: ctx?.cycleId });
@@ -103,13 +107,14 @@ export function GlobalCommands() {
         title: m.cmd.focusSearch,
         group: 'general',
         keys: ['/'],
+        icon: 'search',
         run: () => {
           const input = document.getElementById('sidebar-search');
           if (input && input.offsetParent !== null) input.focus();
           else navigate('/search');
         },
       },
-      { id: 'help.shortcuts', title: m.cmd.showShortcuts, group: 'general', keys: ['?'], run: () => ui.setShortcutsOpen(true) },
+      { id: 'help.shortcuts', title: m.cmd.showShortcuts, group: 'general', keys: ['?'], icon: 'keyboard', run: () => ui.setShortcutsOpen(true) },
       {
         id: 'escape',
         title: m.cmd.close,
@@ -123,30 +128,32 @@ export function GlobalCommands() {
           else useSelection.getState().clear();
         },
       },
-      { id: 'go.backlog', title: m.cmd.goBacklog, group: 'navigation', keys: ['g b'], run: () => goTeam('backlog') },
-      { id: 'go.inbox', title: m.cmd.goInbox, group: 'navigation', keys: ['g i'], run: () => navigate('/inbox') },
-      { id: 'go.myIssues', title: m.cmd.goMyIssues, group: 'navigation', keys: ['g m'], run: () => navigate('/my-issues') },
-      { id: 'go.all', title: m.cmd.goAll, group: 'navigation', keys: ['g a'], run: () => navigate('/issues') },
-      { id: 'go.projects', title: m.cmd.goProjects, group: 'navigation', keys: ['g p'], run: () => navigate('/projects') },
-      { id: 'go.settings', title: m.cmd.goSettings, group: 'navigation', keys: ['g s'], run: () => navigate('/settings') },
-      { id: 'go.cycle', title: m.cmd.goCycle, group: 'navigation', keys: ['g t'], when: () => features.cycles, run: () => goTeam('cycles') },
-      { id: 'go.active', title: m.cmd.goActive, group: 'navigation', keys: ['g c'], run: () => goTeam('active') },
-      { id: 'go.views', title: m.cmd.goViews, group: 'navigation', keys: ['g v'], run: () => navigate('/views') },
-      { id: 'go.insights', title: m.cmd.goInsights, group: 'navigation', when: () => features.insights, run: () => navigate('/insights') },
+      { id: 'go.backlog', title: m.cmd.goBacklog, group: 'navigation', keys: ['g b'], icon: 'backlog', run: () => goTeam('backlog') },
+      { id: 'go.inbox', title: m.cmd.goInbox, group: 'navigation', keys: ['g i'], icon: 'inbox', run: () => navigate('/inbox') },
+      { id: 'go.myIssues', title: m.cmd.goMyIssues, group: 'navigation', keys: ['g m'], icon: 'my-issues', run: () => navigate('/my-issues') },
+      { id: 'go.all', title: m.cmd.goAll, group: 'navigation', keys: ['g a'], icon: 'list', run: () => navigate('/issues') },
+      { id: 'go.projects', title: m.cmd.goProjects, group: 'navigation', keys: ['g p'], icon: 'project', run: () => navigate('/projects') },
+      { id: 'go.settings', title: m.cmd.goSettings, group: 'navigation', keys: ['g s'], icon: 'settings', run: () => navigate('/settings') },
+      { id: 'go.cycle', title: m.cmd.goCycle, group: 'navigation', keys: ['g t'], icon: 'cycle', when: () => features.cycles, run: () => goTeam('cycles') },
+      { id: 'go.active', title: m.cmd.goActive, group: 'navigation', keys: ['g c'], icon: 'active', run: () => goTeam('active') },
+      { id: 'go.views', title: m.cmd.goViews, group: 'navigation', keys: ['g v'], icon: 'view', run: () => navigate('/views') },
+      { id: 'go.insights', title: m.cmd.goInsights, group: 'navigation', icon: 'chart', when: () => features.insights, run: () => navigate('/insights') },
       {
         id: 'theme.toggle',
         title: m.cmd.toggleTheme,
         group: 'general',
         keywords: ['dark', 'light'],
+        icon: 'moon',
         run: () => setTheme(useTheme.getState().resolved === 'dark' ? 'light' : 'dark'),
       },
-      { id: 'team.create', title: m.cmd.newTeam, group: 'general', run: () => navigate('/settings/teams/new') },
-      { id: 'project.create', title: m.cmd.newProject, group: 'general', run: () => navigate('/projects?new=1') },
-      { id: 'view.create', title: m.cmd.newView, group: 'general', run: () => navigate('/view/new') },
+      { id: 'team.create', title: m.cmd.newTeam, group: 'general', icon: 'team', run: () => navigate('/settings/teams/new') },
+      { id: 'project.create', title: m.cmd.newProject, group: 'general', icon: 'project', run: () => navigate('/projects?new=1') },
+      { id: 'view.create', title: m.cmd.newView, group: 'general', icon: 'view', run: () => navigate('/view/new') },
       {
         id: 'session.logout',
         title: m.cmd.logout,
         group: 'general',
+        icon: 'logout',
         run: () =>
           void logout({}).then(async () => {
             await client.clearStore();

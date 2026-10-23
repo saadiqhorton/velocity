@@ -21,6 +21,15 @@
   html.document-scroll body {
     overflow: auto;
   }
+  /* Toast stack (Flag.tsx) sits beside the sidebar from md, but only where the app shell is mounted (login and onboarding have no sidebar). */
+  body:has([data-region='sidebar']) {
+    --flag-inset-left: calc(var(--ds-layout-sidebar-compact) + var(--ds-space-200));
+  }
+  @media (min-width: 80rem) {
+    body:has([data-region='sidebar']) {
+      --flag-inset-left: calc(var(--ds-layout-sidebar) + var(--ds-space-200));
+    }
+  }
   button {
     cursor: default;
   }
@@ -50,6 +59,15 @@
   .scrollbar-thin {
     scrollbar-width: thin;
     scrollbar-color: var(--ds-color-border) transparent;
+  }
+  /* Issue rows glide to a new slot when the list reorders (IssueList). Scrolling never changes a slot, so it never animates. */
+  .issue-row-glide {
+    transition: transform var(--ds-duration-150) var(--ds-ease-standard);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .issue-row-glide {
+      transition: none;
+    }
   }
 }
 

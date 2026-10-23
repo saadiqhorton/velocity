@@ -7,8 +7,11 @@ import { formatBytes, formatRelative } from '@/lib/format';
 import type { DetailIssue } from './IssueDetail';
 import { m } from '@/i18n';
 
-/** Files on the issue (issue page main column, U1): open, upload, delete. */
-export function Attachments({ issue }: { issue: DetailIssue }) {
+/**
+ * Upload for an issue's files. `picker` is the hidden file input (render it once, where the
+ * button lives) and `pick` opens it. The list and the empty-state row both use this, so they upload the same way.
+ */
+export function useAttachFile(issue: DetailIssue) {
   const input = useRef<HTMLInputElement>(null);
   const [upload, { loading }] = useOptimisticMutation(UploadAttachmentDocument, {
     optimistic: { serverConfirmed: 'The stored file id, size and signed URL come from the server.' },
@@ -28,6 +31,26 @@ export function Attachments({ issue }: { issue: DetailIssue }) {
       });
     },
   });
+  const picker = (
+    <input
+      ref={input}
+      type="file"
+      className="hidden"
+      aria-hidden="true"
+      tabIndex={-1}
+      onChange={(e) => {
+        const file = e.target.files?.[0];
+        e.target.value = '';
+        if (file) void upload({ file, issueId: issue.id });
+      }}
+    />
+  );
+  return { loading, picker, pick: () => input.current?.click() };
+}
+
+/** Files on the issue (issue page main column, U1): open, upload, delete. Rendered only when there are files. */
+export function Attachments({ issue }: { issue: DetailIssue }) {
+  const { loading, picker, pick } = useAttachFile(issue);
   const [remove] = useOptimisticMutation(DeleteAttachmentDocument, {
     optimistic: () => ({ __typename: 'Mutation' as const, deleteAttachment: true }),
     rollback: () => m.issuePage.attachmentDeleteFailed,
@@ -43,7 +66,6 @@ export function Attachments({ issue }: { issue: DetailIssue }) {
 
   return (
     <div className="flex flex-col" data-testid="attachments">
-      {issue.attachments.length === 0 ? <p className="px-1 text-base text-fg-subtlest">{m.issuePage.noAttachments}</p> : null}
       {issue.attachments.map((a) => (
         <div key={a.id} className="group/att flex h-8 items-center gap-2 rounded-sm px-1 hover:bg-hover">
           <Icon name="paperclip" className="shrink-0 text-fg-subtlest" />
@@ -64,19 +86,8 @@ export function Attachments({ issue }: { issue: DetailIssue }) {
         </div>
       ))}
       <div>
-        <input
-          ref={input}
-          type="file"
-          className="hidden"
-          aria-hidden="true"
-          tabIndex={-1}
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            e.target.value = '';
-            if (file) void upload({ file, issueId: issue.id });
-          }}
-        />
-        <Button size="sm" variant="subtle" iconBefore={<Icon name="paperclip" />} disabled={loading} onClick={() => input.current?.click()}>
+        {picker}
+        <Button size="sm" variant="subtle" iconBefore={<Icon name="paperclip" />} disabled={loading} onClick={pick}>
           {m.issue.attach}
         </Button>
       </div>
