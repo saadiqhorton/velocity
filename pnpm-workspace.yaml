@@ -8,9 +8,17 @@ allowBuilds:
 audit:
   ignore:
     - GHSA-vfj7-8cjw-p6xm
-# GHSA-7mx3-vvmw-hjmv: force the patched utils (docs/security-review.md).
+# Force patched transitive versions (docs/security-review.md):
+# GHSA-7mx3-vvmw-hjmv utils; GHSA-jm63-cq47-j5jp, GHSA-46jr-4wx8-v453 MCP server (e2e pins 2.2.0);
+# GHSA-mrhx-c7xc-m3w5 zod; GHSA-27r3-jxmh-p828 body-parser; GHSA-xjj6-f33q-929c undici;
+# GHSA-587h-7wmj-h5pm vite.
 overrides:
   '@graphql-tools/utils': '^12.0.3'
+  '@modelcontextprotocol/server': '~2.3.1'
+  zod: '^4.6.7'
+  body-parser: '^2.4.0'
+  'undici@7': '^7.30.1'
+  vite: '^8.3.3'
 minimumReleaseAgeExclude:
   - '@atlaskit/tokens@20.2.0'
   - '@modelcontextprotocol/sdk@1.32.0'
