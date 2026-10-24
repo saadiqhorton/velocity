@@ -70,6 +70,37 @@ describe('usePresence', () => {
     expect(result.current).toEqual({ mounted: true, state: 'open' });
   });
 
+  // A timer can fire after a close/reopen render but before the effect cleanup clears it. Replay
+  // the captured callback in that window: it must not overwrite the newer state.
+  function lastTimer(ms: number): () => void {
+    const call = vi.mocked(setTimeout).mock.calls.filter(([, delay]) => delay === ms).at(-1);
+    if (!call) throw new Error(`no ${ms}ms timer scheduled`);
+    return call[0] as () => void;
+  }
+
+  it('a late enter timer cannot cancel a close (panel stuck open after Esc)', () => {
+    vi.spyOn(globalThis, 'setTimeout');
+    const { result, rerender } = renderHook(({ open }) => usePresence(open), { initialProps: { open: true } });
+    const enterDone = lastTimer(200);
+    rerender({ open: false });
+    act(() => enterDone());
+    expect(result.current).toEqual({ mounted: true, state: 'exit' });
+
+    act(() => vi.advanceTimersByTime(120));
+    expect(result.current).toEqual({ mounted: false, state: 'exit' });
+  });
+
+  it('a late exit timer cannot unmount an element reopened during the exit', () => {
+    vi.spyOn(globalThis, 'setTimeout');
+    const { result, rerender } = renderHook(({ open }) => usePresence(open), { initialProps: { open: true } });
+    act(() => vi.advanceTimersByTime(200));
+    rerender({ open: false });
+    const exitDone = lastTimer(120);
+    rerender({ open: true });
+    act(() => exitDone());
+    expect(result.current).toEqual({ mounted: true, state: 'enter' });
+  });
+
   it('unmounts immediately on close under prefers-reduced-motion', () => {
     stubReducedMotion(true);
     const { result, rerender } = renderHook(({ open }) => usePresence(open), { initialProps: { open: true } });

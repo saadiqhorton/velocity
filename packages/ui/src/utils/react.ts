@@ -108,30 +108,31 @@ export type PresenceState = 'enter' | 'open' | 'exit';
 export function usePresence(open: boolean, opts?: { exitMs?: number }): { mounted: boolean; state: PresenceState } {
   const exitMs = opts?.exitMs ?? PRESENCE_EXIT_MS;
   const reduced = usePrefersReducedMotion();
-  const [mounted, setMounted] = useState(open);
-  const [state, setState] = useState<PresenceState>(open ? (reduced ? 'open' : 'enter') : 'exit');
+  const [presence, setPresence] = useState<{ mounted: boolean; state: PresenceState }>({
+    mounted: open,
+    state: open ? (reduced ? 'open' : 'enter') : 'exit',
+  });
   const [prevOpen, setPrevOpen] = useState(open);
   // Adjust state during render when `open` flips (no extra commit with stale values).
   if (open !== prevOpen) {
     setPrevOpen(open);
-    if (open) {
-      setMounted(true);
-      setState(reduced ? 'open' : 'enter');
-    } else {
-      setState('exit');
-      if (reduced || exitMs <= 0) setMounted(false);
-    }
+    if (open) setPresence({ mounted: true, state: reduced ? 'open' : 'enter' });
+    else setPresence({ mounted: !(reduced || exitMs <= 0), state: 'exit' });
   }
+  const { mounted, state } = presence;
   useEffect(() => {
+    // A timer can fire after `open` flipped but before this cleanup runs, so each one only
+    // advances the state it was scheduled for; otherwise a late enter timer overwrites 'exit'
+    // and the element never unmounts.
     if (state === 'enter') {
-      const id = setTimeout(() => setState('open'), PRESENCE_ENTER_MS);
+      const id = setTimeout(() => setPresence((p) => (p.state === 'enter' ? { ...p, state: 'open' } : p)), PRESENCE_ENTER_MS);
       return () => clearTimeout(id);
     }
     if (state === 'exit' && mounted) {
-      const id = setTimeout(() => setMounted(false), exitMs);
+      const id = setTimeout(() => setPresence((p) => (p.state === 'exit' ? { ...p, mounted: false } : p)), exitMs);
       return () => clearTimeout(id);
     }
     return undefined;
   }, [state, mounted, exitMs]);
-  return { mounted, state };
+  return presence;
 }
