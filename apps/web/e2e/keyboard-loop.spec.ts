@@ -102,12 +102,12 @@ test.describe('keyboard loop', () => {
 
     await page.keyboard.press('s');
     await pickFromPopup(page, 'Status', 'in progress');
-    await expect(row.getByRole('img', { name: 'In Progress' })).toBeVisible();
+    await expect(row.getByRole('button', { name: 'Status: In Progress' })).toBeVisible();
     await expect(row).toBeFocused();
 
     // E marks done; the same key toggles back (SPEC §4.12).
     await page.keyboard.press('e');
-    await expect(row.getByRole('img', { name: 'Done' })).toBeVisible();
+    await expect(row.getByRole('button', { name: 'Status: Done' })).toBeVisible();
 
     // R adds a relation to another issue.
     await page.keyboard.press('r');

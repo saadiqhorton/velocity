@@ -71,7 +71,7 @@ test.describe('offline', () => {
     await pickFromPopup(page, 'Priority', 'urgent');
 
     // The row should immediately show the new priority (optimistic update).
-    await expect(row.getByRole('img', { name: 'Urgent' })).toBeVisible();
+    await expect(row.getByRole('button', { name: 'Priority: Urgent' })).toBeVisible();
 
     // After ~800ms, the sync-pulse class should appear on the row.
     await expect(row).toHaveClass(/sync-pulse/, { timeout: 1000 });

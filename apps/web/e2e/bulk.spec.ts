@@ -108,16 +108,16 @@ test.describe('bulk selection and actions', () => {
 
     // Verify priority changed on both rows
     // Priority is indicated by the aria-label on the PriorityIcon which contains "Urgent"
-    await expect(row1.getByRole('img', { name: /Urgent/ })).toBeVisible();
-    await expect(row2.getByRole('img', { name: /Urgent/ })).toBeVisible();
+    await expect(row1.getByRole('button', { name: 'Priority: Urgent' })).toBeVisible();
+    await expect(row2.getByRole('button', { name: 'Priority: Urgent' })).toBeVisible();
 
     // Reload and verify priority persisted
     await page.reload();
     await gotoTeam(page, 'ENG', 'backlog');
     const reloadedRow1 = rowByTitle(page, title1);
     const reloadedRow2 = rowByTitle(page, title2);
-    await expect(reloadedRow1.getByRole('img', { name: /Urgent/ })).toBeVisible();
-    await expect(reloadedRow2.getByRole('img', { name: /Urgent/ })).toBeVisible();
+    await expect(reloadedRow1.getByRole('button', { name: 'Priority: Urgent' })).toBeVisible();
+    await expect(reloadedRow2.getByRole('button', { name: 'Priority: Urgent' })).toBeVisible();
   });
 
   test('bulk bar edits status, assignee, project, and cycle with mouse and keyboard', async ({ page }) => {
@@ -137,14 +137,14 @@ test.describe('bulk selection and actions', () => {
     await expect(bar).toContainText('2 selected');
     await bar.getByRole('button', { name: 'Status' }).click();
     await pickFromPopup(page, 'Status', 'in progress');
-    await expect(rowA.getByRole('img', { name: 'In Progress' })).toBeVisible();
-    await expect(rowB.getByRole('img', { name: 'In Progress' })).toBeVisible();
+    await expect(rowA.getByRole('button', { name: 'Status: In Progress' })).toBeVisible();
+    await expect(rowB.getByRole('button', { name: 'Status: In Progress' })).toBeVisible();
 
     await bar.getByRole('button', { name: 'Assignee' }).focus();
     await page.keyboard.press('Enter');
     await pickFromPopup(page, 'Assignee', 'alex');
-    await expect(rowA.getByRole('img', { name: 'Alex' })).toBeVisible();
-    await expect(rowB.getByRole('img', { name: 'Alex' })).toBeVisible();
+    await expect(rowA.getByRole('button', { name: 'Assignee: Alex' })).toBeVisible();
+    await expect(rowB.getByRole('button', { name: 'Assignee: Alex' })).toBeVisible();
 
     await bar.getByRole('button', { name: 'Project' }).click();
     await pickFromPopup(page, 'Project', 'Billing v2');
@@ -168,8 +168,8 @@ test.describe('bulk selection and actions', () => {
     await page.reload();
     await expect(rowByTitle(page, first)).toContainText('Billing v2');
     await expect(rowByTitle(page, second)).toContainText('Billing v2');
-    await expect(rowByTitle(page, first).getByRole('img', { name: 'Alex' })).toBeVisible();
-    await expect(rowByTitle(page, second).getByRole('img', { name: 'Alex' })).toBeVisible();
+    await expect(rowByTitle(page, first).getByRole('button', { name: 'Assignee: Alex' })).toBeVisible();
+    await expect(rowByTitle(page, second).getByRole('button', { name: 'Assignee: Alex' })).toBeVisible();
     const panel = page.getByTestId('detail-panel');
     for (const title of [first, second]) {
       await rowByTitle(page, title).focus();

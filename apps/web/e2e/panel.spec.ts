@@ -299,7 +299,7 @@ test.describe('issue detail panel', () => {
     await expect(flag).toBeVisible();
     await expect(flag).toContainText('Simulated rejection.');
     await expect(priority).toHaveText(before); // rolled back
-    await expect(row.getByRole('img', { name: 'Urgent' })).toHaveCount(0);
+    await expect(row.getByRole('button', { name: 'Priority: Urgent' })).toHaveCount(0);
     expect(rejected).toBe(1);
 
     await page.unrouteAll({ behavior: 'wait' });

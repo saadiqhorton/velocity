@@ -54,7 +54,8 @@ test.describe('workspace', () => {
 
   test('a project can be favorited and appears in the sidebar favorites', async ({ page }) => {
     await page.goto('/projects');
-    await page.getByRole('link', { name: 'Public launch' }).first().click();
+    // Open it from the projects table (the row opens on click/Enter); a sidebar link exists only while it is a favorite.
+    await page.getByRole('gridcell', { name: 'Public launch', exact: true }).click();
     await expect(page.getByTestId('project-detail')).toBeVisible();
     const name = (await page.getByRole('heading').first().innerText()).trim();
 

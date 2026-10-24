@@ -81,6 +81,6 @@ test.describe('realtime', () => {
     await expect(panel.getByRole('button', { name: 'Priority: Urgent' })).toBeVisible();
 
     // Within 10s, B's row shows the new priority.
-    await expect(updatedRowB.getByRole('img', { name: 'Urgent' })).toBeVisible({ timeout: 10000 });
+    await expect(updatedRowB.getByRole('button', { name: 'Priority: Urgent' })).toBeVisible({ timeout: 10000 });
   });
 });

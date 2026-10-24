@@ -1,6 +1,6 @@
 import { expect, test, graphqlAs, uniqueTitle } from './support/fixtures';
 
-test('overview milestone edits, progress diamonds, and issue drill-down persist', async ({ page, guard }, testInfo) => {
+test('overview milestone edits, progress diamonds, and issue drill-down persist', async ({ page, guard, browserName }, testInfo) => {
   await page.setViewportSize({ width: 1837, height: 900 });
   await page.goto('/projects');
   const data = await graphqlAs(page, 'query { teams { id key statuses { id category } } }');
@@ -42,7 +42,7 @@ test('overview milestone edits, progress diamonds, and issue drill-down persist'
   await expect(overview.getByRole('button', { name: 'Status: Foundation, In progress' })).toBeVisible();
   await expect(overview.getByText('Updated release criteria.')).toBeVisible();
   await expect(overview.getByRole('button', { name: 'Target date: Foundation' })).toContainText('Jan 20');
-  await page.screenshot({ path: testInfo.outputPath('milestone-overview.png') });
+  if (browserName !== 'webkit') await page.screenshot({ path: testInfo.outputPath('milestone-overview.png') });
 
   await overview.getByRole('link', { name: 'View issues in Foundation' }).click();
   await expect(page).toHaveURL(new RegExp(`/project/${projectId}/issues\\?milestone=${foundation}`));
@@ -65,6 +65,8 @@ test('overview milestone edits, progress diamonds, and issue drill-down persist'
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(overview.getByRole('link', { name: 'View issues in Foundation' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await page.screenshot({ path: testInfo.outputPath('milestone-mobile.png') });
+  // WebKit screenshots inject an inline <style> that the production CSP (rightly) blocks, which the
+  // guard would report as an app violation; the overflow check above already covers the layout.
+  if (browserName !== 'webkit') await page.screenshot({ path: testInfo.outputPath('milestone-mobile.png') });
   expect(guard.csp).toHaveLength(0);
 });

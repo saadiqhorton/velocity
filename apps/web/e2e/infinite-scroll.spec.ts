@@ -14,9 +14,11 @@ test.describe('infinite scroll', () => {
 
     const byIndex = new Map<number, string>();
     const identifiers = new Set<string>();
+    // Measured rather than hard-coded so a row-height change (A1 moved 32px -> 36px) cannot drift the scroll.
+    const rowHeight = await page.getByTestId('issue-row').first().evaluate((row) => row.getBoundingClientRect().height);
     const step = 16; // Half a viewport, so virtualization cannot skip unseen rows.
     for (let start = 0; start < total; start += step) {
-      await list.evaluate((el, index) => { el.scrollTop = index * 32; }, start);
+      await list.evaluate((el, top) => { el.scrollTop = top; }, start * rowHeight);
       await expect.poll(async () => {
         const visible = await page.getByTestId('issue-row').evaluateAll((rows) =>
           rows.map((row) => Number(row.getAttribute('aria-rowindex'))),
