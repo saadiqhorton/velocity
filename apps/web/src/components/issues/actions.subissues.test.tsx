@@ -126,7 +126,9 @@ describe('creating a sub-issue updates the parent list', () => {
     act(() => {
       pending = result.current[0](SUB_INPUT);
     });
-    await waitFor(() => expect(childIds(cache, true)).toEqual([NEW_ID]));
+    // Checked synchronously, before the mocked server's 40ms answer can land: polling (waitFor) let a
+    // slow CI runner see the answer already written to the base cache.
+    expect(childIds(cache, true)).toEqual([NEW_ID]);
     // The base cache is untouched until the server answers: the entry lives in the optimistic layer.
     expect(childIds(cache, false)).toEqual([]);
 
