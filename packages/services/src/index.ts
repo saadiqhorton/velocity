@@ -9,6 +9,7 @@ import { EventProcessor } from './event-handlers';
 import { ExportService } from './exports';
 import { GitHubService } from './github';
 import { ImporterService } from './importer';
+import { ImportReferenceRepairService } from './import-reference-repair';
 import { InsightsService } from './insights';
 import { IssueService } from './issues';
 import { LabelService } from './labels';
@@ -43,6 +44,7 @@ export interface Services {
   attachments: AttachmentService;
   exports: ExportService;
   importer: ImporterService;
+  importReferenceRepairs: ImportReferenceRepairService;
   github: GitHubService;
   maintenance: MaintenanceService;
   events: EventProcessor;
@@ -71,6 +73,7 @@ export function createServices(deps: ServiceDeps): Services {
     attachments: new AttachmentService(deps),
     exports: new ExportService(deps),
     importer: new ImporterService(deps),
+    importReferenceRepairs: new ImportReferenceRepairService(deps),
     github: new GitHubService(deps),
     maintenance: new MaintenanceService(deps),
     events: new EventProcessor(deps),
@@ -86,6 +89,7 @@ export function createServices(deps: ServiceDeps): Services {
   s.webhooks.bind(s.audit);
   s.exports.bind(s.audit);
   s.importer.bind({ audit: s.audit, issues: s.issues, teams: s.teams, labels: s.labels, comments: s.comments });
+  s.importReferenceRepairs.bind(s.audit);
   s.github.bind({ audit: s.audit, issues: s.issues, teams: s.teams, comments: s.comments });
   s.maintenance.bind(s.issues, s.webhooks);
   s.events.bind(s.notifications, s.webhooks);
@@ -117,6 +121,7 @@ export type { AttachmentRow } from './attachments';
 export { INLINE_MIME } from './attachments';
 export type { ExportRow } from './exports';
 export type { ImportRunRow } from './importer';
+export type { ImportReferenceRepairRow, ImportReferenceRepairTargetRow, ImportReferenceRepairPreview } from './import-reference-repair';
 export type { GithubAppRow, GithubAppManifestResult, ResolvedGithubConfig, GithubInstallRow, GithubLinkRow, WebhookReceipt } from './github';
 export type { UserRow } from './users';
 export type { WorkspaceRow } from './workspace';

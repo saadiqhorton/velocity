@@ -44,6 +44,8 @@ export type AuditAction =
   | 'github.app_removed'
   | 'import.started'
   | 'import.committed'
+  | 'import.reference_repair.scan'
+  | 'import.reference_repair.apply'
   | 'cycle.closed_manually'
   | 'issue.deleted'
   | 'team.deleted'

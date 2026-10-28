@@ -12,6 +12,7 @@ import { OwnerOnlyNotice, SettingsPage } from '../common';
 import { ImportRunPage, NewImportPage } from './ImportWizard';
 import { RunStatus, sourceLabel } from './importParts';
 import { isUnfinished } from './importModel';
+import { ImportReferenceRepairPage } from './ImportReferenceRepair';
 
 function ImportList() {
   const t = m.settingsIntegrations.import;
@@ -37,13 +38,14 @@ function ImportList() {
       key: 'actions',
       header: <span className="sr-only">{t.columns.actions}</span>,
       headerLabel: t.columns.actions,
-      width: 96,
+      width: 220,
       align: 'right',
       render: (r) => (
-        <span onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+        <span className="inline-flex gap-2" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
           <Button size="sm" variant={isUnfinished(r.status) ? 'default' : 'subtle'} onClick={() => navigate(r.id)}>
             {isUnfinished(r.status) ? t.resume : t.view}
           </Button>
+          {r.status === 'completed' ? <Button size="sm" variant="subtle" onClick={() => navigate(`${r.id}/repair`)}>{t.referenceRepair.entry}</Button> : null}
         </span>
       ),
     },
@@ -100,6 +102,8 @@ export function ImportSettings() {
     <Routes>
       <Route index element={<ImportList />} />
       <Route path="new" element={<NewImportPage />} />
+      <Route path=":runId/repair" element={<ImportReferenceRepairPage />} />
+      <Route path=":runId/repair/:repairId" element={<ImportReferenceRepairPage />} />
       <Route path=":runId" element={<ImportRunPage />} />
       <Route path="*" element={<NotFound />} />
     </Routes>

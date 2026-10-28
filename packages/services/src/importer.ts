@@ -1,9 +1,11 @@
 import { and, asc, desc, eq, getTableColumns, inArray, isNull, max, sql } from 'drizzle-orm';
+import { createHash } from 'node:crypto';
 import {
   comments,
   cycles,
   importItems,
   importRuns,
+  importWarnings,
   issues,
   labels,
   milestones,
@@ -52,6 +54,7 @@ import { DEFAULT_STATUSES } from './teams';
 import type { TeamService } from './teams';
 import type { CommentService } from './comments';
 import { sanitizeMarkdown } from './lib/markdown';
+import { findImportedReferenceKeys, rewriteImportedReferences } from './lib/import-reference-rewrite';
 import { assertCan } from './lib/permissions';
 
 export type ImportRunRow = typeof importRuns.$inferSelect;
@@ -318,7 +321,7 @@ interface CommitCtx {
   warnings: ImportWarning[];
 }
 
-const PHASE = { setup: 0.05, issues: 0.8, comments: 0.9, parents: 0.95 } as const;
+const PHASE = { setup: 0.05, issues: 0.8, comments: 0.9, references: 0.94, parents: 0.95 } as const;
 
 export class ImporterService extends ServiceBase {
   protected audit!: AuditService;
@@ -334,6 +337,8 @@ export class ImporterService extends ServiceBase {
    * chunk of that invocation has been committed (simulates a crash mid-import). Never set in production.
    */
   failAfterChunks: number | null = null;
+  /** Test hook for retrying after durable reference writes and their markers commit. */
+  failAfterReferenceRewrite = false;
   /** Rows per transaction (SPEC §6.7: 500). Public so tests can shrink it. */
   chunkSize = 500;
 
@@ -609,19 +614,23 @@ export class ImporterService extends ServiceBase {
 
   async commit(actor: ServiceActor, id: string): Promise<ImportRunRow> {
     assertCan(actor, 'workspace.import_export');
-    const run = await this.requireRun(id);
-    if (run.status !== 'ready' && run.status !== 'failed') {
-      throw validation(run.status === 'mapping' ? 'Run the dry-run report before committing.' : `This import is ${run.status}; it can’t be committed.`);
-    }
-    if (!run.report) throw validation('Run the dry-run report before committing.');
-    const [row] = await this.db
-      .update(importRuns)
-      .set({ status: 'committing', error: null, ...(run.status === 'ready' ? { progress: 0, committedCount: 0 } : {}), updatedAt: this.now() })
-      .where(and(eq(importRuns.id, id), inArray(importRuns.status, ['ready', 'failed'])))
-      .returning(SLIM);
-    if (!row) throw validation('This import is already running.');
-    await this.jobs.send('importers', { type: 'commit', runId: id });
-    return row;
+    return this.tx(async (tx) => {
+      const [run] = await tx.select().from(importRuns).where(eq(importRuns.id, id)).for('update');
+      if (!run) throw notFound('Import run');
+      if (run.status !== 'ready' && run.status !== 'failed') {
+        throw validation(run.status === 'mapping' ? 'Run the dry-run report before committing.' : `This import is ${run.status}; it can’t be committed.`);
+      }
+      if (!run.report) throw validation('Run the dry-run report before committing.');
+      const [row] = await tx
+        .update(importRuns)
+        .set({ status: 'committing', error: null, ...(run.status === 'ready' ? { progress: 0, committedCount: 0 } : {}), updatedAt: this.now() })
+        .where(and(eq(importRuns.id, id), inArray(importRuns.status, ['ready', 'failed'])))
+        .returning(SLIM);
+      if (!row) throw validation('This import is already running.');
+      const jobId = await this.jobs.sendInTx(tx, 'importers', { type: 'commit', runId: id });
+      if (!jobId) throw new Error('The import job was not accepted by the queue.');
+      return row;
+    });
   }
 
   /** Job entry point. Resumable and idempotent: every created entity is recorded in import_items. */
@@ -664,6 +673,9 @@ export class ImporterService extends ServiceBase {
       userIds: new Map(),
       warnings: [],
     };
+    ctx.warnings = (await this.db.select({ code: importWarnings.code, message: importWarnings.message, externalId: importWarnings.externalId })
+      .from(importWarnings).where(eq(importWarnings.runId, run.id)))
+      .map((warning) => ({ code: warning.code, message: warning.message, ...(warning.externalId ? { externalId: warning.externalId } : {}) }));
     await this.loadUsers(ctx);
     await this.phaseTeams(ctx);
     await this.phaseStatuses(ctx);
@@ -676,6 +688,11 @@ export class ImporterService extends ServiceBase {
     if (!(await this.phaseIssues(ctx))) return false;
     await this.closeCycles(ctx);
     if (!(await this.phaseComments(ctx))) return false;
+    if (!(await this.phaseReferenceRewrite(ctx))) return false;
+    if (this.failAfterReferenceRewrite) {
+      this.failAfterReferenceRewrite = false;
+      throw new Error('Injected failure after reference rewrite completion');
+    }
     if (!(await this.phaseParents(ctx))) return false;
     if (!(await this.phaseRelations(ctx))) return false;
 
@@ -760,6 +777,17 @@ export class ImporterService extends ServiceBase {
       .insert(importItems)
       .values(entries.map(([externalId, entityId]) => ({ runId, kind, externalId, entityId })))
       .onConflictDoNothing();
+  }
+
+  private async putWarnings(ex: DbOrTx, runId: string, warnings: ImportWarning[]): Promise<void> {
+    if (!warnings.length) return;
+    await ex.insert(importWarnings).values(warnings.map((warning) => ({
+      runId,
+      warningKey: createHash('sha256').update(JSON.stringify([warning.code, warning.externalId ?? null, warning.message])).digest('hex'),
+      code: warning.code,
+      message: warning.message,
+      externalId: warning.externalId ?? null,
+    }))).onConflictDoNothing();
   }
 
   private async stillCommitting(runId: string): Promise<boolean> {
@@ -1045,6 +1073,7 @@ export class ImporterService extends ServiceBase {
           }
         }
         await this.putItems(tx, ctx.run.id, 'issue', created);
+        await this.putWarnings(tx, ctx.run.id, warns);
         processed += chunk.length;
         const progress = PHASE.setup + (PHASE.issues - PHASE.setup) * (processed / Math.max(total, 1));
         await tx
@@ -1087,7 +1116,8 @@ export class ImporterService extends ServiceBase {
     return {
       teamId,
       title: issue.title,
-      descriptionMd: issue.descriptionMd ?? '',
+      // Import issue shells first; references are resolved in the dedicated post-comment phase.
+      descriptionMd: '',
       statusId,
       assigneeId: assignee?.assignable ? assignee.id : null,
       priority: issue.priority ?? 4, // missing priority = "No priority" (4), never Urgent (0)
@@ -1144,6 +1174,95 @@ export class ImporterService extends ServiceBase {
     return true;
   }
 
+  private async phaseReferenceRewrite(ctx: CommitCtx): Promise<boolean> {
+    const issueDone = await this.loadItems(ctx.run.id, 'reference_issue');
+    const commentDone = await this.loadItems(ctx.run.id, 'reference_comment');
+    const complete = await this.loadItems(ctx.run.id, 'reference_rewrite_complete');
+    if (complete.has('complete')) return true;
+
+    const sourceKeyCounts = new Map<string, number>();
+    for (const source of ctx.bundle.issues) sourceKeyCounts.set(source.externalId, (sourceKeyCounts.get(source.externalId) ?? 0) + 1);
+
+    const commentItems = await this.db
+      .select({ externalId: importItems.externalId, entityId: importItems.entityId })
+      .from(importItems)
+      .where(and(eq(importItems.runId, ctx.run.id), eq(importItems.kind, 'comment')));
+    const commentIds = [...new Set(commentItems.map((r) => r.entityId))];
+    const commentRows = commentIds.length
+      ? await this.db.select({ id: comments.id, bodyMd: comments.bodyMd }).from(comments).where(inArray(comments.id, commentIds))
+      : [];
+    const bodyById = new Map(commentRows.map((r) => [r.id, r.bodyMd]));
+    const work: { kind: 'issue' | 'comment'; externalId: string; entityId: string; text: string }[] = [];
+    for (const source of ctx.plan.issues) {
+      const id = ctx.issueIds.get(source.externalId);
+      if (id && !issueDone.has(source.externalId)) {
+        work.push({ kind: 'issue', externalId: source.externalId, entityId: id, text: sanitizeMarkdown(source.descriptionMd ?? '') });
+      }
+    }
+    for (const c of commentItems) {
+      const body = bodyById.get(c.entityId);
+      if (body !== undefined && !commentDone.has(c.externalId)) work.push({ kind: 'comment', externalId: c.externalId, entityId: c.entityId, text: body });
+    }
+
+    for (let off = 0; off < work.length; off += this.chunkSize) {
+      if (!(await this.stillCommitting(ctx.run.id))) return false;
+      const chunk = work.slice(off, off + this.chunkSize);
+      await this.tx(async (tx) => {
+        const sourceMap = await this.resolveCurrentReferences(tx, ctx, chunk.map((item) => item.text).join('\n'), sourceKeyCounts);
+        const issueMarkers: [string, string][] = [];
+        const commentMarkers: [string, string][] = [];
+        const warnings: ImportWarning[] = [];
+        for (const item of chunk) {
+          const rewritten = rewriteImportedReferences(item.text, sourceMap);
+          if (item.kind === 'issue') {
+            await tx.update(issues).set({ descriptionMd: rewritten.text }).where(eq(issues.id, item.entityId));
+            issueMarkers.push([item.externalId, item.entityId]);
+          } else {
+            await tx.update(comments).set({ bodyMd: rewritten.text }).where(eq(comments.id, item.entityId));
+            commentMarkers.push([item.externalId, item.entityId]);
+          }
+          for (const key of rewritten.unmapped) {
+            warnings.push({ code: 'reference_unmapped', message: `Reference ${key} has no successful destination issue in this import; the source text was kept.`, externalId: item.externalId });
+          }
+        }
+        await this.putItems(tx, ctx.run.id, 'reference_issue', issueMarkers);
+        await this.putItems(tx, ctx.run.id, 'reference_comment', commentMarkers);
+        await this.putWarnings(tx, ctx.run.id, warnings);
+        ctx.warnings.push(...warnings);
+      });
+    }
+    await this.putItems(this.db, ctx.run.id, 'reference_rewrite_complete', [['complete', ctx.run.id]]);
+    await this.reportProgress(ctx.run.id, PHASE.references, null);
+    return true;
+  }
+
+  private async resolveCurrentReferences(
+    tx: DbOrTx,
+    ctx: CommitCtx,
+    text: string,
+    sourceKeyCounts: ReadonlyMap<string, number>,
+  ): Promise<Map<string, { id: string; identifier: string } | null>> {
+    const mapping = new Map<string, { id: string; identifier: string } | null>([...ctx.issueIds.keys()].map((key) => [key, null]));
+    const referenced = findImportedReferenceKeys(text, ctx.issueIds.keys());
+    const ids = [...new Set(referenced.flatMap((key) => ctx.issueIds.has(key) ? [ctx.issueIds.get(key)!] : []))];
+    const issueRows = ids.length ? await tx.select({ id: issues.id, number: issues.number, teamId: issues.teamId }).from(issues)
+      .where(inArray(issues.id, ids)).for('update') : [];
+    const teamIds = [...new Set(issueRows.map((row) => row.teamId))];
+    const teamRows = teamIds.length ? await tx.select({ id: teams.id, key: teams.key }).from(teams)
+      .where(inArray(teams.id, teamIds)).for('share') : [];
+    const keyByTeam = new Map(teamRows.map((row) => [row.id, row.key]));
+    const issueById = new Map(issueRows.map((row) => [row.id, row]));
+    for (const sourceKey of referenced) {
+      const id = ctx.issueIds.get(sourceKey);
+      const issue = id ? issueById.get(id) : undefined;
+      const teamKey = issue ? keyByTeam.get(issue.teamId) : undefined;
+      if (id && issue && teamKey && sourceKeyCounts.get(sourceKey) === 1) {
+        mapping.set(sourceKey, { id, identifier: `${teamKey}-${issue.number}` });
+      }
+    }
+    return mapping;
+  }
+
   private async phaseParents(ctx: CommitCtx): Promise<boolean> {
     const done = await this.loadItems(ctx.run.id, 'parent');
     const remaining = ctx.plan.parents.filter((p) => !done.has(p.child) && ctx.issueIds.has(p.child) && ctx.issueIds.has(p.parent));
@@ -1192,10 +1311,13 @@ export class ImporterService extends ServiceBase {
     assertCan(actor, 'workspace.import_export');
     const run = await this.requireRun(id);
     if (run.status === 'completed' || run.status === 'canceled') throw validation(`This import is already ${run.status}.`);
+    if (run.status !== 'mapping' && run.status !== 'ready') {
+      throw validation('Imports can only be canceled before commit starts. Retry a failed commit to finish writing its durable source content.');
+    }
     const [row] = await this.db
       .update(importRuns)
       .set({ status: 'canceled', updatedAt: this.now() })
-      .where(and(eq(importRuns.id, id), inArray(importRuns.status, ['mapping', 'ready', 'committing', 'failed'])))
+      .where(and(eq(importRuns.id, id), inArray(importRuns.status, ['mapping', 'ready'])))
       .returning(SLIM);
     if (!row) throw validation('This import can no longer be canceled.');
     return row;

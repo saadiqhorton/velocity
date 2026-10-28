@@ -36,6 +36,8 @@ import type {
   GithubInstallRow,
   GithubLinkRow,
   ImportRunRow,
+  ImportReferenceRepairPreview,
+  ImportReferenceRepairTargetRow,
   IssueRow,
   LabelRow,
   MilestoneRow,
@@ -99,6 +101,8 @@ export const DeliveryRef = builder.objectRef<DeliveryRow>('WebhookDelivery');
 export const GithubInstallRef = builder.objectRef<GithubInstallRow>('GithubInstall');
 export const GithubLinkRef = builder.objectRef<GithubLinkRow>('GithubLink');
 export const ImportRunRef = builder.objectRef<ImportRunRow>('ImportRun');
+export const ImportReferenceRepairRef = builder.objectRef<ImportReferenceRepairPreview>('ImportReferenceRepair');
+export const ImportReferenceRepairTargetRef = builder.objectRef<ImportReferenceRepairTargetRow>('ImportReferenceRepairTarget');
 export const ExportRef = builder.objectRef<ExportRow>('Export');
 export const SearchResultRef = builder.objectRef<SearchHit>('SearchResult');
 

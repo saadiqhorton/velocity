@@ -10,6 +10,8 @@ import {
   GithubInstallRef,
   GithubLinkRef,
   ImportRunRef,
+  ImportReferenceRepairRef,
+  ImportReferenceRepairTargetRef,
   ImportRunStatusEnum,
   ImportSourceEnum,
   IssueRef,
@@ -235,6 +237,34 @@ ImportRunRef.implement({
   }),
 });
 
+ImportReferenceRepairTargetRef.implement({
+  fields: (t) => ({
+    id: t.exposeID('id'),
+    targetKind: t.exposeString('targetKind'),
+    targetId: t.exposeID('targetId'),
+    sourceExternalId: t.exposeString('sourceExternalId'),
+    referenceCount: t.exposeInt('referenceCount'),
+    beforeMd: t.exposeString('beforeMd'),
+    afterMd: t.exposeString('afterMd'),
+    context: t.expose('context', { type: 'JSON' }),
+    status: t.exposeString('status'),
+    skipReason: t.exposeString('skipReason', { nullable: true }),
+  }),
+});
+
+ImportReferenceRepairRef.implement({
+  fields: (t) => ({
+    id: t.exposeID('id'),
+    runId: t.exposeID('runId'),
+    status: t.exposeString('status'),
+    previewVersion: t.exposeInt('previewVersion'),
+    previewHash: t.exposeString('previewHash'),
+    summary: t.expose('summary', { type: 'JSON' }),
+    error: t.exposeString('error', { nullable: true }),
+    targets: t.field({ type: [ImportReferenceRepairTargetRef], resolve: (r) => r.targets }),
+  }),
+});
+
 const CreateImportRunInput = builder.inputType('CreateImportRunInput', {
   fields: (t) => ({ source: t.field({ type: ImportSourceEnum, required: true }), bundle: t.field({ type: 'JSON', required: true }), fileName: t.string() }),
 });
@@ -368,6 +398,7 @@ builder.queryFields((t) => ({
   }),
   importRuns: t.field({ type: [ImportRunRef], resolve: (_r, _a, ctx) => ctx.services.importer.list(requireActor(ctx)) }),
   importRun: t.field({ type: ImportRunRef, nullable: true, args: { id: t.arg.id({ required: true }) }, resolve: (_r, a, ctx) => ctx.services.importer.get(requireActor(ctx), a.id) }),
+  importReferenceRepair: t.field({ type: ImportReferenceRepairRef, nullable: true, args: { id: t.arg.id({ required: true }), first: t.arg.int(), offset: t.arg.int() }, resolve: (_r, a, ctx) => ctx.services.importReferenceRepairs.get(requireActor(ctx), a.id, { first: a.first ?? undefined, offset: a.offset ?? undefined }) }),
   exports: t.field({ type: [ExportRef], resolve: (_r, _a, ctx) => ctx.services.exports.list(requireActor(ctx)) }),
   auditLog: t.field({
     type: AuditPageRef,
@@ -555,6 +586,8 @@ builder.mutationFields((t) => ({
   dryRunImport: t.field({ type: ImportRunRef, args: { id: t.arg.id({ required: true }) }, resolve: (_r, a, ctx) => ctx.services.importer.dryRun(requireActor(ctx), a.id) }),
   commitImport: t.field({ type: ImportRunRef, args: { id: t.arg.id({ required: true }) }, resolve: (_r, a, ctx) => ctx.services.importer.commit(requireActor(ctx), a.id) }),
   cancelImport: t.field({ type: ImportRunRef, args: { id: t.arg.id({ required: true }) }, resolve: (_r, a, ctx) => ctx.services.importer.cancel(requireActor(ctx), a.id) }),
+  startImportReferenceRepair: t.field({ type: ImportReferenceRepairRef, args: { runId: t.arg.id({ required: true }) }, resolve: (_r, a, ctx) => ctx.services.importReferenceRepairs.startScan(requireActor(ctx), a.runId).then((r) => ({ ...r, targets: [] })) }),
+  applyImportReferenceRepair: t.field({ type: ImportReferenceRepairRef, args: { id: t.arg.id({ required: true }), previewHash: t.arg.string({ required: true }), confirmed: t.arg.boolean({ required: true }) }, resolve: (_r, a, ctx) => ctx.services.importReferenceRepairs.apply(requireActor(ctx), a.id, a.previewHash, a.confirmed).then((r) => ({ ...r, targets: [] })) }),
   requestExport: t.field({ type: ExportRef, resolve: (_r, _a, ctx) => ctx.services.exports.request(requireActor(ctx)) }),
 
   startMcpSession: t.id({

@@ -282,17 +282,81 @@ describe('resumability', () => {
     expect(dupes).toHaveLength(0);
   }, 180_000);
 
-  it('cancel stops a committing run', async () => {
+  it('cancel stops a run before commit starts', async () => {
     const s = c.h.services.importer;
     const run = await s.createRunFromCsv(c.owner, { source: 'linear', csv: fixture('linear-export.csv') });
     await s.dryRun(c.owner, run.id);
-    await s.commit(c.owner, run.id);
     const canceled = await s.cancel(c.owner, run.id);
     expect(canceled.status).toBe('canceled');
     const before = await count(c.h, 'teams');
     await s.runCommit(run.id);
     expect(await count(c.h, 'teams')).toBe(before);
     await expect(s.commit(c.owner, run.id)).rejects.toMatchObject({ code: 'VALIDATION' });
+  });
+
+  it('keeps descriptions durable after issue mapping and refuses to cancel a failed partial commit', async () => {
+    const s = c.h.services.importer;
+    const bundle: ImportBundle = {
+      source: 'linear', teams: [{ externalId: 'team', key: 'SRC', name: 'Source' }],
+      statuses: [{ teamExternalId: 'team', name: 'Todo', category: 'todo' }], users: [], labels: [], projects: [], cycles: [], warnings: [],
+      issues: [
+        { externalId: 'SRC-1', teamExternalId: 'team', title: 'One', descriptionMd: 'See SRC-2', statusName: 'Todo', labelNames: [], relations: [], comments: [{ bodyMd: 'Also SRC-2 and NOPE-9', authorName: 'Author' }], attachments: [] },
+        { externalId: 'SRC-2', teamExternalId: 'team', title: 'Two', descriptionMd: 'Back to SRC-1', statusName: 'Todo', labelNames: [], relations: [], comments: [], attachments: [] },
+      ],
+    };
+    const run = await s.createRun(c.owner, { source: 'linear', bundle });
+    const mapping = mappingOf(run);
+    await s.updateMapping(c.owner, run.id, { ...mapping, teams: { team: { mode: 'create', key: 'DST', name: 'Destination' } } });
+    await s.dryRun(c.owner, run.id);
+    await s.commit(c.owner, run.id);
+    s.chunkSize = 1;
+    s.failAfterChunks = 1;
+    await expect(s.runCommit(run.id)).rejects.toThrow(/Injected failure/);
+    s.failAfterChunks = null;
+    await expect(s.cancel(c.owner, run.id)).rejects.toMatchObject({ code: 'VALIDATION' });
+    await c.h.pool.query(`update teams set key = 'DSTX' where id = (select i.team_id from issues i join import_items it on it.entity_id = i.id where it.run_id = $1 and it.kind = 'issue' and it.external_id = 'SRC-1')`, [run.id]);
+    await s.commit(c.owner, run.id);
+    await s.runCommit(run.id);
+    s.chunkSize = 500;
+
+    const issues = await q<{ identifier: string; description_md: string }>(c.h, `select t.key || '-' || i.number as identifier, i.description_md from issues i join teams t on t.id = i.team_id where i.title in ('One','Two')`);
+    expect(issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ identifier: 'DSTX-1', description_md: 'See DSTX-2' }),
+      expect.objectContaining({ identifier: 'DSTX-2', description_md: 'Back to DSTX-1' }),
+    ]));
+    const comment = await q<{ body_md: string }>(c.h, `select c.body_md from comments c join issues i on i.id = c.issue_id where i.title = 'One'`);
+    expect(comment[0]?.body_md).toBe('Also DSTX-2 and NOPE-9');
+  });
+
+  it('reconstructs rewrite warnings after failure immediately following completion markers', async () => {
+    const s = c.h.services.importer;
+    const bundle: ImportBundle = {
+      source: 'linear', teams: [{ externalId: 'team', key: 'WARN', name: 'Warnings' }],
+      statuses: [{ teamExternalId: 'team', name: 'Todo', category: 'todo' }], users: [], labels: [], projects: [], cycles: [], warnings: [],
+      issues: [{ externalId: 'WARN-1', teamExternalId: 'team', title: 'Warn', descriptionMd: 'See UNKNOWN-8', statusName: 'Todo', labelNames: [], relations: [], comments: [], attachments: [] }],
+    };
+    const run = await s.createRun(c.owner, { source: 'linear', bundle });
+    await s.dryRun(c.owner, run.id);
+    await s.commit(c.owner, run.id);
+    s.failAfterReferenceRewrite = true;
+    await expect(s.runCommit(run.id)).rejects.toThrow(/after reference rewrite completion/);
+    await s.commit(c.owner, run.id);
+    await s.runCommit(run.id);
+    const done = (await s.get(c.owner, run.id))!;
+    const report = done.report as Committed;
+    expect(report.result.warnings.filter((warning) => warning.code === 'reference_unmapped')).toHaveLength(1);
+    expect(await count(c.h, 'import_warnings', `run_id = '${run.id}'`)).toBe(1);
+  });
+
+  it('rolls back import commit state when transactional queue submission fails', async () => {
+    const s = c.h.services.importer;
+    const run = await s.createRunFromCsv(c.owner, { source: 'linear', csv: fixture('linear-export.csv') });
+    await s.dryRun(c.owner, run.id);
+    for (const failure of [new Error('queue unavailable'), 'null'] as const) {
+      c.h.jobs.nextSendFailure = failure;
+      await expect(s.commit(c.owner, run.id)).rejects.toThrow();
+      expect((await s.get(c.owner, run.id))?.status).toBe('ready');
+    }
   });
 });
 
@@ -557,8 +621,8 @@ describe('bundle helper', () => {
         projects: [],
         cycles: [],
         issues: [
-          { externalId: 'a/b#1', teamExternalId: 'a/b', title: 'One', statusName: 'Open', labelNames: ['area/x'], relations: [], comments: [], attachments: [], parentExternalId: 'a/b#99' },
-          { externalId: 'a/b#2', teamExternalId: 'a/b', title: 'Two', statusName: 'Mystery', labelNames: [], relations: [{ type: 'blocks', targetExternalId: 'a/b#1' }], comments: [{ bodyMd: 'hi', authorName: 'ghost' }], attachments: [], parentExternalId: 'a/b#1' },
+          { externalId: 'a/b#1', teamExternalId: 'a/b', title: 'One', descriptionMd: 'See a/b#2 and a/b#2; preserve a/b#20.', statusName: 'Open', labelNames: ['area/x'], relations: [], comments: [], attachments: [], parentExternalId: 'a/b#99' },
+          { externalId: 'a/b#2', teamExternalId: 'a/b', title: 'Two', descriptionMd: 'Use `a/b#1` and a/b#1.', statusName: 'Mystery', labelNames: [], relations: [{ type: 'blocks', targetExternalId: 'a/b#1' }], comments: [{ bodyMd: 'See a/b#1.', authorName: 'ghost' }], attachments: [], parentExternalId: 'a/b#1' },
         ],
         warnings: [{ code: 'x', message: 'from importer' }],
       };
@@ -571,12 +635,30 @@ describe('bundle helper', () => {
       await c.h.services.importer.runCommit(run.id);
       const rep = ((await c.h.services.importer.get(c.owner, run.id))!.report) as Committed;
       expect(rep.counts).toEqual(dry.counts);
+      expect(rep.warnings.map((w) => w.code)).toContain('reference_unmapped');
       expect(await count(c.h, 'issues', 'parent_id is not null')).toBe(1);
       // GitHub issues carry no priority: they must land as "No priority" (4), never Urgent (0).
       expect(await count(c.h, 'issues', 'priority = 4')).toBe(2);
       expect(await count(c.h, 'issues', 'priority = 0')).toBe(0);
       const g = await q<{ is_group: boolean; parent: string | null; name: string }>(c.h, `select is_group, parent_label_id as parent, name from labels where lower(name) in ('area','area/x') order by name`);
       expect(g.find((x) => x.name === 'area/x')!.parent).not.toBeNull();
+      const imported = await q<{ external_id: string; description_md: string; identifier: string; issue_id: string }>(c.h,
+        `select item.external_id, i.description_md, t.key || '-' || i.number as identifier, i.id as issue_id
+         from import_items item join issues i on i.id = item.entity_id join teams t on t.id = i.team_id
+         where item.run_id = $1 and item.kind = 'issue'`, [run.id]);
+      const one = imported.find((i) => i.external_id === 'a/b#1')!;
+      const two = imported.find((i) => i.external_id === 'a/b#2')!;
+      expect(one.description_md).toBe(`See ${two.identifier} and ${two.identifier}; preserve a/b#20.`);
+      expect(two.description_md).toBe(`Use \`a/b#1\` and ${one.identifier}.`);
+      const rewrittenComment = await q<{ body_md: string }>(c.h,
+        `select body_md from comments where issue_id = $1 and source = 'import'`, [two.issue_id]);
+      expect(rewrittenComment[0]!.body_md).toBe(`See ${one.identifier}.`);
+      expect(await count(c.h, 'import_items', `run_id = '${run.id}' and kind = 'reference_issue'`)).toBe(2);
+      expect(await count(c.h, 'import_items', `run_id = '${run.id}' and kind = 'reference_comment'`)).toBe(1);
+      expect(await count(c.h, 'import_items', `run_id = '${run.id}' and kind = 'reference_rewrite_complete'`)).toBe(1);
+      await c.h.services.importer.runCommit(run.id);
+      const afterRetry = await q<{ description_md: string }>(c.h, `select description_md from issues where id = $1`, [one.issue_id]);
+      expect(afterRetry[0]!.description_md).toBe(one.description_md);
     } finally {
       await c.h.close();
     }

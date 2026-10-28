@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useSubscription } from '@apollo/client';
 import { Button, ConfirmDialog, InlineMessage, Pagination, ProgressBar, Table } from '@velocity/ui';
 import type { TableColumn } from '@velocity/ui';
@@ -132,6 +132,7 @@ export interface CommitStepProps {
 export function CommitStep({ run, onResume, resuming, onNew, refetch }: CommitStepProps) {
   const t = m.settingsIntegrations.import.commit;
   const { teamsById } = useWorkspace();
+  const navigate = useNavigate();
   const [confirmCancel, setConfirmCancel] = useState(false);
   const committing = run.status === 'committing';
   const report = useMemo(() => parseReport(run.report), [run.report]);
@@ -226,9 +227,12 @@ export function CommitStep({ run, onResume, resuming, onNew, refetch }: CommitSt
       ) : null}
 
       {run.status === 'completed' && result ? (
-        <SettingsSection title={t.resultTitle}>
-          <Table aria-label={t.resultTitle} columns={resultColumns} rows={resultRows} rowKey={(r) => r.key} stickyHeader={false} />
-        </SettingsSection>
+        <>
+          <SettingsSection title={t.resultTitle}>
+            <Table aria-label={t.resultTitle} columns={resultColumns} rows={resultRows} rowKey={(r) => r.key} stickyHeader={false} />
+          </SettingsSection>
+          <div className="flex justify-end"><Button onClick={() => navigate(`/settings/import/${run.id}/repair`)}>{m.settingsIntegrations.import.referenceRepair.entry}</Button></div>
+        </>
       ) : null}
       {run.status === 'completed' && teamLinks.length > 0 ? (
         <div className="flex flex-wrap items-center gap-3 text-sm">

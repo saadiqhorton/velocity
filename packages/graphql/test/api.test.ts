@@ -3,6 +3,7 @@ import { addMember, apiActor, createHarness, executeApi, setupOwner } from './he
 import type { ApiResult } from './helpers';
 import type { ServiceActor } from '../../services/src/index';
 import type { Harness } from '../../services/test/helpers/harness';
+import type { ImportBundle } from '@velocity/schema';
 
 const CREATE_ISSUE = `mutation CreateIssue($input: CreateIssueInput!) {
   createIssue(input: $input) { id identifier title priority }
@@ -136,6 +137,39 @@ describe('typed GraphQL errors', () => {
     const limited = await executeApi(h, null, login);
     expect(errorCode(limited)).toBe('RATE_LIMITED');
     expect(limited.errors[0]?.extensions.retryAfter).toEqual(expect.any(Number));
+  });
+});
+
+describe('historical import reference repair API', () => {
+  it('keeps repair reads and mutations owner-only', async () => {
+    const bundle: ImportBundle = {
+      source: 'github',
+      teams: [{ externalId: 'repair/team', key: 'REPAIR', name: 'Repair team' }],
+      statuses: [{ teamExternalId: 'repair/team', name: 'Open', category: 'todo' }], users: [], labels: [], projects: [], cycles: [],
+      issues: [{ externalId: 'repair/team#1', teamExternalId: 'repair/team', title: 'Repair API fixture', descriptionMd: 'No references.', statusName: 'Open', labelNames: [], relations: [], comments: [], attachments: [], parentExternalId: null }],
+      warnings: [],
+    };
+    const run = await h.services.importer.createRun(owner, { source: 'github', bundle });
+    await h.services.importer.dryRun(owner, run.id);
+    await h.services.importer.commit(owner, run.id);
+    await h.services.importer.runCommit(run.id);
+
+    const start = `mutation { startImportReferenceRepair(runId: "${run.id}") { id status previewVersion error } }`;
+    expect(errorCode(await executeApi(h, member, start))).toBe('FORBIDDEN');
+    expect(errorCode(await executeApi(h, null, start))).toBe('UNAUTHENTICATED');
+    const started = payload(await executeApi(h, owner, start), 'startImportReferenceRepair');
+    expect(started.status).toBe('scanning');
+    const repairId = started.id as string;
+
+    const query = `query { importReferenceRepair(id: "${repairId}") { id status error targets { id status skipReason } } }`;
+    expect(errorCode(await executeApi(h, member, query))).toBe('FORBIDDEN');
+    expect(errorCode(await executeApi(h, null, query))).toBe('UNAUTHENTICATED');
+    expect(payload(await executeApi(h, owner, query), 'importReferenceRepair')).toMatchObject({ id: repairId, status: 'scanning', error: null });
+
+    const apply = `mutation { applyImportReferenceRepair(id: "${repairId}", previewHash: "preview", confirmed: true) { id status error } }`;
+    expect(errorCode(await executeApi(h, member, apply))).toBe('FORBIDDEN');
+    expect(errorCode(await executeApi(h, null, apply))).toBe('UNAUTHENTICATED');
+    expect(errorCode(await executeApi(h, owner, apply))).toBe('VALIDATION');
   });
 });
 

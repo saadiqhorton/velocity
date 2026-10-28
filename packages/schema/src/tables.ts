@@ -9,7 +9,7 @@
  * Additions beyond the SPEC table list (recorded in docs/architecture.md):
  *   workspace (singleton settings row), invites, team_counters, project_teams,
  *   issue_activity (timeline), favorites (orderable), mcp_sessions, import_items
- *   (resumable import idempotency), exports.
+ *   (resumable import idempotency), import_reference_repairs/targets, exports.
  */
 import { sql } from 'drizzle-orm';
 import {
@@ -893,6 +893,70 @@ export const importItems = pgTable(
     entityId: uuid('entity_id').notNull(),
   },
   (t) => [primaryKey({ columns: [t.runId, t.kind, t.externalId] })],
+);
+
+/** Durable import warnings survive worker retries and run resumption. */
+export const importWarnings = pgTable(
+  'import_warnings',
+  {
+    id: id(),
+    runId: uuid('run_id').notNull().references(() => importRuns.id, { onDelete: 'cascade' }),
+    warningKey: text('warning_key').notNull(),
+    code: text('code').notNull(),
+    message: text('message').notNull(),
+    externalId: text('external_id'),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex('import_warnings_run_key_uq').on(t.runId, t.warningKey), index('import_warnings_run_idx').on(t.runId)],
+);
+
+export const importReferenceRepairs = pgTable(
+  'import_reference_repairs',
+  {
+    id: id(),
+    runId: uuid('run_id').notNull().references(() => importRuns.id, { onDelete: 'cascade' }),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    status: text('status').$type<'scanning' | 'preview' | 'applying' | 'completed' | 'failed' | 'superseded'>().notNull().default('scanning'),
+    previewVersion: integer('preview_version').notNull().default(1),
+    previewHash: text('preview_hash').notNull().default(''),
+    summary: jsonb('summary').$type<Record<string, number>>().notNull().default({}),
+    error: text('error'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    check('import_reference_repairs_status', sql`${t.status} in ('scanning','preview','applying','completed','failed','superseded')`),
+    index('import_reference_repairs_run_idx').on(t.runId, t.createdAt),
+    uniqueIndex('import_reference_repairs_active_uq').on(t.runId).where(sql`${t.status} in ('scanning','preview','applying')`),
+  ],
+);
+
+export const importReferenceRepairTargets = pgTable(
+  'import_reference_repair_targets',
+  {
+    id: id(),
+    repairId: uuid('repair_id').notNull().references(() => importReferenceRepairs.id, { onDelete: 'cascade' }),
+    targetKind: text('target_kind').$type<'issue_description' | 'comment_body'>().notNull(),
+    targetId: uuid('target_id').notNull(),
+    provenanceKey: text('provenance_key').notNull(),
+    sourceExternalId: text('source_external_id').notNull(),
+    mappingSnapshot: jsonb('mapping_snapshot').$type<{ sourceExternalId: string; destinationId: string; identifier: string }[]>().notNull().default([]),
+    expectedHash: text('expected_hash').notNull(),
+    beforeMd: text('before_md').notNull(),
+    afterMd: text('after_md').notNull(),
+    context: jsonb('context').$type<{ before: string; after: string }>().notNull(),
+    referenceCount: integer('reference_count').notNull().default(0),
+    status: text('status').$type<'pending' | 'applied' | 'skipped'>().notNull().default('pending'),
+    skipReason: text('skip_reason'),
+    appliedAt: ts('applied_at'),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    check('import_reference_repair_targets_kind', sql`${t.targetKind} in ('issue_description','comment_body')`),
+    check('import_reference_repair_targets_status', sql`${t.status} in ('pending','applied','skipped')`),
+    uniqueIndex('import_reference_repair_targets_uq').on(t.repairId, t.targetKind, t.targetId),
+    index('import_reference_repair_targets_pending_idx').on(t.repairId, t.status),
+  ],
 );
 
 export const exports = pgTable('exports', {
