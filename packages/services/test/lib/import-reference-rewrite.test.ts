@@ -29,6 +29,12 @@ describe('rewriteImportedReferences', () => {
     expect(result.skippedCodeReferences).toBeGreaterThanOrEqual(3);
   });
 
+  it('preserves network-path URL query references while rewriting prose', () => {
+    const source = '//example.test/?ref=ENG-12\nSee ENG-12';
+
+    expect(rewriteImportedReferences(source, mapping).text).toBe('//example.test/?ref=ENG-12\nSee OPS-4');
+  });
+
   it('does not infer from a suffix, prefix, or a missing map entry', () => {
     const result = rewriteImportedReferences('ENG-13 ENG-12x XENG-12', mapping);
     expect(result.text).toBe('ENG-13 ENG-12x XENG-12');

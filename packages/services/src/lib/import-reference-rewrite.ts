@@ -75,6 +75,11 @@ function markdownProtected(text: string, mapping: ReadonlyMap<string, unknown>):
     if (mapping.has(scheme) && text[colon + 1] !== '/') continue;
     mark(mask, start, start + m[0].length);
   }
+  for (const m of text.matchAll(/(^|[\s(])\/\/[^\s<>]+/gm)) {
+    const prefixLength = m[1]!.length;
+    const start = (m.index ?? 0) + prefixLength;
+    mark(mask, start, start + m[0].length - prefixLength);
+  }
   for (const m of text.matchAll(/\bwww\.[^\s<>]+/gi)) {
     mark(mask, m.index ?? 0, (m.index ?? 0) + m[0].length);
   }
