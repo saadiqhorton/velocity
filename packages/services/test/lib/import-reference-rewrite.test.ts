@@ -77,6 +77,28 @@ describe('rewriteImportedReferences', () => {
     expect(result.text).toBe(source.replace(/\nENG-12$/, '\nOPS-4'));
   });
 
+  it('preserves indented code nested in blockquotes while rewriting blockquote prose', () => {
+    const source = ['>     ENG-12', '> >     ENG-12', '> ENG-12', 'ENG-12'].join('\n');
+
+    expect(rewriteImportedReferences(source, mapping)).toMatchObject({
+      text: ['>     ENG-12', '> >     ENG-12', '> OPS-4', 'OPS-4'].join('\n'),
+      edits: [
+        { sourceKey: 'ENG-12', destinationId: 'issue-12', before: 'ENG-12', after: 'OPS-4' },
+        { sourceKey: 'ENG-12', destinationId: 'issue-12', before: 'ENG-12', after: 'OPS-4' },
+      ],
+    });
+  });
+
+  it('masks URI destinations with any valid scheme and keeps exact map semantics', () => {
+    const source = ['mailto:ENG-12@example.test', 'custom+v1:ENG-12/resource', 'ENG-12', 'ENG-13'].join('\n');
+
+    expect(rewriteImportedReferences(source, mapping)).toMatchObject({
+      text: ['mailto:ENG-12@example.test', 'custom+v1:ENG-12/resource', 'OPS-4', 'ENG-13'].join('\n'),
+      unmapped: ['ENG-13'],
+      edits: [{ sourceKey: 'ENG-12', destinationId: 'issue-12', before: 'ENG-12', after: 'OPS-4' }],
+    });
+  });
+
   it('does not rewrite identifiers embedded after path, issue, dot, or hyphen punctuation', () => {
     const source = 'path/ENG-12 #ENG-12 .ENG-12 -ENG-12 (ENG-12)';
     expect(rewriteImportedReferences(source, mapping).text).toBe('path/ENG-12 #ENG-12 .ENG-12 -ENG-12 (OPS-4)');

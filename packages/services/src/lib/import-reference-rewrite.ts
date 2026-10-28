@@ -44,7 +44,7 @@ function markdownProtected(text: string): boolean[] {
       mark(mask, offset, offset + value.length);
       continue;
     }
-    if (/^(?: {4,}|\t)/.test(value) || /^ {0,3}\[[^\]]+\]:/.test(value)) mark(mask, offset, offset + value.length);
+    if (/^(?: {4,}|\t)/.test(content) || /^ {0,3}\[[^\]]+\]:/.test(value)) mark(mask, offset, offset + value.length);
   }
 
   // Inline code spans use matching backtick-run lengths. Fenced/indented lines are already masked.
@@ -67,7 +67,7 @@ function markdownProtected(text: string): boolean[] {
     if (close >= text.length) i += run;
   }
 
-  for (const m of text.matchAll(/[A-Za-z][A-Za-z0-9+.-]*:\/\/[^\s<>]+/g)) {
+  for (const m of text.matchAll(/\b[A-Za-z][A-Za-z0-9+.-]*:[^\s<>]+/g)) {
     mark(mask, m.index ?? 0, (m.index ?? 0) + m[0].length);
   }
   for (const m of text.matchAll(/\bwww\.[^\s<>]+/gi)) {
