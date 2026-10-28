@@ -35,8 +35,9 @@ function markdownProtected(text: string): boolean[] {
     const opening = /^ {0,3}(`{3,}|~{3,})/.exec(content);
     if (fence) {
       mark(mask, offset, offset + value.length);
-      const closing = new RegExp(`^ {0,3}${fence.char === '`' ? '`' : '~'}{${fence.size},}\\s*$`).test(content.replace(/\r?\n$/, ''));
-      if (closing) fence = null;
+      const closing = /^ {0,3}(`+|~+)[ \t]*$/.exec(content.replace(/\r?\n$/, ''));
+      const closingRun = closing?.[1] ?? '';
+      if (closingRun[0] === fence.char && closingRun.length >= fence.size) fence = null;
       continue;
     }
     if (opening) {
