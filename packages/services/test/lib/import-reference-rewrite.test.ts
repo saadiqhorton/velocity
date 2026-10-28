@@ -108,7 +108,13 @@ describe('rewriteImportedReferences', () => {
     const source = 'ENG-12/child ENG-12#comment ENG-12.child ENG-12-child. See ENG-12.';
     const result = rewriteImportedReferences(source, mapping);
 
-    expect(result.text).toBe('ENG-12/child ENG-12#comment ENG-12.child ENG-12-child. See OPS-4.');
-    expect(result.edits.map(({ start, end }) => [start, end])).toEqual([[source.lastIndexOf('ENG-12'), source.lastIndexOf('ENG-12') + 'ENG-12'.length]]);
+    expect(result).toMatchObject({
+      text: 'ENG-12/child ENG-12#comment ENG-12.child ENG-12-child. See OPS-4.',
+      unmapped: [],
+      edits: [{ sourceKey: 'ENG-12', destinationId: 'issue-12', before: 'ENG-12', after: 'OPS-4' }],
+    });
+    expect(result.edits.map(({ start, end }) => [start, end])).toEqual([
+      [source.lastIndexOf('ENG-12'), source.lastIndexOf('ENG-12') + 'ENG-12'.length],
+    ]);
   });
 });

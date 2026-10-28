@@ -89,8 +89,10 @@ function markdownProtected(text: string): boolean[] {
   return mask;
 }
 
-function isIdentifierContinuation(ch: string | undefined): boolean {
-  return ch !== undefined && /[\p{L}\p{N}_./#-]/u.test(ch);
+function isIdentifierContinuation(ch: string | undefined, next: string | undefined): boolean {
+  if (ch === undefined) return false;
+  if (ch === '.') return next !== undefined && /[\p{L}\p{N}_]/u.test(next);
+  return /[\p{L}\p{N}_/#-]/u.test(ch);
 }
 
 function isWord(ch: string | undefined): boolean {
@@ -126,7 +128,7 @@ export function rewriteImportedReferences(text: string, mapping: ReadonlyMap<str
       if (!child) break;
       node = child;
       end++;
-      const candidate = node.keys.find(() => !isIdentifierContinuation(text[i - 1]) && !isWord(text[end]));
+      const candidate = node.keys.find(() => !isIdentifierContinuation(text[i - 1], text[i]) && !isIdentifierContinuation(text[end], text[end + 1]) && !isWord(text[end]));
       if (candidate) key = candidate;
     }
     if (!key) { i++; continue; }
@@ -161,7 +163,7 @@ export function rewriteImportedReferences(text: string, mapping: ReadonlyMap<str
     for (const m of text.matchAll(pattern)) {
       const start = m.index ?? 0;
       const end = start + m[0].length;
-      if (isIdentifierContinuation(text[start - 1]) || isWord(text[end]) || mapping.has(m[0])) continue;
+      if (isIdentifierContinuation(text[start - 1], text[start]) || isIdentifierContinuation(text[end], text[end + 1]) || isWord(text[end]) || mapping.has(m[0])) continue;
       if (mask.slice(start, end).some(Boolean)) { skippedCodeReferences++; continue; }
       unmapped.add(m[0]);
     }
