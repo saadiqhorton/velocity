@@ -45,7 +45,7 @@ function markdownProtected(text: string, mapping: ReadonlyMap<string, unknown>):
       mark(mask, offset, offset + value.length);
       continue;
     }
-    if (/^(?: {4,}|\t)/.test(content) || /^ {0,3}\[[^\]]+\]:/.test(value)) mark(mask, offset, offset + value.length);
+    if (/^(?: {4,}|\t)/.test(content) || /^ {0,3}\[[^\]]+\]:/.test(content)) mark(mask, offset, offset + value.length);
   }
 
   // Inline code spans use matching backtick-run lengths. Fenced/indented lines are already masked.

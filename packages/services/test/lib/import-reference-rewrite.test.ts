@@ -83,6 +83,19 @@ describe('rewriteImportedReferences', () => {
     expect(result.text).toBe(source.replace(/\nENG-12$/, '\nOPS-4'));
   });
 
+  it('preserves blockquoted reference labels and destinations while rewriting prose', () => {
+    const source = '> [ENG-12]: /ENG-12 "ENG-12"\n> ENG-12\nENG-12';
+    const proseReference = source.indexOf('> ENG-12') + 2;
+    const plainReference = source.lastIndexOf('ENG-12');
+    const result = rewriteImportedReferences(source, mapping);
+
+    expect(result.text).toBe('> [ENG-12]: /ENG-12 "ENG-12"\n> OPS-4\nOPS-4');
+    expect(result.edits.map(({ start, end }) => [start, end])).toEqual([
+      [proseReference, proseReference + 'ENG-12'.length],
+      [plainReference, plainReference + 'ENG-12'.length],
+    ]);
+  });
+
   it('preserves indented code nested in blockquotes while rewriting blockquote prose', () => {
     const source = ['>     ENG-12', '> >     ENG-12', '> ENG-12', 'ENG-12'].join('\n');
 
