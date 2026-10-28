@@ -226,6 +226,11 @@ export class ImportReferenceRepairService extends ServiceBase {
       const bundle = run.config as ImportBundle;
       const sourceKeyCounts = new Map<string, number>();
       for (const issue of bundle.issues) sourceKeyCounts.set(issue.externalId, (sourceKeyCounts.get(issue.externalId) ?? 0) + 1);
+      const sourceItems = targets.length
+        ? await tx.select({ externalId: importItems.externalId, entityId: importItems.entityId }).from(importItems)
+          .where(and(eq(importItems.runId, run.id), eq(importItems.kind, 'issue')))
+        : [];
+      const idBySource = new Map(sourceItems.map((row) => [row.externalId, row.entityId]));
       for (const target of targets) {
         const [provenance] = await tx.select({ entityId: importItems.entityId }).from(importItems).where(and(
           eq(importItems.runId, run.id),
@@ -240,7 +245,7 @@ export class ImportReferenceRepairService extends ServiceBase {
           await this.setTargetResult(tx, target.id, 'stale');
           continue;
         }
-        const mapping = await this.resolveCurrentMapping(tx, run.id, target.beforeMd, sourceKeyCounts);
+        const mapping = await this.resolveCurrentMapping(tx, target.beforeMd, sourceKeyCounts, idBySource);
         const freshText = rewriteImportedReferences(target.beforeMd, mapping).text;
         if (freshText !== target.afterMd) {
           await this.setTargetResult(tx, target.id, 'stale');
@@ -313,15 +318,12 @@ export class ImportReferenceRepairService extends ServiceBase {
 
   private async resolveCurrentMapping(
     tx: Tx,
-    runId: string,
     text: string,
     sourceKeyCounts: ReadonlyMap<string, number>,
+    idBySource: ReadonlyMap<string, string>,
   ): Promise<Map<string, { id: string; identifier: string } | null>> {
-    const sourceItems = await tx.select({ externalId: importItems.externalId, entityId: importItems.entityId }).from(importItems)
-      .where(and(eq(importItems.runId, runId), eq(importItems.kind, 'issue')));
-    const idBySource = new Map(sourceItems.map((row) => [row.externalId, row.entityId]));
     const referenced = findImportedReferenceKeys(text, idBySource.keys());
-    const mapping = new Map<string, { id: string; identifier: string } | null>(sourceItems.map((row) => [row.externalId, null]));
+    const mapping = new Map<string, { id: string; identifier: string } | null>([...idBySource.keys()].map((key) => [key, null]));
     const ids = [...new Set(referenced.flatMap((key) => idBySource.has(key) ? [idBySource.get(key)!] : []))];
     const issueRows = ids.length ? await tx.select({ id: issues.id, number: issues.number, teamId: issues.teamId }).from(issues)
       .where(inArray(issues.id, ids)).for('update') : [];

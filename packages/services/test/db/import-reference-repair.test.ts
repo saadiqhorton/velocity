@@ -3,6 +3,49 @@ import type { ImportBundle, ImportMapping } from '@velocity/schema';
 import type { Harness } from '../helpers/harness';
 import { addMember, createHarness, setupOwner } from '../helpers/harness';
 import type { ServiceActor } from '../../src/index';
+import type { PoolClient } from 'pg';
+
+async function captureImportItemReadCounts<T>(h: Harness, action: () => Promise<T>): Promise<{
+  value: T;
+  mappingScans: number;
+  provenanceLookups: number;
+}> {
+  let mappingScans = 0;
+  let provenanceLookups = 0;
+  const originals = new Map<PoolClient, PoolClient['query']>();
+  const onAcquire = (client: PoolClient) => {
+    if (originals.has(client)) return;
+    const original = client.query;
+    originals.set(client, original);
+    client.query = new Proxy(original, {
+      apply(target, thisArg, args: unknown[]) {
+        const queryArg = args[0];
+        const queryText = typeof queryArg === 'string'
+          ? queryArg
+          : queryArg !== null && typeof queryArg === 'object' && 'text' in queryArg && typeof queryArg.text === 'string'
+            ? queryArg.text
+            : '';
+        const whereAt = queryText.toLowerCase().indexOf(' where ');
+        const predicate = whereAt < 0 ? '' : queryText.slice(whereAt + 7);
+        if (/from\s+"import_items"/i.test(queryText)
+          && /"import_items"\."run_id"\s*=\s*\$\d+/i.test(predicate)
+          && /"import_items"\."kind"\s*=\s*\$\d+/i.test(predicate)) {
+          if (/"import_items"\."external_id"\s*=\s*\$\d+/i.test(predicate)) provenanceLookups++;
+          else mappingScans++;
+        }
+        return Reflect.apply(target, thisArg, args);
+      },
+    }) as PoolClient['query'];
+  };
+  h.pool.on('acquire', onAcquire);
+  try {
+    const value = await action();
+    return { value, mappingScans, provenanceLookups };
+  } finally {
+    h.pool.off('acquire', onAcquire);
+    for (const [client, query] of originals) client.query = query;
+  }
+}
 
 describe('historical import reference repair', () => {
   let h: Harness;
@@ -266,11 +309,13 @@ describe('historical import reference repair', () => {
     const preview = await h.services.importReferenceRepairs.get(owner, repair.id, { first: 1 });
     expect(preview?.summary).toMatchObject({ targets: 101, references: 101 });
     await h.services.importReferenceRepairs.apply(owner, repair.id, preview!.previewHash, true);
-    await h.services.importReferenceRepairs.applyJob(repair.id, preview!.previewHash);
+    const firstBatch = await captureImportItemReadCounts(h, () => h.services.importReferenceRepairs.applyJob(repair.id, preview!.previewHash));
+    expect(firstBatch).toMatchObject({ mappingScans: 1, provenanceLookups: 100 });
     expect((await h.services.importReferenceRepairs.get(owner, repair.id))?.status).toBe('applying');
     expect(Number((await h.pool.query(`select count(*)::int as n from import_reference_repair_targets where repair_id = $1 and status = 'pending'`, [repair.id])).rows[0].n)).toBe(1);
     expect(h.jobs.sent.filter((job) => job.queue === 'import_reference_repairs' && (job.data as { type?: string }).type === 'apply').length).toBeGreaterThanOrEqual(2);
-    await h.services.importReferenceRepairs.applyJob(repair.id, preview!.previewHash);
+    const secondBatch = await captureImportItemReadCounts(h, () => h.services.importReferenceRepairs.applyJob(repair.id, preview!.previewHash));
+    expect(secondBatch).toMatchObject({ mappingScans: 1, provenanceLookups: 1 });
     const result = await h.services.importReferenceRepairs.get(owner, repair.id);
     expect(result?.status).toBe('completed');
     expect(result?.summary).toMatchObject({ applied: 101, skipped: 0 });

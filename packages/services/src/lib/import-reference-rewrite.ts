@@ -24,7 +24,7 @@ function mark(mask: boolean[], start: number, end: number): void {
   for (let i = start; i < end; i++) mask[i] = true;
 }
 
-function markdownProtected(text: string): boolean[] {
+function markdownProtected(text: string, mapping: ReadonlyMap<string, unknown>): boolean[] {
   const mask = Array.from({ length: text.length }, () => false);
   const lines = [...text.matchAll(/.*(?:\n|$)/g)].filter((m) => m[0].length > 0);
   let fence: { char: string; size: number } | null = null;
@@ -68,8 +68,12 @@ function markdownProtected(text: string): boolean[] {
     if (close >= text.length) i += run;
   }
 
-  for (const m of text.matchAll(/\b[A-Za-z][A-Za-z0-9+.-]*:[^\s<>]+/g)) {
-    mark(mask, m.index ?? 0, (m.index ?? 0) + m[0].length);
+  for (const m of text.matchAll(/\b([A-Za-z][A-Za-z0-9+.-]*):[^\s<>]+/g)) {
+    const start = m.index ?? 0;
+    const scheme = m[1]!;
+    const colon = start + scheme.length;
+    if (mapping.has(scheme) && text[colon + 1] !== '/') continue;
+    mark(mask, start, start + m[0].length);
   }
   for (const m of text.matchAll(/\bwww\.[^\s<>]+/gi)) {
     mark(mask, m.index ?? 0, (m.index ?? 0) + m[0].length);
@@ -91,7 +95,7 @@ function markdownProtected(text: string): boolean[] {
 
 function isIdentifierContinuation(ch: string | undefined, next: string | undefined): boolean {
   if (ch === undefined) return false;
-  if (ch === '.') return next !== undefined && /[\p{L}\p{N}_]/u.test(next);
+  if (ch === '.') return next !== undefined && /[\p{L}\p{N}_/#-]/u.test(next);
   return /[\p{L}\p{N}_/#-]/u.test(ch);
 }
 
@@ -101,7 +105,7 @@ function isWord(ch: string | undefined): boolean {
 
 /** Replaces only exact run-scoped keys outside Markdown code and URL/link destinations. */
 export function rewriteImportedReferences(text: string, mapping: ReadonlyMap<string, ImportedReferenceTarget | null>): ImportedReferenceRewrite {
-  const mask = markdownProtected(text);
+  const mask = markdownProtected(text, mapping);
   const keys = [...mapping.keys()].filter(Boolean).sort((a, b) => b.length - a.length || a.localeCompare(b));
   const root: { next: Map<string, typeof root>; keys: string[] } = { next: new Map(), keys: [] };
   for (const key of keys) {

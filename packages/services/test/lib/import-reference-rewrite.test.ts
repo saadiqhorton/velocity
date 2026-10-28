@@ -89,13 +89,30 @@ describe('rewriteImportedReferences', () => {
     });
   });
 
-  it('masks URI destinations with any valid scheme and keeps exact map semantics', () => {
-    const source = ['mailto:ENG-12@example.test', 'custom+v1:ENG-12/resource', 'ENG-12', 'ENG-13'].join('\n');
+  it('masks URI destinations while rewriting an exact mapped reference before a colon suffix', () => {
+    const source = [
+      'mailto:ENG-12@example.test',
+      'custom+v1:ENG-12/resource',
+      'ENG-12:review',
+      'ENG-12://example.test/ENG-12',
+      'ENG-12',
+      'ENG-13',
+    ].join('\n');
 
     expect(rewriteImportedReferences(source, mapping)).toMatchObject({
-      text: ['mailto:ENG-12@example.test', 'custom+v1:ENG-12/resource', 'OPS-4', 'ENG-13'].join('\n'),
+      text: [
+        'mailto:ENG-12@example.test',
+        'custom+v1:ENG-12/resource',
+        'OPS-4:review',
+        'ENG-12://example.test/ENG-12',
+        'OPS-4',
+        'ENG-13',
+      ].join('\n'),
       unmapped: ['ENG-13'],
-      edits: [{ sourceKey: 'ENG-12', destinationId: 'issue-12', before: 'ENG-12', after: 'OPS-4' }],
+      edits: [
+        { sourceKey: 'ENG-12', destinationId: 'issue-12', before: 'ENG-12', after: 'OPS-4' },
+        { sourceKey: 'ENG-12', destinationId: 'issue-12', before: 'ENG-12', after: 'OPS-4' },
+      ],
     });
   });
 
@@ -105,11 +122,11 @@ describe('rewriteImportedReferences', () => {
   });
 
   it('rejects identifiers embedded before path, issue, dot, or hyphen suffixes while allowing sentence punctuation', () => {
-    const source = 'ENG-12/child ENG-12#comment ENG-12.child ENG-12-child. See ENG-12.';
+    const source = 'ENG-12/child ENG-12#comment ENG-12.child ENG-12-child. ENG-12./child ENG-12.#123 ENG-12.-subtask. See ENG-12.';
     const result = rewriteImportedReferences(source, mapping);
 
     expect(result).toMatchObject({
-      text: 'ENG-12/child ENG-12#comment ENG-12.child ENG-12-child. See OPS-4.',
+      text: 'ENG-12/child ENG-12#comment ENG-12.child ENG-12-child. ENG-12./child ENG-12.#123 ENG-12.-subtask. See OPS-4.',
       unmapped: [],
       edits: [{ sourceKey: 'ENG-12', destinationId: 'issue-12', before: 'ENG-12', after: 'OPS-4' }],
     });
