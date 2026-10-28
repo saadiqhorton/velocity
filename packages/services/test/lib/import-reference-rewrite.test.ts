@@ -103,4 +103,12 @@ describe('rewriteImportedReferences', () => {
     const source = 'path/ENG-12 #ENG-12 .ENG-12 -ENG-12 (ENG-12)';
     expect(rewriteImportedReferences(source, mapping).text).toBe('path/ENG-12 #ENG-12 .ENG-12 -ENG-12 (OPS-4)');
   });
+
+  it('rejects identifiers embedded before path, issue, dot, or hyphen suffixes while allowing sentence punctuation', () => {
+    const source = 'ENG-12/child ENG-12#comment ENG-12.child ENG-12-child. See ENG-12.';
+    const result = rewriteImportedReferences(source, mapping);
+
+    expect(result.text).toBe('ENG-12/child ENG-12#comment ENG-12.child ENG-12-child. See OPS-4.');
+    expect(result.edits.map(({ start, end }) => [start, end])).toEqual([[source.lastIndexOf('ENG-12'), source.lastIndexOf('ENG-12') + 'ENG-12'.length]]);
+  });
 });
