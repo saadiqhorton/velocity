@@ -872,6 +872,10 @@ export const importRuns = pgTable('import_runs', {
   config: jsonb('config').notNull(),
   suggestedMapping: jsonb('suggested_mapping'),
   mapping: jsonb('mapping'),
+  /** Unique commit lifecycle generation; stale retries/finalizers cannot mutate a resumed run. */
+  commitId: uuid('commit_id'),
+  /** Hash of immutable import input for the current commit lifecycle. */
+  commitHash: text('commit_hash'),
   report: jsonb('report'),
   progress: real('progress').notNull().default(0),
   committedCount: integer('committed_count').notNull().default(0),

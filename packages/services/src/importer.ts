@@ -1,5 +1,6 @@
-import { and, asc, desc, eq, getTableColumns, inArray, isNull, max, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, getTableColumns, inArray, isNull, max, or, sql } from 'drizzle-orm';
 import { createHash } from 'node:crypto';
+import { v7 as uuidv7 } from 'uuid';
 import {
   comments,
   cycles,
@@ -46,7 +47,8 @@ import { ServiceBase } from './base';
 import type { AuditService } from './audit';
 import { actorUserId, systemActor } from './context';
 import type { ServiceActor } from './context';
-import type { DbOrTx } from './db';
+import type { DbOrTx, Tx } from './db';
+import type { ImportCommitJobData } from './jobs';
 import { ServiceError, notFound, validation } from './errors';
 import type { IssueService } from './issues';
 import type { LabelService } from './labels';
@@ -56,6 +58,7 @@ import type { CommentService } from './comments';
 import { sanitizeMarkdown } from './lib/markdown';
 import { findImportedReferenceKeys, rewriteImportedReferences } from './lib/import-reference-rewrite';
 import { assertCan } from './lib/permissions';
+import { lockReferenceScope } from './lib/reference-lock-order';
 
 export type ImportRunRow = typeof importRuns.$inferSelect;
 
@@ -339,6 +342,10 @@ export class ImporterService extends ServiceBase {
   failAfterChunks: number | null = null;
   /** Test hook for retrying after durable reference writes and their markers commit. */
   failAfterReferenceRewrite = false;
+  /** Test hook for deterministically pausing a chunk before it locks its active lifecycle row. */
+  beforeChunkLock: ((phase: 'issues' | 'comments' | 'references' | 'parents' | 'relations') => Promise<void>) | null = null;
+  /** Test hook for deterministically pausing after reference issue/team locks and before comment locks. */
+  beforeReferenceComments: ((tx: Tx, commentIds: readonly string[]) => Promise<void>) | null = null;
   /** Rows per transaction (SPEC §6.7: 500). Public so tests can shrink it. */
   chunkSize = 500;
 
@@ -621,34 +628,84 @@ export class ImporterService extends ServiceBase {
         throw validation(run.status === 'mapping' ? 'Run the dry-run report before committing.' : `This import is ${run.status}; it can’t be committed.`);
       }
       if (!run.report) throw validation('Run the dry-run report before committing.');
+      const commitId = uuidv7();
+      const commitHash = createHash('sha256').update(JSON.stringify([run.config, run.mapping, run.report])).digest('hex');
       const [row] = await tx
         .update(importRuns)
-        .set({ status: 'committing', error: null, ...(run.status === 'ready' ? { progress: 0, committedCount: 0 } : {}), updatedAt: this.now() })
+        .set({ status: 'committing', commitId, commitHash, error: null, ...(run.status === 'ready' ? { progress: 0, committedCount: 0 } : {}), updatedAt: this.now() })
         .where(and(eq(importRuns.id, id), inArray(importRuns.status, ['ready', 'failed'])))
         .returning(SLIM);
       if (!row) throw validation('This import is already running.');
-      const jobId = await this.jobs.sendInTx(tx, 'importers', { type: 'commit', runId: id });
+      const jobId = await this.jobs.sendInTx(tx, 'importers', { type: 'commit', runId: id, commitId, commitHash });
       if (!jobId) throw new Error('The import job was not accepted by the queue.');
       return row;
     });
   }
 
+  /**
+   * Upgrade committing rows created before lifecycle tokens existed, before workers are registered.
+   * The row lock, token/hash update, and replacement job share one transaction; any legacy queued job
+   * delivered afterward lacks the matching generation and is therefore a no-op.
+   */
+  async recoverCommittingRuns(): Promise<number> {
+    return this.db.transaction(async (tx) => {
+      const stale = await tx.select().from(importRuns).where(and(
+        eq(importRuns.status, 'committing'),
+        or(isNull(importRuns.commitId), isNull(importRuns.commitHash)),
+      )).orderBy(asc(importRuns.id)).for('update');
+      let recovered = 0;
+      for (const run of stale) {
+        const commitId = uuidv7();
+        const commitHash = createHash('sha256').update(JSON.stringify([run.config, run.mapping, run.report])).digest('hex');
+        const [updated] = await tx.update(importRuns)
+          .set({ commitId, commitHash, updatedAt: this.now() })
+          .where(and(
+            eq(importRuns.id, run.id),
+            eq(importRuns.status, 'committing'),
+            run.commitId ? eq(importRuns.commitId, run.commitId) : isNull(importRuns.commitId),
+            run.commitHash ? eq(importRuns.commitHash, run.commitHash) : isNull(importRuns.commitHash),
+          ))
+          .returning({ id: importRuns.id });
+        if (!updated) continue;
+        const jobId = await this.jobs.sendInTx(tx, 'importers', { type: 'commit', runId: run.id, commitId, commitHash });
+        if (!jobId) throw new Error('The recovered import job was not accepted by the queue.');
+        recovered++;
+      }
+      return recovered;
+    });
+  }
+
   /** Job entry point. Resumable and idempotent: every created entity is recorded in import_items. */
-  async runCommit(runId: string): Promise<void> {
+  async runCommit(job: string | ImportCommitJobData): Promise<void> {
+    const payload = typeof job === 'string' ? null : job;
+    const runId = typeof job === 'string' ? job : job.runId;
+    if (payload && (!payload.commitId || !payload.commitHash)) return;
     const [run] = await this.db.select().from(importRuns).where(eq(importRuns.id, runId));
-    if (!run || run.status !== 'committing') return;
+    if (!run || run.status !== 'committing' || !run.commitId || !run.commitHash) return;
+    const currentJob = { type: 'commit' as const, runId, commitId: run.commitId, commitHash: run.commitHash };
+    if (payload && (payload.commitId !== currentJob.commitId || payload.commitHash !== currentJob.commitHash)) return;
     try {
       const done = await this.execute(run);
       if (!done) return; // canceled
     } catch (err) {
       this.logger.error({ err, runId }, 'import commit failed');
-      const message = (err instanceof Error ? err.message : String(err)).slice(0, 2000);
-      await this.db
-        .update(importRuns)
-        .set({ status: 'failed', error: message, updatedAt: this.now() })
-        .where(and(eq(importRuns.id, runId), eq(importRuns.status, 'committing')));
       throw err;
     }
+  }
+
+  /** Idempotent terminal handler for pg-boss exhaustion/expiry; stale generations are ignored. */
+  async failCommit(job: ImportCommitJobData, message: string): Promise<boolean> {
+    if (!job.commitId || !job.commitHash) return false;
+    const [failed] = await this.db.update(importRuns)
+      .set({ status: 'failed', error: message.slice(0, 2000), updatedAt: this.now() })
+      .where(and(
+        eq(importRuns.id, job.runId),
+        eq(importRuns.status, 'committing'),
+        eq(importRuns.commitId, job.commitId),
+        eq(importRuns.commitHash, job.commitHash),
+      ))
+      .returning({ id: importRuns.id });
+    return Boolean(failed);
   }
 
   private async execute(run: ImportRunRow): Promise<boolean> {
@@ -677,16 +734,16 @@ export class ImporterService extends ServiceBase {
       .from(importWarnings).where(eq(importWarnings.runId, run.id)))
       .map((warning) => ({ code: warning.code, message: warning.message, ...(warning.externalId ? { externalId: warning.externalId } : {}) }));
     await this.loadUsers(ctx);
-    await this.phaseTeams(ctx);
-    await this.phaseStatuses(ctx);
-    await this.phaseLabels(ctx);
-    await this.phaseProjects(ctx);
-    await this.phaseCycles(ctx);
-    await this.reportProgress(run.id, PHASE.setup, null);
-    if (!(await this.stillCommitting(run.id))) return false;
+    if (!(await this.phaseTeams(ctx))) return false;
+    if (!(await this.phaseStatuses(ctx))) return false;
+    if (!(await this.phaseLabels(ctx))) return false;
+    if (!(await this.phaseProjects(ctx))) return false;
+    if (!(await this.phaseCycles(ctx))) return false;
+    await this.reportProgress(run, PHASE.setup, null);
+    if (!(await this.stillCommitting(run))) return false;
 
     if (!(await this.phaseIssues(ctx))) return false;
-    await this.closeCycles(ctx);
+    if (!(await this.closeCycles(ctx))) return false;
     if (!(await this.phaseComments(ctx))) return false;
     if (!(await this.phaseReferenceRewrite(ctx))) return false;
     if (this.failAfterReferenceRewrite) {
@@ -721,7 +778,7 @@ export class ImporterService extends ServiceBase {
       const updated = await tx
         .update(importRuns)
         .set({ status: 'completed', progress: 1, committedCount: result.counts.issues, report: committed, error: null, updatedAt: this.now() })
-        .where(and(eq(importRuns.id, run.id), eq(importRuns.status, 'committing')))
+        .where(and(eq(importRuns.id, run.id), eq(importRuns.status, 'committing'), eq(importRuns.commitId, run.commitId!), eq(importRuns.commitHash, run.commitHash!)))
         .returning({ id: importRuns.id });
       if (!updated.length) return false;
       await publish(tx, 'import.progress', { runId: run.id, status: 'completed', progress: 1 });
@@ -763,12 +820,25 @@ export class ImporterService extends ServiceBase {
 
   // ───────────── Phases ─────────────
 
-  private async loadItems(runId: string, kind: string): Promise<Map<string, string>> {
-    const rows = await this.db
+  private async loadItems(runId: string, kind: string, executor: DbOrTx = this.db, externalIds?: readonly string[]): Promise<Map<string, string>> {
+    if (externalIds && externalIds.length === 0) return new Map();
+    const rows = await executor
       .select({ externalId: importItems.externalId, entityId: importItems.entityId })
       .from(importItems)
-      .where(and(eq(importItems.runId, runId), eq(importItems.kind, kind)));
+      .where(and(eq(importItems.runId, runId), eq(importItems.kind, kind), externalIds ? inArray(importItems.externalId, [...externalIds]) : undefined));
     return new Map(rows.map((r) => [r.externalId, r.entityId]));
+  }
+
+  /** Lock first; a terminalizer or newer generation either wins before this check or waits for the chunk to commit. */
+  private async lockCommitLifecycle(tx: Tx, run: ImportRunRow): Promise<boolean> {
+    if (!run.commitId || !run.commitHash) return false;
+    const [current] = await tx.select({ id: importRuns.id }).from(importRuns).where(and(
+      eq(importRuns.id, run.id),
+      eq(importRuns.status, 'committing'),
+      eq(importRuns.commitId, run.commitId),
+      eq(importRuns.commitHash, run.commitHash),
+    )).for('update');
+    return Boolean(current);
   }
 
   private async putItems(ex: DbOrTx, runId: string, kind: string, entries: [string, string][]): Promise<void> {
@@ -790,18 +860,25 @@ export class ImporterService extends ServiceBase {
     }))).onConflictDoNothing();
   }
 
-  private async stillCommitting(runId: string): Promise<boolean> {
-    const [r] = await this.db.select({ status: importRuns.status }).from(importRuns).where(eq(importRuns.id, runId));
-    return r?.status === 'committing';
+  private async stillCommitting(run: ImportRunRow): Promise<boolean> {
+    if (!run.commitId || !run.commitHash) return false;
+    const [r] = await this.db.select({ id: importRuns.id }).from(importRuns).where(and(
+      eq(importRuns.id, run.id), eq(importRuns.status, 'committing'),
+      eq(importRuns.commitId, run.commitId), eq(importRuns.commitHash, run.commitHash),
+    ));
+    return Boolean(r);
   }
 
-  private async reportProgress(runId: string, progress: number, committed: number | null): Promise<void> {
+  private async reportProgress(run: ImportRunRow, progress: number, committed: number | null): Promise<void> {
+    if (!run.commitId || !run.commitHash) return;
+    const { commitId, commitHash } = run;
     await this.db.transaction(async (tx) => {
+      if (!(await this.lockCommitLifecycle(tx, run))) return;
       await tx
         .update(importRuns)
         .set({ progress, ...(committed !== null ? { committedCount: committed } : {}), updatedAt: this.now() })
-        .where(and(eq(importRuns.id, runId), eq(importRuns.status, 'committing')));
-      await publish(tx, 'import.progress', { runId, status: 'committing', progress });
+        .where(and(eq(importRuns.id, run.id), eq(importRuns.status, 'committing'), eq(importRuns.commitId, commitId), eq(importRuns.commitHash, commitHash)));
+      await publish(tx, 'import.progress', { runId: run.id, status: 'committing', progress });
     });
   }
 
@@ -816,8 +893,8 @@ export class ImporterService extends ServiceBase {
     }
   }
 
-  private async phaseTeams(ctx: CommitCtx): Promise<void> {
-    const items = await this.loadItems(ctx.run.id, 'team');
+  private async phaseTeams(ctx: CommitCtx): Promise<boolean> {
+    if (!(await this.stillCommitting(ctx.run))) return false;
     for (const t of ctx.bundle.teams) {
       const m = ctx.mapping.teams[t.externalId];
       if (!m) continue;
@@ -826,33 +903,36 @@ export class ImporterService extends ServiceBase {
         ctx.teamIds.set(t.externalId, m.teamId);
         continue;
       }
-      const known = items.get(t.externalId);
-      if (known) {
-        ctx.teamIds.set(t.externalId, known);
-        continue;
-      }
-      // Crash between creating the team and recording it? Adopt a team we created after this run began.
-      const [orphan] = await this.db
-        .select({ id: teams.id, createdAt: teams.createdAt })
-        .from(teams)
-        .where(and(eq(teams.key, m.key), isNull(teams.deletedAt)));
-      let teamId: string;
-      if (orphan && orphan.createdAt >= ctx.run.createdAt && !(await this.teamHasIssues(orphan.id))) {
-        teamId = orphan.id;
-      } else {
-        teamId = (await this.teamService.create(ctx.actor, { key: m.key, name: m.name })).id;
-      }
-      await this.putItems(this.db, ctx.run.id, 'team', [[t.externalId, teamId]]);
+      const teamId = await this.tx(async (tx) => {
+        if (!(await this.lockCommitLifecycle(tx, ctx.run))) return false;
+        const known = (await this.loadItems(ctx.run.id, 'team', tx, [t.externalId])).get(t.externalId);
+        if (known) return known;
+        // Crash recovery can adopt an orphan created after this run started.
+        const [orphan] = await tx
+          .select({ id: teams.id, createdAt: teams.createdAt })
+          .from(teams)
+          .where(and(eq(teams.key, m.key), isNull(teams.deletedAt)));
+        let resolvedId: string;
+        if (orphan && orphan.createdAt >= ctx.run.createdAt && !(await this.teamHasIssues(orphan.id, tx))) {
+          resolvedId = orphan.id;
+        } else {
+          resolvedId = (await this.teamService.create(ctx.actor, { key: m.key, name: m.name }, tx)).id;
+        }
+        await this.putItems(tx, ctx.run.id, 'team', [[t.externalId, resolvedId]]);
+        return resolvedId;
+      });
+      if (!teamId) return false;
       ctx.teamIds.set(t.externalId, teamId);
     }
+    return this.stillCommitting(ctx.run);
   }
 
-  private async teamHasIssues(teamId: string): Promise<boolean> {
-    const [r] = await this.db.select({ n: sql<number>`count(*)::int` }).from(issues).where(eq(issues.teamId, teamId));
+  private async teamHasIssues(teamId: string, executor: DbOrTx = this.db): Promise<boolean> {
+    const [r] = await executor.select({ n: sql<number>`count(*)::int` }).from(issues).where(eq(issues.teamId, teamId));
     return (r?.n ?? 0) > 0;
   }
 
-  private async phaseStatuses(ctx: CommitCtx): Promise<void> {
+  private async phaseStatuses(ctx: CommitCtx): Promise<boolean> {
     const items = await this.loadItems(ctx.run.id, 'status');
     for (const s of ctx.bundle.statuses) {
       const key = statusKey(s.teamExternalId, s.name);
@@ -875,18 +955,22 @@ export class ImporterService extends ServiceBase {
         continue;
       }
       const created = await this.tx(async (tx) => {
+        if (!(await this.lockCommitLifecycle(tx, ctx.run))) return null;
         const row = await this.teamService.createStatus(ctx.actor, teamId, { name, category: m.category, color: STATUS_COLORS[m.category] }, tx);
         await this.putItems(tx, ctx.run.id, 'status', [[key, row.id]]);
         return row;
       });
+      if (!created) return false;
       ctx.statusIds.set(key, created.id);
     }
+    return this.stillCommitting(ctx.run);
   }
 
-  private async phaseLabels(ctx: CommitCtx): Promise<void> {
+  private async phaseLabels(ctx: CommitCtx): Promise<boolean> {
     const items = await this.loadItems(ctx.run.id, 'label');
     const existing = new Map((await this.db.select().from(labels)).map((l) => [lc(l.name), l]));
-    await this.tx(async (tx) => {
+    const current = await this.tx(async (tx) => {
+      if (!(await this.lockCommitLifecycle(tx, ctx.run))) return false;
       const fresh: [string, string][] = [];
       for (const l of ctx.plan.labels) {
         const known = items.get(l.key);
@@ -912,17 +996,21 @@ export class ImporterService extends ServiceBase {
         fresh.push([l.key, row.id]);
       }
       await this.putItems(tx, ctx.run.id, 'label', fresh);
+      return true;
     });
+    if (!current) return false;
     // Existing labels that matched by name but live under a group we just created are left as they are.
+    return true;
   }
 
-  private async phaseProjects(ctx: CommitCtx): Promise<void> {
-    if (!ctx.plan.projects.length) return;
+  private async phaseProjects(ctx: CommitCtx): Promise<boolean> {
+    if (!ctx.plan.projects.length) return true;
     const projectItems = await this.loadItems(ctx.run.id, 'project');
     const milestoneItems = await this.loadItems(ctx.run.id, 'milestone');
     for (const p of ctx.plan.projects) {
       const teamIdsForProject = [...new Set(ctx.plan.issues.filter((i) => i.projectExternalId === p.externalId).map((i) => ctx.teamIds.get(i.teamExternalId)).filter((x): x is string => Boolean(x)))];
-      await this.tx(async (tx) => {
+      const current = await this.tx(async (tx) => {
+        if (!(await this.lockCommitLifecycle(tx, ctx.run))) return false;
         let projectId = projectItems.get(p.externalId);
         if (!projectId) {
           const [byName] = await tx.select({ id: projects.id }).from(projects).where(and(isNull(projects.trashedAt), sql`lower(${projects.name}) = ${lc(p.name)}`));
@@ -970,14 +1058,18 @@ export class ImporterService extends ServiceBase {
           ctx.milestoneIds.set(ms.externalId, id);
           ctx.milestoneProject.set(ms.externalId, projectId);
         }
+        return true;
       });
+      if (!current) return false;
     }
+    return true;
   }
 
-  private async phaseCycles(ctx: CommitCtx): Promise<void> {
-    if (!ctx.plan.cycles.length) return;
+  private async phaseCycles(ctx: CommitCtx): Promise<boolean> {
+    if (!ctx.plan.cycles.length) return true;
     const items = await this.loadItems(ctx.run.id, 'cycle');
-    await this.tx(async (tx) => {
+    const current = await this.tx(async (tx) => {
+      if (!(await this.lockCommitLifecycle(tx, ctx.run))) return false;
       const fresh: [string, string][] = [];
       for (const c of ctx.plan.cycles) {
         const teamId = ctx.teamIds.get(c.teamExternalId);
@@ -1001,44 +1093,52 @@ export class ImporterService extends ServiceBase {
         fresh.push([c.externalId, row.id]);
       }
       await this.putItems(tx, ctx.run.id, 'cycle', fresh);
+      return true;
     });
+    return current;
   }
 
   /** Cycles we created that ended in the past are closed (closedAt = endsAt) with a stats snapshot, after issues joined. */
-  private async closeCycles(ctx: CommitCtx): Promise<void> {
+  private async closeCycles(ctx: CommitCtx): Promise<boolean> {
     const created = await this.loadItems(ctx.run.id, 'cycle');
     const now = this.now();
     for (const c of ctx.plan.cycles) {
       const id = created.get(c.externalId);
       const endsAt = parseDate(c.endsAt);
       if (!id || !endsAt || endsAt > now) continue;
-      const [agg] = await this.db
-        .select({
-          scope: sql<number>`count(*)::int`,
-          points: sql<number>`coalesce(sum(${issues.estimate}), 0)::int`,
-          done: sql<number>`count(*) filter (where ${issues.completedAt} is not null)::int`,
-          donePoints: sql<number>`coalesce(sum(${issues.estimate}) filter (where ${issues.completedAt} is not null), 0)::int`,
-          canceled: sql<number>`count(*) filter (where ${issues.canceledAt} is not null)::int`,
-        })
-        .from(issues)
-        .where(eq(issues.cycleId, id));
-      await this.db
-        .update(cycles)
-        .set({
-          closedAt: endsAt,
-          stats: {
-            scopeCount: agg?.scope ?? 0,
-            scopePoints: agg?.points ?? 0,
-            completedCount: agg?.done ?? 0,
-            completedPoints: agg?.donePoints ?? 0,
-            canceledCount: agg?.canceled ?? 0,
-            addedAfterStartCount: 0,
-            removedCount: 0,
-            carriedOverCount: 0,
-          },
-        })
-        .where(and(eq(cycles.id, id), isNull(cycles.closedAt)));
+      const current = await this.db.transaction(async (tx) => {
+        if (!(await this.lockCommitLifecycle(tx, ctx.run))) return false;
+        const [agg] = await tx
+          .select({
+            scope: sql<number>`count(*)::int`,
+            points: sql<number>`coalesce(sum(${issues.estimate}), 0)::int`,
+            done: sql<number>`count(*) filter (where ${issues.completedAt} is not null)::int`,
+            donePoints: sql<number>`coalesce(sum(${issues.estimate}) filter (where ${issues.completedAt} is not null), 0)::int`,
+            canceled: sql<number>`count(*) filter (where ${issues.canceledAt} is not null)::int`,
+          })
+          .from(issues)
+          .where(eq(issues.cycleId, id));
+        await tx
+          .update(cycles)
+          .set({
+            closedAt: endsAt,
+            stats: {
+              scopeCount: agg?.scope ?? 0,
+              scopePoints: agg?.points ?? 0,
+              completedCount: agg?.done ?? 0,
+              completedPoints: agg?.donePoints ?? 0,
+              canceledCount: agg?.canceled ?? 0,
+              addedAfterStartCount: 0,
+              removedCount: 0,
+              carriedOverCount: 0,
+            },
+          })
+          .where(and(eq(cycles.id, id), isNull(cycles.closedAt)));
+        return true;
+      });
+      if (!current) return false;
     }
+    return true;
   }
 
   private async phaseIssues(ctx: CommitCtx): Promise<boolean> {
@@ -1049,12 +1149,18 @@ export class ImporterService extends ServiceBase {
     let processed = total - remaining.length;
     let chunks = 0;
     for (let off = 0; off < remaining.length; off += this.chunkSize) {
-      if (!(await this.stillCommitting(ctx.run.id))) return false;
+      if (!(await this.stillCommitting(ctx.run))) return false;
       const chunk = remaining.slice(off, off + this.chunkSize);
       const created: [string, string][] = [];
+      const alreadyCreated: [string, string][] = [];
       const warns: ImportWarning[] = [];
-      await this.tx(async (tx) => {
-        for (const issue of chunk) {
+      const current = await this.tx(async (tx) => {
+        await this.beforeChunkLock?.('issues');
+        if (!(await this.lockCommitLifecycle(tx, ctx.run))) return false;
+        const committed = await this.loadItems(ctx.run.id, 'issue', tx, chunk.map((issue) => issue.externalId));
+        for (const [externalId, entityId] of committed) alreadyCreated.push([externalId, entityId]);
+        const pending = chunk.filter((issue) => !committed.has(issue.externalId));
+        for (const issue of pending) {
           const teamId = ctx.teamIds.get(issue.teamExternalId);
           if (!teamId) continue;
           const input = this.issueInput(ctx, issue, teamId);
@@ -1078,10 +1184,16 @@ export class ImporterService extends ServiceBase {
         const progress = PHASE.setup + (PHASE.issues - PHASE.setup) * (processed / Math.max(total, 1));
         await tx
           .update(importRuns)
-          .set({ progress, committedCount: done.size + created.length, updatedAt: this.now() })
-          .where(eq(importRuns.id, ctx.run.id));
+          .set({ progress, committedCount: done.size + committed.size + created.length, updatedAt: this.now() })
+          .where(and(eq(importRuns.id, ctx.run.id), eq(importRuns.status, 'committing'), eq(importRuns.commitId, ctx.run.commitId!), eq(importRuns.commitHash, ctx.run.commitHash!)));
         await publish(tx, 'import.progress', { runId: ctx.run.id, status: 'committing', progress });
+        return true;
       });
+      if (!current) return false;
+      for (const [externalId, entityId] of alreadyCreated) {
+        ctx.issueIds.set(externalId, entityId);
+        done.set(externalId, entityId);
+      }
       for (const [k, v] of created) {
         ctx.issueIds.set(k, v);
         done.set(k, v);
@@ -1142,13 +1254,17 @@ export class ImporterService extends ServiceBase {
     const total = ctx.plan.comments.length;
     let processed = total - remaining.length;
     for (let off = 0; off < remaining.length; off += this.chunkSize) {
-      if (!(await this.stillCommitting(ctx.run.id))) return false;
+      if (!(await this.stillCommitting(ctx.run))) return false;
       const chunk = remaining.slice(off, off + this.chunkSize);
-      await this.tx(async (tx) => {
-        const rows = await tx
+      const current = await this.tx(async (tx) => {
+        await this.beforeChunkLock?.('comments');
+        if (!(await this.lockCommitLifecycle(tx, ctx.run))) return false;
+        const committed = await this.loadItems(ctx.run.id, 'comment', tx, chunk.map((comment) => comment.key));
+        const pending = chunk.filter((comment) => !committed.has(comment.key));
+        const rows = pending.length ? await tx
           .insert(comments)
           .values(
-            chunk.map((c) => {
+            pending.map((c) => {
               const author = c.comment.authorExternalId ? ctx.userIds.get(c.comment.authorExternalId) : undefined;
               const created = parseDate(c.comment.createdAt) ?? parseDate(issueByExt.get(c.issueExt)?.createdAt) ?? this.now();
               return {
@@ -1161,16 +1277,21 @@ export class ImporterService extends ServiceBase {
               };
             }),
           )
-          .returning({ id: comments.id });
-        if (rows.length !== chunk.length) throw new Error('comment insert returned an unexpected row count');
-        await this.putItems(tx, ctx.run.id, 'comment', chunk.map((c, i): [string, string] => [c.key, rows[i]!.id]));
+          .returning({ id: comments.id }) : [];
+        if (rows.length !== pending.length) throw new Error('comment insert returned an unexpected row count');
+        await this.putItems(tx, ctx.run.id, 'comment', pending.map((c, i): [string, string] => [c.key, rows[i]!.id]));
         processed += chunk.length;
         const progress = PHASE.issues + (PHASE.comments - PHASE.issues) * (processed / Math.max(total, 1));
-        await tx.update(importRuns).set({ progress, updatedAt: this.now() }).where(eq(importRuns.id, ctx.run.id));
+        await tx.update(importRuns).set({ progress, updatedAt: this.now() }).where(and(
+          eq(importRuns.id, ctx.run.id), eq(importRuns.status, 'committing'),
+          eq(importRuns.commitId, ctx.run.commitId!), eq(importRuns.commitHash, ctx.run.commitHash!),
+        ));
         await publish(tx, 'import.progress', { runId: ctx.run.id, status: 'committing', progress });
+        return true;
       });
+      if (!current) return false;
     }
-    await this.reportProgress(ctx.run.id, PHASE.comments, null);
+    await this.reportProgress(ctx.run, PHASE.comments, null);
     return true;
   }
 
@@ -1205,14 +1326,39 @@ export class ImporterService extends ServiceBase {
     }
 
     for (let off = 0; off < work.length; off += this.chunkSize) {
-      if (!(await this.stillCommitting(ctx.run.id))) return false;
+      if (!(await this.stillCommitting(ctx.run))) return false;
       const chunk = work.slice(off, off + this.chunkSize);
-      await this.tx(async (tx) => {
-        const sourceMap = await this.resolveCurrentReferences(tx, ctx, chunk.map((item) => item.text).join('\n'), sourceKeyCounts);
+      const warnings: ImportWarning[] = [];
+      const current = await this.tx(async (tx) => {
+        await this.beforeChunkLock?.('references');
+        if (!(await this.lockCommitLifecycle(tx, ctx.run))) return false;
+        const issueDoneNow = await this.loadItems(ctx.run.id, 'reference_issue', tx, chunk.filter((item) => item.kind === 'issue').map((item) => item.externalId));
+        const commentDoneNow = await this.loadItems(ctx.run.id, 'reference_comment', tx, chunk.filter((item) => item.kind === 'comment').map((item) => item.externalId));
+        const pending = chunk.filter((item) => item.kind === 'issue' ? !issueDoneNow.has(item.externalId) : !commentDoneNow.has(item.externalId));
+        if (!pending.length) return true;
+        const issueTargets = [...new Set(pending.filter((item) => item.kind === 'issue').map((item) => item.entityId))].sort();
+        const commentTargets = [...new Set(pending.filter((item) => item.kind === 'comment').map((item) => item.entityId))].sort();
+        // Parse every Markdown document independently so an open code fence in
+        // one item cannot hide references in another item in the same chunk.
+        const keysByItem = new Map(pending.map((item) => [
+          item.entityId, findImportedReferenceKeys(item.text, ctx.issueIds.keys()),
+        ]));
+        const referencedKeys = [...new Set(pending.flatMap((item) => keysByItem.get(item.entityId) ?? []))];
+        const referencedIssueIds = referencedKeys.flatMap((key) => {
+          const id = ctx.issueIds.get(key);
+          return id ? [id] : [];
+        });
+        const scope = await lockReferenceScope(tx, {
+          issueIds: [...issueTargets, ...referencedIssueIds],
+          commentIds: commentTargets,
+          beforeComments: this.beforeReferenceComments,
+        });
+        const sourceMap = this.resolveCurrentReferences(
+          ctx, referencedKeys, sourceKeyCounts, scope.issueRows, scope.teamRows,
+        );
         const issueMarkers: [string, string][] = [];
         const commentMarkers: [string, string][] = [];
-        const warnings: ImportWarning[] = [];
-        for (const item of chunk) {
+        for (const item of pending) {
           const rewritten = rewriteImportedReferences(item.text, sourceMap);
           if (item.kind === 'issue') {
             await tx.update(issues).set({ descriptionMd: rewritten.text }).where(eq(issues.id, item.entityId));
@@ -1228,28 +1374,29 @@ export class ImporterService extends ServiceBase {
         await this.putItems(tx, ctx.run.id, 'reference_issue', issueMarkers);
         await this.putItems(tx, ctx.run.id, 'reference_comment', commentMarkers);
         await this.putWarnings(tx, ctx.run.id, warnings);
-        ctx.warnings.push(...warnings);
+        return true;
       });
+      if (!current) return false;
+      ctx.warnings.push(...warnings);
     }
-    await this.putItems(this.db, ctx.run.id, 'reference_rewrite_complete', [['complete', ctx.run.id]]);
-    await this.reportProgress(ctx.run.id, PHASE.references, null);
+    const completionSaved = await this.tx(async (tx) => {
+      if (!(await this.lockCommitLifecycle(tx, ctx.run))) return false;
+      await this.putItems(tx, ctx.run.id, 'reference_rewrite_complete', [['complete', ctx.run.id]]);
+      return true;
+    });
+    if (!completionSaved) return false;
+    await this.reportProgress(ctx.run, PHASE.references, null);
     return true;
   }
 
-  private async resolveCurrentReferences(
-    tx: DbOrTx,
+  private resolveCurrentReferences(
     ctx: CommitCtx,
-    text: string,
+    referenced: readonly string[],
     sourceKeyCounts: ReadonlyMap<string, number>,
-  ): Promise<Map<string, { id: string; identifier: string } | null>> {
+    issueRows: readonly { id: string; number: number; teamId: string }[],
+    teamRows: readonly { id: string; key: string }[],
+  ): Map<string, { id: string; identifier: string } | null> {
     const mapping = new Map<string, { id: string; identifier: string } | null>([...ctx.issueIds.keys()].map((key) => [key, null]));
-    const referenced = findImportedReferenceKeys(text, ctx.issueIds.keys());
-    const ids = [...new Set(referenced.flatMap((key) => ctx.issueIds.has(key) ? [ctx.issueIds.get(key)!] : []))];
-    const issueRows = ids.length ? await tx.select({ id: issues.id, number: issues.number, teamId: issues.teamId }).from(issues)
-      .where(inArray(issues.id, ids)).for('update') : [];
-    const teamIds = [...new Set(issueRows.map((row) => row.teamId))];
-    const teamRows = teamIds.length ? await tx.select({ id: teams.id, key: teams.key }).from(teams)
-      .where(inArray(teams.id, teamIds)).for('share') : [];
     const keyByTeam = new Map(teamRows.map((row) => [row.id, row.key]));
     const issueById = new Map(issueRows.map((row) => [row.id, row]));
     for (const sourceKey of referenced) {
@@ -1267,16 +1414,22 @@ export class ImporterService extends ServiceBase {
     const done = await this.loadItems(ctx.run.id, 'parent');
     const remaining = ctx.plan.parents.filter((p) => !done.has(p.child) && ctx.issueIds.has(p.child) && ctx.issueIds.has(p.parent));
     for (let off = 0; off < remaining.length; off += this.chunkSize) {
-      if (!(await this.stillCommitting(ctx.run.id))) return false;
+      if (!(await this.stillCommitting(ctx.run))) return false;
       const chunk = remaining.slice(off, off + this.chunkSize);
-      await this.tx(async (tx) => {
-        for (const p of chunk) {
+      const current = await this.tx(async (tx) => {
+        await this.beforeChunkLock?.('parents');
+        if (!(await this.lockCommitLifecycle(tx, ctx.run))) return false;
+        const committed = await this.loadItems(ctx.run.id, 'parent', tx, chunk.map((parent) => parent.child));
+        const pending = chunk.filter((parent) => !committed.has(parent.child));
+        for (const p of pending) {
           await tx.update(issues).set({ parentId: ctx.issueIds.get(p.parent)! }).where(eq(issues.id, ctx.issueIds.get(p.child)!));
         }
-        await this.putItems(tx, ctx.run.id, 'parent', chunk.map((p): [string, string] => [p.child, ctx.issueIds.get(p.parent)!]));
+        await this.putItems(tx, ctx.run.id, 'parent', pending.map((p): [string, string] => [p.child, ctx.issueIds.get(p.parent)!]));
+        return true;
       });
+      if (!current) return false;
     }
-    await this.reportProgress(ctx.run.id, PHASE.parents, null);
+    await this.reportProgress(ctx.run, PHASE.parents, null);
     return true;
   }
 
@@ -1284,11 +1437,15 @@ export class ImporterService extends ServiceBase {
     const done = await this.loadItems(ctx.run.id, 'relation');
     const remaining = ctx.plan.relations.filter((r) => !done.has(r.key) && ctx.issueIds.has(r.src) && ctx.issueIds.has(r.tgt));
     for (let off = 0; off < remaining.length; off += this.chunkSize) {
-      if (!(await this.stillCommitting(ctx.run.id))) return false;
+      if (!(await this.stillCommitting(ctx.run))) return false;
       const chunk = remaining.slice(off, off + this.chunkSize);
-      await this.tx(async (tx) => {
+      const current = await this.tx(async (tx) => {
+        await this.beforeChunkLock?.('relations');
+        if (!(await this.lockCommitLifecycle(tx, ctx.run))) return false;
+        const committed = await this.loadItems(ctx.run.id, 'relation', tx, chunk.map((relation) => relation.key));
+        const pending = chunk.filter((relation) => !committed.has(relation.key));
         const fresh: [string, string][] = [];
-        for (const r of chunk) {
+        for (const r of pending) {
           try {
             const row = await tx.transaction((sp) =>
               this.issueService.addRelationInTx(sp, ctx.actor, ctx.issueIds.get(r.src)!, r.type, ctx.issueIds.get(r.tgt)!),
@@ -1300,7 +1457,9 @@ export class ImporterService extends ServiceBase {
           }
         }
         await this.putItems(tx, ctx.run.id, 'relation', fresh);
+        return true;
       });
+      if (!current) return false;
     }
     return true;
   }

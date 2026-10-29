@@ -6,6 +6,7 @@ export const QUEUES = {
   webhooks: 'webhooks',
   github: 'github',
   importers: 'importers',
+  importer_deadletter: 'importer_deadletter',
   import_reference_repair_deadletter: 'import_reference_repair_deadletter',
   import_reference_repairs: 'import_reference_repairs',
   maintenance: 'maintenance',
@@ -17,12 +18,18 @@ export type ImportReferenceRepairJobData =
   | { type: 'scan'; repairId: string; previewVersion: number }
   | { type: 'apply'; repairId: string; previewHash: string };
 
+export type ImportCommitJobData =
+  | { type: 'commit'; runId: string; commitId: string; commitHash: string }
+  /** Payload shape persisted by releases before commit lifecycle generations were added. */
+  | { type: 'commit'; runId: string; commitId?: never; commitHash?: never };
+
 export interface JobPayloads {
   cycles: { type: 'rotate_all' } | { type: 'rotate_team'; teamId: string };
   notifications: { type: 'drain_outbox' };
   webhooks: { type: 'deliver'; deliveryId: string };
   github: { type: 'process_event'; eventRowId: string } | { type: 'backfill'; installId: string };
-  importers: { type: 'commit'; runId: string };
+  importers: ImportCommitJobData;
+  importer_deadletter: ImportCommitJobData;
   import_reference_repairs: ImportReferenceRepairJobData;
   import_reference_repair_deadletter: ImportReferenceRepairJobData;
   maintenance: { type: 'daily' } | { type: 'outbox_sweep' };

@@ -1,17 +1,43 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { sql } from 'drizzle-orm';
 import type { ImportBundle, ImportMapping } from '@velocity/schema';
 import type { Harness } from '../helpers/harness';
 import { addMember, createHarness, setupOwner } from '../helpers/harness';
 import type { ServiceActor } from '../../src/index';
 import type { PoolClient } from 'pg';
 
-async function captureImportItemReadCounts<T>(h: Harness, action: () => Promise<T>): Promise<{
+async function waitUntilMoveBlocksOn(h: Harness, blockerPid: number): Promise<void> {
+  const deadline = Date.now() + 5_000;
+  while (Date.now() < deadline) {
+    const blocked = await h.pool.query<{ pid: number }>(`
+      select pid from pg_stat_activity
+       where $1::int = any(pg_blocking_pids(pid))
+         and query ilike '%from "issues"%'
+         and query ilike '%for update%'
+    `, [blockerPid]);
+    if (blocked.rows.length) return;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  throw new Error(`Issue move did not block on PostgreSQL backend ${blockerPid}.`);
+}
+
+async function captureApplyQueryCounts<T>(h: Harness, action: () => Promise<T>): Promise<{
   value: T;
   mappingScans: number;
   provenanceLookups: number;
+  issueLocks: number;
+  commentLocks: number;
+  teamLocks: number;
+  contentCasWrites: number;
+  lockOrder: string[];
 }> {
   let mappingScans = 0;
   let provenanceLookups = 0;
+  let issueLocks = 0;
+  let commentLocks = 0;
+  let teamLocks = 0;
+  let contentCasWrites = 0;
+  const lockOrder: string[] = [];
   const originals = new Map<PoolClient, PoolClient['query']>();
   const onAcquire = (client: PoolClient) => {
     if (originals.has(client)) return;
@@ -25,14 +51,21 @@ async function captureImportItemReadCounts<T>(h: Harness, action: () => Promise<
           : queryArg !== null && typeof queryArg === 'object' && 'text' in queryArg && typeof queryArg.text === 'string'
             ? queryArg.text
             : '';
-        const whereAt = queryText.toLowerCase().indexOf(' where ');
-        const predicate = whereAt < 0 ? '' : queryText.slice(whereAt + 7);
+        const lower = queryText.toLowerCase();
+        const whereAt = lower.indexOf(' where ');
+        const predicate = whereAt < 0 ? '' : lower.slice(whereAt + 7);
         if (/from\s+"import_items"/i.test(queryText)
           && /"import_items"\."run_id"\s*=\s*\$\d+/i.test(predicate)
           && /"import_items"\."kind"\s*=\s*\$\d+/i.test(predicate)) {
           if (/"import_items"\."external_id"\s*=\s*\$\d+/i.test(predicate)) provenanceLookups++;
           else mappingScans++;
         }
+        if (/from\s+"issues"/i.test(queryText) && /for\s+update/i.test(lower)) { issueLocks++; lockOrder.push('issues'); }
+        if (/from\s+"comments"/i.test(queryText) && /for\s+update/i.test(lower)) { commentLocks++; lockOrder.push('comments'); }
+        if (/from\s+"teams"/i.test(queryText) && /for\s+share/i.test(lower)) { teamLocks++; lockOrder.push('teams'); }
+        if (/update\s+"(?:issues|comments)"\s+set/i.test(queryText)
+          && /"(?:description_md|body_md)"\s*=\s*\$\d+/i.test(lower)
+          && /where[\s\S]*?"(?:description_md|body_md)"\s*=\s*\$\d+/i.test(lower)) contentCasWrites++;
         return Reflect.apply(target, thisArg, args);
       },
     }) as PoolClient['query'];
@@ -40,13 +73,12 @@ async function captureImportItemReadCounts<T>(h: Harness, action: () => Promise<
   h.pool.on('acquire', onAcquire);
   try {
     const value = await action();
-    return { value, mappingScans, provenanceLookups };
+    return { value, mappingScans, provenanceLookups, issueLocks, commentLocks, teamLocks, contentCasWrites, lockOrder };
   } finally {
     h.pool.off('acquire', onAcquire);
     for (const [client, query] of originals) client.query = query;
   }
 }
-
 describe('historical import reference repair', () => {
   let h: Harness;
   let owner: ServiceActor;
@@ -279,12 +311,104 @@ describe('historical import reference repair', () => {
     expect((await service.get(owner, scan.id))?.summary).toMatchObject({ missing: 1, skipped: 1 });
   });
 
+  it('applies a self-referencing comment while a normal issue move waits on the issue family', async () => {
+    const bundle: ImportBundle = {
+      source: 'linear',
+      teams: [{ externalId: 'repair-lock', key: 'LOCK', name: 'Lock order' }],
+      statuses: [{ teamExternalId: 'repair-lock', name: 'Todo', category: 'todo' }],
+      users: [], labels: [], projects: [], cycles: [], warnings: [],
+      issues: [
+        {
+          externalId: 'LOCK-1', teamExternalId: 'repair-lock', title: 'Moved issue', descriptionMd: 'No references',
+          statusName: 'Todo', labelNames: [], relations: [], attachments: [],
+          comments: [{ bodyMd: 'See LOCK-1', authorName: 'Author' }],
+        },
+        {
+          externalId: 'LOCK-2', teamExternalId: 'repair-lock', title: 'Referenced issue', descriptionMd: 'See LOCK-1',
+          statusName: 'Todo', labelNames: [], relations: [], comments: [], attachments: [],
+        },
+      ],
+    };
+    const run = await h.services.importer.createRun(owner, { source: 'linear', bundle });
+    const mapping = run.mapping as ImportMapping;
+    await h.services.importer.updateMapping(owner, run.id, {
+      ...mapping,
+      teams: { 'repair-lock': { mode: 'create', key: 'RPRX', name: 'Repair lock destination' } },
+    });
+    await h.services.importer.dryRun(owner, run.id);
+    await h.services.importer.commit(owner, run.id);
+    await h.services.importer.runCommit(run.id);
+
+    const imported = await h.pool.query<{ external_id: string; entity_id: string; identifier: string }>(`
+      select it.external_id, it.entity_id, t.key || '-' || i.number as identifier
+        from import_items it join issues i on i.id = it.entity_id join teams t on t.id = i.team_id
+       where it.run_id = $1 and it.kind = 'issue' order by it.external_id
+    `, [run.id]);
+    const movedSource = imported.rows.find((row) => row.external_id === 'LOCK-1')!;
+    const referenced = imported.rows.find((row) => row.external_id === 'LOCK-2')!;
+    const comment = await h.pool.query<{ id: string }>(`
+      select id from comments where issue_id = $1
+    `, [movedSource.entity_id]);
+    const commentId = comment.rows[0]!.id;
+    await h.pool.query('update issues set description_md = $1 where id = $2', ['No references', movedSource.entity_id]);
+    await h.pool.query('update issues set description_md = $1 where id = $2', ['See LOCK-1', referenced.entity_id]);
+    await h.pool.query('update comments set body_md = $1 where id = $2', ['See LOCK-1', commentId]);
+
+    const service = h.services.importReferenceRepairs;
+    const scan = await service.startScan(owner, run.id);
+    await service.scanJob(scan.id, scan.previewVersion);
+    const preview = await service.get(owner, scan.id);
+    expect(preview?.summary).toMatchObject({ targets: 2, references: 2 });
+    expect(preview?.targets.map((target) => target.targetKind).sort()).toEqual(['comment_body', 'issue_description']);
+    await service.apply(owner, scan.id, preview!.previewHash, true);
+
+    const moveTeam = await h.services.teams.create(owner, { key: 'MOVEL', name: 'Move lock destination' });
+    let applyPid = 0;
+    let reached!: () => void;
+    let releaseApply!: () => void;
+    const atCommentLock = new Promise<void>((resolve) => { reached = resolve; });
+    const applyGate = new Promise<void>((resolve) => { releaseApply = resolve; });
+    service.beforeApplyComments = async (tx, commentIds) => {
+      if (!commentIds.includes(commentId)) return;
+      const result = await tx.execute(sql`select pg_backend_pid() as pid`) as unknown as { rows: { pid: number }[] };
+      applyPid = Number(result.rows[0]!.pid);
+      reached();
+      await applyGate;
+    };
+
+    const applying = service.applyJob(scan.id, preview!.previewHash);
+    await atCommentLock;
+    const moving = h.services.issues.move(owner, movedSource.entity_id, moveTeam.id);
+    await waitUntilMoveBlocksOn(h, applyPid);
+    releaseApply();
+    await Promise.all([applying, moving]);
+    service.beforeApplyComments = null;
+
+    expect((await service.get(owner, scan.id))?.status).toBe('completed');
+    const oldIssue = await h.pool.query<{ moved_to_issue_id: string | null }>(
+      'select moved_to_issue_id from issues where id = $1', [movedSource.entity_id],
+    );
+    const newIssueId = oldIssue.rows[0]!.moved_to_issue_id!;
+    const finalIssue = await h.pool.query<{ team_id: string; description_md: string }>(
+      'select team_id, description_md from issues where id = $1', [newIssueId],
+    );
+    const finalComment = await h.pool.query<{ issue_id: string; body_md: string }>(
+      'select issue_id, body_md from comments where id = $1', [commentId],
+    );
+    const referencedAfter = await h.pool.query<{ description_md: string }>(
+      'select description_md from issues where id = $1', [referenced.entity_id],
+    );
+    expect(finalIssue.rows[0]).toMatchObject({ team_id: moveTeam.id, description_md: 'No references' });
+    expect(finalComment.rows[0]).toEqual({ issue_id: newIssueId, body_md: `See ${movedSource.identifier}` });
+    expect(referencedAfter.rows[0]!.description_md).toBe(`See ${movedSource.identifier}`);
+  });
+
   it('bounds large applies and leaves the repair applying until continuation outcomes finish', async () => {
     const issues = Array.from({ length: 101 }, (_, index) => {
       const number = index + 1;
       const next = number === 101 ? 1 : number + 1;
       return {
-        externalId: `BUL-${number}`, teamExternalId: 'bulk', title: `Bulk ${number}`, descriptionMd: `See BUL-${next}`,
+        externalId: 'BUL-' + number, teamExternalId: 'bulk', title: 'Bulk ' + number, descriptionMd: number === 1 ? 'See BUL-' + next + String.fromCharCode(10) + String.fromCharCode(96).repeat(3) + 'typescript' + String.fromCharCode(10) + 'BUL-3' : 'See BUL-' + next,
         statusName: 'Todo', labelNames: [], relations: [], comments: [], attachments: [],
       };
     });
@@ -302,20 +426,26 @@ describe('historical import reference repair', () => {
     for (const row of imported.rows) {
       const number = Number(row.external_id.split('-')[1]);
       const next = number === 101 ? 1 : number + 1;
-      await h.pool.query('update issues set description_md = $1 where id = $2', [`See BUL-${next}`, row.entity_id]);
+      const body = number === 1 ? 'See BUL-' + next + String.fromCharCode(10) + String.fromCharCode(96).repeat(3) + 'typescript' + String.fromCharCode(10) + 'BUL-3' : 'See BUL-' + next;
+      await h.pool.query('update issues set description_md = $1 where id = $2', [body, row.entity_id]);
     }
     const repair = await h.services.importReferenceRepairs.startScan(owner, run.id);
     await h.services.importReferenceRepairs.scanJob(repair.id, repair.previewVersion);
     const preview = await h.services.importReferenceRepairs.get(owner, repair.id, { first: 1 });
     expect(preview?.summary).toMatchObject({ targets: 101, references: 101 });
+    await h.pool.query('update import_reference_repair_targets set id = $1 where repair_id = $2 and target_id = (select entity_id from import_items where run_id = $3 and kind = $4 and external_id = $5)', ['00000000-0000-0000-0000-000000000001', repair.id, run.id, 'issue', 'BUL-1']);
     await h.services.importReferenceRepairs.apply(owner, repair.id, preview!.previewHash, true);
-    const firstBatch = await captureImportItemReadCounts(h, () => h.services.importReferenceRepairs.applyJob(repair.id, preview!.previewHash));
-    expect(firstBatch).toMatchObject({ mappingScans: 1, provenanceLookups: 100 });
+    const firstBatch = await captureApplyQueryCounts(h, () => h.services.importReferenceRepairs.applyJob(repair.id, preview!.previewHash));
+    expect(firstBatch).toMatchObject({
+      mappingScans: 1, provenanceLookups: 100, issueLocks: 1, commentLocks: 0, teamLocks: 1, contentCasWrites: 100,
+    });
+    expect(firstBatch.lockOrder).toEqual(['issues', 'teams']);
     expect((await h.services.importReferenceRepairs.get(owner, repair.id))?.status).toBe('applying');
     expect(Number((await h.pool.query(`select count(*)::int as n from import_reference_repair_targets where repair_id = $1 and status = 'pending'`, [repair.id])).rows[0].n)).toBe(1);
     expect(h.jobs.sent.filter((job) => job.queue === 'import_reference_repairs' && (job.data as { type?: string }).type === 'apply').length).toBeGreaterThanOrEqual(2);
-    const secondBatch = await captureImportItemReadCounts(h, () => h.services.importReferenceRepairs.applyJob(repair.id, preview!.previewHash));
-    expect(secondBatch).toMatchObject({ mappingScans: 1, provenanceLookups: 1 });
+    const secondBatch = await captureApplyQueryCounts(h, () => h.services.importReferenceRepairs.applyJob(repair.id, preview!.previewHash));
+    expect(secondBatch).toMatchObject({ mappingScans: 1, provenanceLookups: 1, issueLocks: 1, commentLocks: 0, teamLocks: 1, contentCasWrites: 1 });
+    expect(secondBatch.lockOrder).toEqual(['issues', 'teams']);
     const result = await h.services.importReferenceRepairs.get(owner, repair.id);
     expect(result?.status).toBe('completed');
     expect(result?.summary).toMatchObject({ applied: 101, skipped: 0 });

@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { sql } from 'drizzle-orm';
 import type { ImportBundle, ImportDryRunReport, ImportMapping } from '@velocity/schema';
 import { generateLinearCsv } from '../../../importers/scripts/generate-linear-csv';
 import type { Harness } from '../helpers/harness';
@@ -31,6 +32,21 @@ async function count(h: Harness, table: string, where = 'true'): Promise<number>
   return Number((await q<{ n: string }>(h, `select count(*) as n from ${table} where ${where}`))[0]!.n);
 }
 
+async function waitUntilMoveBlocksOn(h: Harness, blockerPid: number): Promise<void> {
+  const deadline = Date.now() + 5_000;
+  while (Date.now() < deadline) {
+    const blocked = await h.pool.query<{ pid: number }>(`
+      select pid from pg_stat_activity
+       where $1::int = any(pg_blocking_pids(pid))
+         and query ilike '%from "issues"%'
+         and query ilike '%for update%'
+    `, [blockerPid]);
+    if (blocked.rows.length) return;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  throw new Error(`Issue move did not block on PostgreSQL backend ${blockerPid}.`);
+}
+
 const dryReport = (r: ImportRunRow): ImportDryRunReport => r.report as ImportDryRunReport;
 const mappingOf = (r: ImportRunRow): ImportMapping => r.mapping as ImportMapping;
 
@@ -41,6 +57,31 @@ async function importAll(c: Ctx, run: ImportRunRow): Promise<ImportRunRow> {
   await s.commit(c.owner, run.id);
   await s.runCommit(run.id);
   return (await s.get(c.owner, run.id))!;
+}
+type CommitJob = { type: 'commit'; runId: string; commitId: string; commitHash: string };
+function latestCommitJob(h: Harness): CommitJob {
+  return h.jobs.sent.filter((job) => job.queue === 'importers').at(-1)!.data as CommitJob;
+}
+
+function raceBundle(prefix: string): ImportBundle {
+  return {
+    source: 'linear',
+    teams: [{ externalId: 'team', key: prefix, name: `${prefix} team` }],
+    statuses: [{ teamExternalId: 'team', name: 'Todo', category: 'todo' }],
+    users: [], labels: [], projects: [], cycles: [], warnings: [],
+    issues: [
+      { externalId: `${prefix}-1`, teamExternalId: 'team', title: `${prefix} one`, descriptionMd: `See ${prefix}-2`, statusName: 'Todo', labelNames: [], relations: [], comments: [{ bodyMd: `Also ${prefix}-2`, authorName: 'Author' }], attachments: [] },
+      { externalId: `${prefix}-2`, teamExternalId: 'team', title: `${prefix} two`, descriptionMd: `Back to ${prefix}-1`, statusName: 'Todo', labelNames: [], relations: [], comments: [], attachments: [] },
+    ],
+  };
+}
+
+async function createRaceRun(c: Ctx, prefix: string): Promise<{ run: ImportRunRow; job: CommitJob }> {
+  const s = c.h.services.importer;
+  const run = await s.createRun(c.owner, { source: 'linear', bundle: raceBundle(prefix) });
+  await s.dryRun(c.owner, run.id);
+  await s.commit(c.owner, run.id);
+  return { run, job: latestCommitJob(c.h) };
 }
 
 interface Committed extends ImportDryRunReport {
@@ -252,20 +293,17 @@ describe('resumability', () => {
     s.failAfterChunks = null;
 
     const failed = (await s.get(c.owner, run.id))!;
-    expect(failed.status).toBe('failed');
-    expect(failed.error).toMatch(/Injected failure/);
+    expect(failed.status).toBe('committing');
+    expect(failed.error).toBeNull();
     expect(failed.committedCount).toBe(500);
     expect(failed.progress).toBeGreaterThan(0.05);
     expect(failed.progress).toBeLessThan(0.8);
     expect(await count(c.h, 'issues')).toBe(500);
     expect(await count(c.h, 'comments')).toBe(0);
 
-    // A failed run can't be re-dry-run, but can be re-committed.
+    // pg-boss retries the same lifecycle; a dry-run is still disallowed while it is active.
     await expect(s.dryRun(c.owner, run.id)).rejects.toMatchObject({ code: 'VALIDATION' });
-    const again = await s.commit(c.owner, run.id);
-    expect(again.status).toBe('committing');
-    expect(again.committedCount).toBe(500);
-    await s.runCommit(run.id);
+    await s.runCommit(latestCommitJob(c.h));
 
     const done = (await s.get(c.owner, run.id))!;
     expect(done.status).toBe('completed');
@@ -294,7 +332,7 @@ describe('resumability', () => {
     await expect(s.commit(c.owner, run.id)).rejects.toMatchObject({ code: 'VALIDATION' });
   });
 
-  it('keeps descriptions durable after issue mapping and refuses to cancel a failed partial commit', async () => {
+  it('keeps descriptions durable after issue creation and rewrite retry', async () => {
     const s = c.h.services.importer;
     const bundle: ImportBundle = {
       source: 'linear', teams: [{ externalId: 'team', key: 'SRC', name: 'Source' }],
@@ -313,10 +351,8 @@ describe('resumability', () => {
     s.failAfterChunks = 1;
     await expect(s.runCommit(run.id)).rejects.toThrow(/Injected failure/);
     s.failAfterChunks = null;
-    await expect(s.cancel(c.owner, run.id)).rejects.toMatchObject({ code: 'VALIDATION' });
     await c.h.pool.query(`update teams set key = 'DSTX' where id = (select i.team_id from issues i join import_items it on it.entity_id = i.id where it.run_id = $1 and it.kind = 'issue' and it.external_id = 'SRC-1')`, [run.id]);
-    await s.commit(c.owner, run.id);
-    await s.runCommit(run.id);
+    await s.runCommit(latestCommitJob(c.h));
     s.chunkSize = 500;
 
     const issues = await q<{ identifier: string; description_md: string }>(c.h, `select t.key || '-' || i.number as identifier, i.description_md from issues i join teams t on t.id = i.team_id where i.title in ('One','Two')`);
@@ -340,14 +376,251 @@ describe('resumability', () => {
     await s.commit(c.owner, run.id);
     s.failAfterReferenceRewrite = true;
     await expect(s.runCommit(run.id)).rejects.toThrow(/after reference rewrite completion/);
-    await s.commit(c.owner, run.id);
-    await s.runCommit(run.id);
+    const firstLifecycle = latestCommitJob(c.h);
+    expect(await s.failCommit(firstLifecycle, 'retry limit reached')).toBe(true);
+    expect(await s.failCommit(firstLifecycle, 'duplicate dead-letter delivery')).toBe(false);
+    expect((await s.get(c.owner, run.id))?.status).toBe('failed');
+    const resumed = await s.commit(c.owner, run.id);
+    expect(resumed.commitId).not.toBe(firstLifecycle.commitId);
+    const resumedJob = latestCommitJob(c.h);
+    expect(await s.failCommit(firstLifecycle, 'stale dead-letter delivery')).toBe(false);
+    await s.runCommit(resumedJob);
     const done = (await s.get(c.owner, run.id))!;
     const report = done.report as Committed;
     expect(report.result.warnings.filter((warning) => warning.code === 'reference_unmapped')).toHaveLength(1);
     expect(await count(c.h, 'import_warnings', `run_id = '${run.id}'`)).toBe(1);
   });
 
+  it('finalizes only the matching committing lifecycle and never overwrites cancellation or completion', async () => {
+    const s = c.h.services.importer;
+    const run = await s.createRunFromCsv(c.owner, { source: 'linear', csv: fixture('linear-export.csv') });
+    await s.dryRun(c.owner, run.id);
+    await s.commit(c.owner, run.id);
+    const job = latestCommitJob(c.h);
+    expect(await s.failCommit({ ...job, commitHash: 'wrong-hash' }, 'stale')).toBe(false);
+    expect((await s.get(c.owner, run.id))?.status).toBe('committing');
+    expect(await s.failCommit(job, 'exhausted')).toBe(true);
+    expect(await s.failCommit(job, 'duplicate')).toBe(false);
+    const resumed = await s.commit(c.owner, run.id);
+    const resumedJob = latestCommitJob(c.h);
+    expect(resumed.commitId).not.toBe(job.commitId);
+    expect(await s.failCommit(job, 'old generation')).toBe(false);
+    expect((await s.get(c.owner, run.id))?.status).toBe('committing');
+    await s.runCommit(resumedJob);
+    expect((await s.get(c.owner, run.id))?.status).toBe('completed');
+    expect(await s.failCommit(resumedJob, 'late dead-letter')).toBe(false);
+
+    const canceled = await s.createRunFromCsv(c.owner, { source: 'linear', csv: fixture('linear-export.csv') });
+    await s.dryRun(c.owner, canceled.id);
+    await s.commit(c.owner, canceled.id);
+    const canceledJob = latestCommitJob(c.h);
+    await c.h.pool.query(`update import_runs set status = 'canceled' where id = $1`, [canceled.id]);
+    expect(await s.failCommit(canceledJob, 'late dead-letter')).toBe(false);
+    expect((await s.get(c.owner, canceled.id))?.status).toBe('canceled');
+  });
+
+  it.each([
+    ['issues', 'RACE'],
+    ['comments', 'COMM'],
+    ['references', 'REFS'],
+  ] as const)('does not commit a %s chunk after its lifecycle is terminalized', async (pausedPhase, prefix) => {
+    const s = c.h.services.importer;
+    const previousChunkSize = s.chunkSize;
+    s.chunkSize = 1;
+    const { run, job } = await createRaceRun(c, prefix);
+    let entered!: () => void;
+    let release!: () => void;
+    const atChunk = new Promise<void>((resolve) => { entered = resolve; });
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    s.beforeChunkLock = async (phase) => {
+      if (phase !== pausedPhase) return;
+      s.beforeChunkLock = null;
+      entered();
+      await gate;
+    };
+
+    const running = s.runCommit(job);
+    await atChunk;
+    const issuesBefore = await count(c.h, 'issues');
+    const commentsBefore = await count(c.h, 'comments');
+    const markerCountBefore = await count(c.h, 'import_items', `run_id = '${run.id}' and kind like 'reference_%'`);
+    const issueContentBefore = await q(c.h, `select i.description_md from issues i join import_items x on x.entity_id = i.id where x.run_id = $1 and x.kind = 'issue' order by x.external_id`, [run.id]);
+    const commentContentBefore = await q(c.h, `select cm.body_md from comments cm join import_items x on x.entity_id = cm.id where x.run_id = $1 and x.kind = 'comment' order by x.external_id`, [run.id]);
+    let finalized: boolean;
+    try {
+      finalized = await s.failCommit(job, `terminalized during ${pausedPhase} chunk`);
+    } finally {
+      release();
+    }
+    await running;
+    s.beforeChunkLock = null;
+    s.chunkSize = previousChunkSize;
+
+    expect(finalized).toBe(true);
+    expect((await s.get(c.owner, run.id))?.status).toBe('failed');
+    expect(await count(c.h, 'issues')).toBe(issuesBefore);
+    expect(await count(c.h, 'comments')).toBe(commentsBefore);
+    expect(await count(c.h, 'import_items', `run_id = '${run.id}' and kind like 'reference_%'`)).toBe(markerCountBefore);
+    expect(await q(c.h, `select i.description_md from issues i join import_items x on x.entity_id = i.id where x.run_id = $1 and x.kind = 'issue' order by x.external_id`, [run.id])).toEqual(issueContentBefore);
+    expect(await q(c.h, `select cm.body_md from comments cm join import_items x on x.entity_id = cm.id where x.run_id = $1 and x.kind = 'comment' order by x.external_id`, [run.id])).toEqual(commentContentBefore);
+  });
+
+  it('rewrites a self-referencing comment while a normal issue move waits on the issue family', async () => {
+    const s = c.h.services.importer;
+    const previousChunkSize = s.chunkSize;
+    s.chunkSize = 1;
+    const bundle: ImportBundle = {
+      source: 'linear',
+      teams: [{ externalId: 'rewrite-lock', key: 'LOCK', name: 'Rewrite lock' }],
+      statuses: [{ teamExternalId: 'rewrite-lock', name: 'Todo', category: 'todo' }],
+      users: [], labels: [], projects: [], cycles: [], warnings: [],
+      issues: [
+        {
+          externalId: 'LOCK-1', teamExternalId: 'rewrite-lock', title: 'Moved issue', descriptionMd: 'No references',
+          statusName: 'Todo', labelNames: [], relations: [], attachments: [],
+          comments: [{ bodyMd: 'Also LOCK-2 and LOCK-1', authorName: 'Author' }],
+        },
+        {
+          externalId: 'LOCK-2', teamExternalId: 'rewrite-lock', title: 'Referenced issue', descriptionMd: 'No references',
+          statusName: 'Todo', labelNames: [], relations: [], comments: [], attachments: [],
+        },
+      ],
+    };
+    const run = await s.createRun(c.owner, { source: 'linear', bundle });
+    const mapping = mappingOf(run);
+    await s.updateMapping(c.owner, run.id, {
+      ...mapping,
+      teams: { 'rewrite-lock': { mode: 'create', key: 'IMPL', name: 'Import lock destination' } },
+    });
+    const dry = dryReport(await s.dryRun(c.owner, run.id));
+    expect(dry.counts.comments).toBe(1);
+    await s.commit(c.owner, run.id);
+    const job = latestCommitJob(c.h);
+    const moveTeam = await c.h.services.teams.create(c.owner, { key: 'MOVEL', name: 'Move lock destination' });
+
+    let blockedPid = 0;
+    let reached!: () => void;
+    let releaseRewrite!: () => void;
+    const atCommentLock = new Promise<void>((resolve) => { reached = resolve; });
+    const rewriteGate = new Promise<void>((resolve) => { releaseRewrite = resolve; });
+    s.beforeReferenceComments = async (tx, commentIds) => {
+      if (!commentIds.length) return;
+      const result = await tx.execute(sql`select pg_backend_pid() as pid`) as unknown as { rows: { pid: number }[] };
+      blockedPid = Number(result.rows[0]!.pid);
+      reached();
+      await rewriteGate;
+    };
+
+    try {
+      const running = s.runCommit(job);
+      await atCommentLock;
+      const source = await q<{ entity_id: string }>(c.h, `
+        select entity_id from import_items
+         where run_id = $1 and kind = 'issue' and external_id = 'LOCK-1'
+      `, [run.id]);
+      const comment = await q<{ entity_id: string }>(c.h, `
+        select entity_id from import_items
+         where run_id = $1 and kind = 'comment'
+      `, [run.id]);
+      const sourceIssueId = source[0]!.entity_id;
+      const commentId = comment[0]!.entity_id;
+      const moving = c.h.services.issues.move(c.owner, sourceIssueId, moveTeam.id);
+      await waitUntilMoveBlocksOn(c.h, blockedPid);
+      releaseRewrite();
+      await Promise.all([running, moving]);
+
+      expect((await s.get(c.owner, run.id))?.status).toBe('completed');
+      const oldIssue = await q<{ moved_to_issue_id: string | null }>(c.h,
+        'select moved_to_issue_id from issues where id = $1', [sourceIssueId]);
+      const newIssueId = oldIssue[0]!.moved_to_issue_id!;
+      const finalIssue = await q<{ team_id: string; description_md: string }>(c.h,
+        'select team_id, description_md from issues where id = $1', [newIssueId]);
+      const finalComment = await q<{ issue_id: string; body_md: string }>(c.h,
+        'select issue_id, body_md from comments where id = $1', [commentId]);
+      expect(finalIssue[0]).toMatchObject({ team_id: moveTeam.id, description_md: 'No references' });
+      expect(finalComment[0]).toEqual({ issue_id: newIssueId, body_md: 'Also IMPL-2 and IMPL-1' });
+    } finally {
+      releaseRewrite();
+      s.beforeReferenceComments = null;
+      s.chunkSize = previousChunkSize;
+    }
+  });
+
+  it('serializes overlapping deliveries so issues and comments are created once', async () => {
+    const s = c.h.services.importer;
+    const previousChunkSize = s.chunkSize;
+    s.chunkSize = 1;
+    const { run, job } = await createRaceRun(c, 'DUPE');
+    let firstEntered!: () => void;
+    let bothEntered!: () => void;
+    let release!: () => void;
+    const atFirst = new Promise<void>((resolve) => { firstEntered = resolve; });
+    const atBoth = new Promise<void>((resolve) => { bothEntered = resolve; });
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    let arrivals = 0;
+    s.beforeChunkLock = async (phase) => {
+      if (phase !== 'comments' || arrivals >= 2) return;
+      arrivals++;
+      if (arrivals === 1) firstEntered();
+      if (arrivals === 2) bothEntered();
+      await gate;
+    };
+
+    const first = s.runCommit(job);
+    await atFirst;
+    const second = s.runCommit(job);
+    await atBoth;
+    release();
+    await Promise.all([first, second]);
+    s.beforeChunkLock = null;
+    s.chunkSize = previousChunkSize;
+
+    expect((await s.get(c.owner, run.id))?.status).toBe('completed');
+    expect(await count(c.h, 'import_items', `run_id = '${run.id}' and kind = 'issue'`)).toBe(2);
+    expect(await count(c.h, 'import_items', `run_id = '${run.id}' and kind = 'comment'`)).toBe(1);
+    expect(await count(c.h, 'comments', `issue_id in (select entity_id from import_items where run_id = '${run.id}' and kind = 'issue')`)).toBe(1);
+  });
+
+  it('recovers pre-lifecycle committing rows in id order and ignores legacy queued jobs', async () => {
+    const s = c.h.services.importer;
+    const first = await s.createRunFromCsv(c.owner, { source: 'linear', csv: fixture('linear-export.csv') });
+    const second = await s.createRunFromCsv(c.owner, { source: 'linear', csv: fixture('linear-export.csv') });
+    await c.h.pool.query(
+      `update import_runs set id = case id when $1 then $3::uuid when $2 then $4::uuid end
+        where id in ($1, $2)`,
+      [first.id, second.id, '70000000-0000-7000-8000-000000000002', '70000000-0000-7000-8000-000000000001'],
+    );
+    const runIds = ['70000000-0000-7000-8000-000000000002', '70000000-0000-7000-8000-000000000001'];
+    for (const runId of runIds) await s.dryRun(c.owner, runId);
+    await c.h.pool.query(
+      `update import_runs set status = 'committing', commit_id = null, commit_hash = null where id = any($1::uuid[])`,
+      [runIds],
+    );
+    const legacyJobs = runIds.map((runId) => ({ type: 'commit' as const, runId }));
+    const sentBeforeRecovery = c.h.jobs.sent.length;
+
+    expect(await s.recoverCommittingRuns()).toBe(2);
+    const recoveredJobs = c.h.jobs.sent.slice(sentBeforeRecovery).map((job) => job.data as CommitJob);
+    expect(recoveredJobs.map((job) => job.runId)).toEqual([...runIds].sort());
+    for (const runId of runIds) {
+      const recovered = (await s.get(c.owner, runId))!;
+      expect(recovered.status).toBe('committing');
+      expect(recovered.commitId).toBeTruthy();
+      expect(recovered.commitHash).toMatch(/^[a-f0-9]{64}$/);
+      expect(recoveredJobs.find((job) => job.runId === runId)).toMatchObject({ commitId: recovered.commitId, commitHash: recovered.commitHash });
+    }
+
+    const issuesBeforeLegacyDelivery = await count(c.h, 'issues');
+    for (const legacyJob of legacyJobs) await s.runCommit(legacyJob);
+    for (const runId of runIds) expect((await s.get(c.owner, runId))?.status).toBe('committing');
+    expect(await count(c.h, 'issues')).toBe(issuesBeforeLegacyDelivery);
+
+    for (const recoveredJob of recoveredJobs) await s.runCommit(recoveredJob);
+    for (const runId of runIds) {
+      expect((await s.get(c.owner, runId))?.status).toBe('completed');
+      expect(await s.failCommit({ type: 'commit', runId }, 'stale legacy dead-letter')).toBe(false);
+    }
+  });
   it('rolls back import commit state when transactional queue submission fails', async () => {
     const s = c.h.services.importer;
     const run = await s.createRunFromCsv(c.owner, { source: 'linear', csv: fixture('linear-export.csv') });

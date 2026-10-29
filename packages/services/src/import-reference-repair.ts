@@ -18,6 +18,7 @@ import type { Tx } from './db';
 import { notFound, validation } from './errors';
 import { assertCan } from './lib/permissions';
 import { findImportedReferenceKeys, rewriteImportedReferences } from './lib/import-reference-rewrite';
+import { lockReferenceScope } from './lib/reference-lock-order';
 
 export type ImportReferenceRepairRow = typeof importReferenceRepairs.$inferSelect;
 export type ImportReferenceRepairTargetRow = typeof importReferenceRepairTargets.$inferSelect;
@@ -34,6 +35,8 @@ export class ImportReferenceRepairService extends ServiceBase {
   private audit!: AuditService;
   /** Deterministic race hook used only by database tests. */
   beforeApplyContentWrite: ((target: ImportReferenceRepairTargetRow) => Promise<void>) | null = null;
+  /** Deterministic race hook used only by database tests, after issue/team locks. */
+  beforeApplyComments: ((tx: Tx, commentIds: readonly string[]) => Promise<void>) | null = null;
 
   bind(audit: AuditService): void { this.audit = audit; }
 
@@ -231,6 +234,13 @@ export class ImportReferenceRepairService extends ServiceBase {
           .where(and(eq(importItems.runId, run.id), eq(importItems.kind, 'issue')))
         : [];
       const idBySource = new Map(sourceItems.map((row) => [row.externalId, row.entityId]));
+      // Parse each Markdown document separately: an unclosed code fence in one target
+      // must not hide references in a later target in the same batch.
+      const keysByTarget = new Map<string, string[]>();
+      for (const target of targets) {
+        keysByTarget.set(target.id, findImportedReferenceKeys(target.beforeMd, idBySource.keys()));
+      }
+      const candidates: ImportReferenceRepairTargetRow[] = [];
       for (const target of targets) {
         const [provenance] = await tx.select({ entityId: importItems.entityId }).from(importItems).where(and(
           eq(importItems.runId, run.id),
@@ -245,13 +255,35 @@ export class ImportReferenceRepairService extends ServiceBase {
           await this.setTargetResult(tx, target.id, 'stale');
           continue;
         }
-        const mapping = await this.resolveCurrentMapping(tx, target.beforeMd, sourceKeyCounts, idBySource);
-        const freshText = rewriteImportedReferences(target.beforeMd, mapping).text;
+        candidates.push(target);
+      }
+      const referencedKeys = [...new Set(candidates.flatMap((target) => keysByTarget.get(target.id) ?? []))];
+      for (const target of candidates) await this.beforeApplyContentWrite?.(target);
+
+      const issueTargetIds = candidates
+        .filter((target) => target.targetKind === 'issue_description')
+        .map((target) => target.targetId);
+      const referencedIssueIds = referencedKeys.flatMap((key) => {
+        const id = idBySource.get(key);
+        return id ? [id] : [];
+      });
+      const commentTargetIds = candidates
+        .filter((target) => target.targetKind === 'comment_body')
+        .map((target) => target.targetId);
+      const scope = await lockReferenceScope(tx, {
+        issueIds: [...issueTargetIds, ...referencedIssueIds],
+        commentIds: commentTargetIds,
+        beforeComments: this.beforeApplyComments,
+      });
+      const batchMapping = this.resolveCurrentMapping(
+        referencedKeys, sourceKeyCounts, idBySource, scope.issueRows, scope.teamRows,
+      );
+      for (const target of candidates) {
+        const freshText = rewriteImportedReferences(target.beforeMd, batchMapping).text;
         if (freshText !== target.afterMd) {
           await this.setTargetResult(tx, target.id, 'stale');
           continue;
         }
-        if (this.beforeApplyContentWrite) await this.beforeApplyContentWrite(target);
         const updated = target.targetKind === 'issue_description'
           ? await tx.update(issues).set({ descriptionMd: freshText }).where(and(eq(issues.id, target.targetId), eq(issues.descriptionMd, target.beforeMd))).returning({ id: issues.id })
           : await tx.update(comments).set({ bodyMd: freshText }).where(and(eq(comments.id, target.targetId), eq(comments.bodyMd, target.beforeMd))).returning({ id: comments.id });
@@ -264,7 +296,6 @@ export class ImportReferenceRepairService extends ServiceBase {
           : await tx.select({ id: comments.id }).from(comments).where(eq(comments.id, target.targetId));
         await this.setTargetResult(tx, target.id, exists.length ? 'stale' : 'missing');
       }
-
       const [pending] = await tx.select({ count: sql<number>`count(*)::int` }).from(importReferenceRepairTargets)
         .where(and(eq(importReferenceRepairTargets.repairId, repairId), eq(importReferenceRepairTargets.status, 'pending')));
       if ((pending?.count ?? 0) > 0) {
@@ -316,20 +347,14 @@ export class ImportReferenceRepairService extends ServiceBase {
     await tx.update(importReferenceRepairTargets).set({ status: 'skipped', skipReason: reason }).where(eq(importReferenceRepairTargets.id, id));
   }
 
-  private async resolveCurrentMapping(
-    tx: Tx,
-    text: string,
+  private resolveCurrentMapping(
+    referenced: readonly string[],
     sourceKeyCounts: ReadonlyMap<string, number>,
     idBySource: ReadonlyMap<string, string>,
-  ): Promise<Map<string, { id: string; identifier: string } | null>> {
-    const referenced = findImportedReferenceKeys(text, idBySource.keys());
+    issueRows: readonly { id: string; number: number; teamId: string }[],
+    teamRows: readonly { id: string; key: string }[],
+  ): Map<string, { id: string; identifier: string } | null> {
     const mapping = new Map<string, { id: string; identifier: string } | null>([...idBySource.keys()].map((key) => [key, null]));
-    const ids = [...new Set(referenced.flatMap((key) => idBySource.has(key) ? [idBySource.get(key)!] : []))];
-    const issueRows = ids.length ? await tx.select({ id: issues.id, number: issues.number, teamId: issues.teamId }).from(issues)
-      .where(inArray(issues.id, ids)).for('update') : [];
-    const teamIds = [...new Set(issueRows.map((row) => row.teamId))];
-    const teamRows = teamIds.length ? await tx.select({ id: teams.id, key: teams.key }).from(teams)
-      .where(inArray(teams.id, teamIds)).for('share') : [];
     const keyByTeam = new Map(teamRows.map((row) => [row.id, row.key]));
     const issueById = new Map(issueRows.map((row) => [row.id, row]));
     for (const sourceKey of referenced) {
@@ -337,7 +362,7 @@ export class ImportReferenceRepairService extends ServiceBase {
       const issue = id ? issueById.get(id) : undefined;
       const teamKey = issue ? keyByTeam.get(issue.teamId) : undefined;
       if (id && issue && teamKey && (sourceKeyCounts.get(sourceKey) ?? 0) === 1) {
-        mapping.set(sourceKey, { id, identifier: `${teamKey}-${issue.number}` });
+        mapping.set(sourceKey, { id, identifier: teamKey + '-' + issue.number });
       }
     }
     return mapping;

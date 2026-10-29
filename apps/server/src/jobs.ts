@@ -55,6 +55,15 @@ export async function startBoss(databaseUrl: string, logger: Logger): Promise<Pg
   // updateQueue is required because createQueue does not change options on existing deployments.
   await boss.updateQueue('import_reference_repair_deadletter', { retryLimit: 5, retryDelay: 30, retryBackoff: true, expireInSeconds: 900 });
   await boss.updateQueue('import_reference_repairs', repairQueue);
+  await boss.updateQueue('importer_deadletter', { retryLimit: 5, retryDelay: 30, retryBackoff: true, expireInSeconds: 900 });
+  await boss.updateQueue('importers', {
+    retryLimit: 5,
+    retryDelay: 30,
+    retryBackoff: true,
+    deadLetter: 'importer_deadletter',
+    expireInSeconds: 3600,
+    heartbeatSeconds: 120,
+  });
   return boss;
 }
 
@@ -85,7 +94,10 @@ export async function startWorkers(boss: PgBoss, services: Services, logger: Log
     if (d.type === 'process_event') await services.github.processEvent(d.eventRowId);
     else await services.github.runBackfill(d.installId);
   });
-  await run('importers', async (d) => services.importer.runCommit(d.runId));
+  await run('importers', async (d) => services.importer.runCommit(d));
+  await boss.work<JobPayloads['importer_deadletter']>('importer_deadletter', { batchSize: 1 }, async (jobs) => {
+    for (const job of jobs) await services.importer.failCommit(job.data, 'Import job exhausted retries or expired.');
+  });
   await boss.work<JobPayloads['import_reference_repairs']>('import_reference_repairs', { batchSize: 1, heartbeatRefreshSeconds: 30 }, async (jobs) => {
     for (const job of jobs) {
       try {
