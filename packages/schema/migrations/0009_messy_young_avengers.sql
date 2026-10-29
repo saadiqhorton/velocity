@@ -1,0 +1,3 @@
+ALTER TABLE "import_reference_repair_targets" ADD CONSTRAINT "import_reference_repair_targets_kind" CHECK ("import_reference_repair_targets"."target_kind" in ('issue_description','comment_body'));--> statement-breakpoint
+ALTER TABLE "import_reference_repair_targets" ADD CONSTRAINT "import_reference_repair_targets_status" CHECK ("import_reference_repair_targets"."status" in ('pending','applied','skipped'));--> statement-breakpoint
+ALTER TABLE "import_reference_repairs" ADD CONSTRAINT "import_reference_repairs_status" CHECK ("import_reference_repairs"."status" in ('scanning','preview','applying','completed','failed','superseded'));

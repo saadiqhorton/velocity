@@ -54,7 +54,9 @@ export class CommentService extends ServiceBase {
     if (!body) throw validation('Write something before posting.', { field: 'bodyMd' });
     if (body.length > MAX_COMMENT) throw validation('Comments are limited to 64 KB.', { field: 'bodyMd' });
     const run = async (tx: Tx): Promise<CommentRow> => {
-      const [issue] = await tx.select().from(issues).where(eq(issues.id, input.issueId));
+      // The comment's issue is the outer lock family; take it before inserting
+      // the comment row so this transaction cannot invert issue moves.
+      const [issue] = await tx.select().from(issues).where(eq(issues.id, input.issueId)).for('update');
       if (!issue || issue.trashedAt) throw notFound('Issue');
       const [row] = await tx
         .insert(comments)

@@ -847,11 +847,27 @@ export class IssueService extends ServiceBase {
   }
 
   async moveAllFromTeam(actor: ServiceActor, fromTeamId: string, toTeamId: string, executor?: Tx): Promise<number> {
-    const rows = await this.db
-      .select({ id: issues.id })
-      .from(issues)
-      .where(and(eq(issues.teamId, fromTeamId), isNull(issues.movedToIssueId)))
-      .orderBy(asc(issues.number));
+    let rows: { id: string; number: number }[];
+    if (executor) {
+      // Team deletion spans many issue moves. Lock the whole issue family first,
+      // then the teams, so no later issue is acquired after an earlier comment.
+      rows = (await executor
+        .select({ id: issues.id, number: issues.number })
+        .from(issues)
+        .where(and(eq(issues.teamId, fromTeamId), isNull(issues.movedToIssueId)))
+        .orderBy(asc(issues.id))
+        .for('update'))
+        .sort((a, b) => a.number - b.number);
+      const teamIds = [fromTeamId, toTeamId].sort();
+      await executor.select({ id: teams.id }).from(teams)
+        .where(inArray(teams.id, teamIds)).orderBy(asc(teams.id)).for('update');
+    } else {
+      rows = await this.db
+        .select({ id: issues.id, number: issues.number })
+        .from(issues)
+        .where(and(eq(issues.teamId, fromTeamId), isNull(issues.movedToIssueId)))
+        .orderBy(asc(issues.number));
+    }
     for (let i = 0; i < rows.length; i += 200) {
       const chunk = rows.slice(i, i + 200);
       const moveChunk = async (tx: Tx) => {

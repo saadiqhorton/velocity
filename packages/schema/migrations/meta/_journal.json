@@ -57,6 +57,34 @@
       "when": 1791253684468,
       "tag": "0007_nebulous_nightshade",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793219971264,
+      "tag": "0008_flippant_mercury",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793220685109,
+      "tag": "0009_messy_young_avengers",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1793221906323,
+      "tag": "0010_useful_madrox",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1793225184439,
+      "tag": "0011_skinny_terrax",
+      "breakpoints": true
     }
   ]
 }

@@ -1620,6 +1620,17 @@ export const en = {
         commitFailed: 'Couldn’t start the import',
         cancelFailed: 'Couldn’t cancel the import',
       },
+      referenceRepair: {
+        entry: 'Repair references', title: 'Review imported references', description: 'Scan this completed import for exact issue references. Review every proposed text change before applying it.',
+        scan: 'Scan references', rescan: 'Rescan', apply: 'Apply reviewed changes', scanning: 'Scanning imported text…', applying: 'Applying reviewed changes…',
+        noChanges: 'No reference changes were found.', previewTitle: 'Proposed changes', target: 'Target', before: 'Before', after: 'After', refs: 'References',
+        showing: (from: number, to: number, total: number) => `${from}–${to} of ${total}`,
+        targetStatus: (status: string, reason: string | null) => status === 'applied' ? 'Applied' : status === 'skipped' ? `Skipped · ${reason ?? 'unknown reason'}` : 'Pending',
+        summary: { targets: 'Targets with changes', references: 'References to update', alreadyCorrect: 'Already correct', unmapped: 'Unmapped', ambiguous: 'Ambiguous', stale: 'Changed since preview', missing: 'Missing', codeSkipped: 'Skipped in code, URLs, or link destinations' },
+        confirmTitle: 'Apply these reference changes?', confirmBody: 'Only text from this import will be updated. Targets changed since the preview will be skipped.', confirmLabel: 'Apply changes',
+        completed: (applied: number, skipped: number) => `Applied to ${applied} targets; skipped ${skipped}.`, stale: 'This preview is stale. Rescan before applying.',
+        flags: { scanFailed: 'Couldn’t scan imported references', applyFailed: 'Couldn’t apply reference changes' },
+      },
     },
   },
   issuePage: {

@@ -433,6 +433,46 @@ query ImportRun($id: ID!) {
   }
 }
 
+fragment ImportReferenceRepairFields on ImportReferenceRepair {
+  id
+  runId
+  status
+  previewVersion
+  previewHash
+  summary
+  error
+  targets {
+    id
+    targetKind
+    targetId
+    sourceExternalId
+    referenceCount
+    beforeMd
+    afterMd
+    context
+    status
+    skipReason
+  }
+}
+
+query ImportReferenceRepair($id: ID!, $first: Int, $offset: Int) {
+  importReferenceRepair(id: $id, first: $first, offset: $offset) {
+    ...ImportReferenceRepairFields
+  }
+}
+
+mutation StartImportReferenceRepair($runId: ID!) {
+  startImportReferenceRepair(runId: $runId) {
+    ...ImportReferenceRepairFields
+  }
+}
+
+mutation ApplyImportReferenceRepair($id: ID!, $previewHash: String!, $confirmed: Boolean!) {
+  applyImportReferenceRepair(id: $id, previewHash: $previewHash, confirmed: $confirmed) {
+    ...ImportReferenceRepairFields
+  }
+}
+
 mutation CreateImportRunFromCsv($input: CsvImportInput!) {
   createImportRunFromCsv(input: $input) {
     ...ImportRunFields

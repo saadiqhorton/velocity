@@ -121,6 +121,8 @@ export async function createApp(config: ServerConfig, opts: { logger?: Logger; i
   const drainInterval = runsJobs ? setInterval(scheduleDrain, 5000) : null;
   drainInterval?.unref();
   if (boss && runsJobs) {
+    const recoveredImports = await services.importer.recoverCommittingRuns();
+    if (recoveredImports > 0) logger.warn({ recoveredImports }, 'recovered legacy committing imports');
     await startWorkers(boss, services, logger, { auditRetentionDays: config.auditRetentionDays });
     if (await registerBackupSchedule(boss, config, logger)) logger.info({ schedule: config.backup.schedule, retentionDays: config.backup.retentionDays, dir: config.backupDir }, 'nightly backups scheduled');
   }

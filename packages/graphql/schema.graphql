@@ -400,6 +400,30 @@ type HourlyCount {
   hour: DateTime!
 }
 
+type ImportReferenceRepair {
+  error: String
+  id: ID!
+  previewHash: String!
+  previewVersion: Int!
+  runId: ID!
+  status: String!
+  summary: JSON!
+  targets: [ImportReferenceRepairTarget!]!
+}
+
+type ImportReferenceRepairTarget {
+  afterMd: String!
+  beforeMd: String!
+  context: JSON!
+  id: ID!
+  referenceCount: Int!
+  skipReason: String
+  sourceExternalId: String!
+  status: String!
+  targetId: ID!
+  targetKind: String!
+}
+
 type ImportRun {
   committedCount: Int!
   createdAt: DateTime!
@@ -569,7 +593,7 @@ input LoginInput {
 
 type McpInfo {
   """
-  Versioned tarball of the stdio client served by this server; run with `npx -y <url>`.
+  Content-addressed tarball of the stdio client served by this server; run with `npx -y <url>`.
   """
   clientPackageUrl: String
   httpEnabled: Boolean!
@@ -606,6 +630,7 @@ type Mutation {
   acceptInvite(input: AcceptInviteInput!): AuthPayload!
   addFavorite(kind: FavoriteKind!, targetId: ID!): Favorite!
   addRelation(issueId: ID!, targetIssueId: ID!, type: RelationInputType!): IssueRelation!
+  applyImportReferenceRepair(confirmed: Boolean!, id: ID!, previewHash: String!): ImportReferenceRepair!
   archiveIssues(archived: Boolean!, ids: [ID!]!): [Issue!]!
   archiveProject(archived: Boolean!, id: ID!): Project!
   archiveTeam(archived: Boolean!, id: ID!): Team!
@@ -702,6 +727,7 @@ type Mutation {
   """
   setupWorkspace(input: SetupWorkspaceInput!): AuthPayload!
   signup(input: SignupInput!): AuthPayload!
+  startImportReferenceRepair(runId: ID!): ImportReferenceRepair!
 
   """
   Called by MCP servers on connect; returns the session id sent as X-MCP-Session-Id (audited).
@@ -877,6 +903,7 @@ type Query {
   exports: [Export!]!
   favorites: [Favorite!]!
   githubIntegration: GithubIntegration!
+  importReferenceRepair(first: Int, id: ID!, offset: Int): ImportReferenceRepair
   importRun(id: ID!): ImportRun
   importRuns: [ImportRun!]!
   inviteInfo(token: String!): InviteInfo!

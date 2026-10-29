@@ -127,12 +127,12 @@ export class TeamService extends ServiceBase {
     if (input.description && input.description.length > 2000) throw validation('Description is too long.', { field: 'description' });
   }
 
-  async create(actor: ServiceActor, input: TeamInput): Promise<TeamRow> {
+  async create(actor: ServiceActor, input: TeamInput, executor?: Tx): Promise<TeamRow> {
     assertCan(actor, 'team.write');
     const key = input.key.trim().toUpperCase();
     this.validateInput({ ...input, key });
     try {
-      const team = await this.tx(async (tx) => {
+      const create = async (tx: Tx): Promise<TeamRow> => {
         const [maxOrder] = await tx.select({ m: max(teams.sortOrder) }).from(teams);
         const [t] = await tx
           .insert(teams)
@@ -162,8 +162,14 @@ export class TeamService extends ServiceBase {
         if (actor.userId) await tx.insert(teamMembers).values({ teamId: t.id, userId: actor.userId }).onConflictDoNothing();
         await publish(tx, 'team.updated', { teamId: t.id, actor: toActorRef(actor) });
         return t;
-      });
-      if (team.cycleEnabled) await this.jobs.send('cycles', { type: 'rotate_team', teamId: team.id });
+      };
+      const team = executor ? await create(executor) : await this.tx(create);
+      if (team.cycleEnabled) {
+        if (executor) {
+          const jobId = await this.jobs.sendInTx(executor, 'cycles', { type: 'rotate_team', teamId: team.id });
+          if (!jobId) throw new Error('The team cycle job was not accepted by the queue.');
+        } else await this.jobs.send('cycles', { type: 'rotate_team', teamId: team.id });
+      }
       this.keyCache.clear();
       return team;
     } catch (err) {
