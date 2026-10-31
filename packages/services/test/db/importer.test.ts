@@ -936,4 +936,51 @@ describe('bundle helper', () => {
       await c.h.close();
     }
   });
+
+  it('rewrites only exact mapped Linear links to canonical destination issue links', async () => {
+    const c = await start();
+    try {
+      const mappedLinear = '[DEZ-99](https://linear.app/saadiqhorton/issue/SAA-22/source-slug "Mapped source")';
+      const unmappedLinear = '[DEZ-404](https://linear.app/saadiqhorton/issue/SAA-404/unmapped)';
+      const external = '[external](https://example.com/issue/SAA-22)';
+      const bundle: ImportBundle = {
+        source: 'linear',
+        teams: [{ externalId: 'source', key: 'SAA', name: 'Source' }],
+        statuses: [{ teamExternalId: 'source', name: 'Todo', category: 'todo' }],
+        users: [], labels: [], projects: [], cycles: [], warnings: [],
+        issues: [
+          { externalId: 'SAA-22', teamExternalId: 'source', title: 'Mapped target', descriptionMd: 'No links', statusName: 'Todo', labelNames: [], relations: [], comments: [], attachments: [] },
+          { externalId: 'SAA-21', teamExternalId: 'source', title: 'Link source', descriptionMd: [mappedLinear, unmappedLinear, external].join('\n'), statusName: 'Todo', labelNames: [], relations: [], comments: [], attachments: [] },
+        ],
+      };
+      const run = await c.h.services.importer.createRun(c.owner, { source: 'linear', bundle });
+      const mapping = mappingOf(run);
+      await c.h.services.importer.updateMapping(c.owner, run.id, {
+        ...mapping,
+        teams: { source: { mode: 'create', key: 'DEZ', name: 'Destination' } },
+      });
+
+      await importAll(c, run);
+
+      const imported = await q<{ external_id: string; entity_id: string; identifier: string; description_md: string }>(c.h,
+        `select item.external_id, item.entity_id, t.key || '-' || i.number as identifier, i.description_md
+           from import_items item join issues i on i.id = item.entity_id join teams t on t.id = i.team_id
+          where item.run_id = $1 and item.kind = 'issue'`, [run.id]);
+      const target = imported.find((row) => row.external_id === 'SAA-22')!;
+      const source = imported.find((row) => row.external_id === 'SAA-21')!;
+      expect(target.identifier).toBe('DEZ-1');
+      expect(source.description_md).toBe([
+        `[${target.identifier}](/issue/${target.entity_id})`,
+        unmappedLinear,
+        external,
+      ].join('\n'));
+      expect(source.description_md).not.toContain('issue/SAA-22/source-slug');
+
+      await c.h.services.importer.runCommit(run.id);
+      const afterRetry = await q<{ description_md: string }>(c.h, 'select description_md from issues where id = $1', [source.entity_id]);
+      expect(afterRetry[0]!.description_md).toBe(source.description_md);
+    } finally {
+      await c.h.close();
+    }
+  });
 });

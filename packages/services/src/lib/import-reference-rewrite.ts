@@ -6,6 +6,7 @@ export interface ImportedReferenceTarget {
 export interface ImportedReferenceEdit {
   sourceKey: string;
   destinationId: string;
+  identifier: string;
   before: string;
   after: string;
   start: number;
@@ -20,13 +21,29 @@ export interface ImportedReferenceRewrite {
   alreadyCorrect: number;
 }
 
+interface InlineMarkdownLink {
+  start: number;
+  end: number;
+  labelStart: number;
+  labelEnd: number;
+  destination: string;
+  image: boolean;
+}
+
 function mark(mask: boolean[], start: number, end: number): void {
   for (let i = start; i < end; i++) mask[i] = true;
 }
 
-function markdownProtected(text: string, mapping: ReadonlyMap<string, unknown>): boolean[] {
+function isEscaped(text: string, index: number): boolean {
+  let slashes = 0;
+  for (let i = index - 1; i >= 0 && text[i] === '\\'; i--) slashes++;
+  return slashes % 2 === 1;
+}
+
+function markdownProtected(text: string): boolean[] {
   const mask = Array.from({ length: text.length }, () => false);
   const lines = [...text.matchAll(/.*(?:\n|$)/g)].filter((m) => m[0].length > 0);
+  const referenceLabels = new Set<string>();
   let fence: { char: string; size: number } | null = null;
   for (const line of lines) {
     const value = line[0];
@@ -45,7 +62,14 @@ function markdownProtected(text: string, mapping: ReadonlyMap<string, unknown>):
       mark(mask, offset, offset + value.length);
       continue;
     }
-    if (/^(?: {4,}|\t)/.test(content) || /^ {0,3}\[[^\]]+\]:/.test(content)) mark(mask, offset, offset + value.length);
+    if (/^(?: {4,}|\t)/.test(content)) mark(mask, offset, offset + value.length);
+    else {
+      const definition = /^ {0,3}\[([^\]]+)\]:/.exec(content);
+      if (definition) {
+        referenceLabels.add(definition[1]!.trim().replace(/\s+/g, ' ').toLowerCase());
+        mark(mask, offset, offset + value.length);
+      }
+    }
   }
 
   // Inline code spans use matching backtick-run lengths. Fenced/indented lines are already masked.
@@ -68,34 +92,145 @@ function markdownProtected(text: string, mapping: ReadonlyMap<string, unknown>):
     if (close >= text.length) i += run;
   }
 
+  // Reference-style links retain their definition and destination as one Markdown unit.
+  for (const match of text.matchAll(/!?\[([^\]\n]*)\](?:\[([^\]\n]*)\])?/g)) {
+    const start = match.index ?? 0;
+    const end = start + match[0].length;
+    const label = (match[2] || match[1] || '').trim().replace(/\s+/g, ' ').toLowerCase();
+    const shortcut = match[2] === undefined && text[end] !== '(';
+    if ((match[2] === undefined && !shortcut) || (!referenceLabels.has(label) && match[2] === undefined)) continue;
+    if (!mask.slice(start, end).some(Boolean)) mark(mask, start, end);
+  }
+
+  return mask;
+}
+
+/** Protects bare URLs that are not already part of a parsed inline link. */
+function markProtectedUrls(text: string, mapping: ReadonlyMap<string, unknown>, mask: boolean[]): void {
   for (const m of text.matchAll(/\b([A-Za-z][A-Za-z0-9+.-]*):[^\s<>]+/g)) {
     const start = m.index ?? 0;
+    const end = start + m[0].length;
+    if (mask.slice(start, end).some(Boolean)) continue;
     const scheme = m[1]!;
     const colon = start + scheme.length;
     if (mapping.has(scheme) && text[colon + 1] !== '/') continue;
-    mark(mask, start, start + m[0].length);
+    mark(mask, start, end);
   }
   for (const m of text.matchAll(/(^|[\s(])\/\/[^\s<>]+/gm)) {
     const prefixLength = m[1]!.length;
     const start = (m.index ?? 0) + prefixLength;
-    mark(mask, start, start + m[0].length - prefixLength);
+    const end = start + m[0].length - prefixLength;
+    if (!mask.slice(start, end).some(Boolean)) mark(mask, start, end);
   }
   for (const m of text.matchAll(/\bwww\.[^\s<>]+/gi)) {
-    mark(mask, m.index ?? 0, (m.index ?? 0) + m[0].length);
+    const start = m.index ?? 0;
+    const end = start + m[0].length;
+    if (!mask.slice(start, end).some(Boolean)) mark(mask, start, end);
   }
-  // Markdown link destinations: [label](destination), including balanced parentheses.
-  for (let i = 0; i < text.length - 1; i++) {
-    if (text[i] !== ']' || text[i + 1] !== '(' || mask[i]) continue;
-    let depth = 1;
-    let j = i + 2;
-    for (; j < text.length && depth > 0; j++) {
-      if (text[j] === '\\') { j++; continue; }
-      if (text[j] === '(') depth++;
-      else if (text[j] === ')') depth--;
+}
+
+/** Parses the destination and optional title of `[label](...)`, returning the full closing position. */
+function parseInlineDestination(text: string, destinationStart: number): { destination: string; end: number } | null {
+  let i = destinationStart;
+  while (text[i] === ' ' || text[i] === '\t') i++;
+  let destination: string;
+  if (text[i] === '<') {
+    const start = ++i;
+    while (i < text.length && (text[i] !== '>' || isEscaped(text, i))) i++;
+    if (i >= text.length) return null;
+    destination = text.slice(start, i);
+    i++;
+  } else {
+    const start = i;
+    let depth = 0;
+    while (i < text.length) {
+      const ch = text[i]!;
+      if (isEscaped(text, i)) { i++; continue; }
+      if (ch === '(') { depth++; i++; continue; }
+      if (ch === ')') {
+        if (depth === 0) break;
+        depth--;
+        i++;
+        continue;
+      }
+      if (ch === ' ' || ch === '\t' || ch === '\r' || ch === '\n') break;
+      i++;
     }
-    if (depth === 0) mark(mask, i + 2, j - 1);
+    destination = text.slice(start, i);
   }
-  return mask;
+  if (!destination) return null;
+
+  while (text[i] === ' ' || text[i] === '\t' || text[i] === '\r' || text[i] === '\n') i++;
+  if (text[i] === ')') return { destination, end: i + 1 };
+
+  const quote = text[i];
+  if (quote !== '"' && quote !== "'" && quote !== '(') return null;
+  const titleEnd = quote === '(' ? ')' : quote;
+  i++;
+  while (i < text.length && (text[i] !== titleEnd || isEscaped(text, i))) i++;
+  if (i >= text.length) return null;
+  i++;
+  while (text[i] === ' ' || text[i] === '\t' || text[i] === '\r' || text[i] === '\n') i++;
+  return text[i] === ')' ? { destination, end: i + 1 } : null;
+}
+
+function inlineMarkdownLinks(text: string, mask: boolean[]): InlineMarkdownLink[] {
+  const links: InlineMarkdownLink[] = [];
+  for (let close = 1; close < text.length - 1; close++) {
+    if (mask[close] || text[close] !== ']' || text[close + 1] !== '(' || isEscaped(text, close)) continue;
+    let depth = 0;
+    let open = -1;
+    for (let i = close - 1; i >= 0; i--) {
+      if (isEscaped(text, i)) continue;
+      if (text[i] === ']') { depth++; continue; }
+      if (text[i] !== '[') continue;
+      if (depth === 0) { open = i; break; }
+      depth--;
+    }
+    if (open < 0 || mask[open]) continue;
+    const parsed = parseInlineDestination(text, close + 2);
+    if (!parsed || mask[open] || mask[close]) continue;
+    const image = open > 0 && text[open - 1] === '!' && !isEscaped(text, open - 1);
+    links.push({
+      start: image ? open - 1 : open,
+      end: parsed.end,
+      labelStart: open + 1,
+      labelEnd: close,
+      destination: parsed.destination,
+      image,
+    });
+    close = parsed.end - 1;
+  }
+  return links;
+}
+
+function linearIssueKey(destination: string): string | null {
+  let url: URL;
+  try {
+    url = new URL(destination);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== 'https:' || url.hostname !== 'linear.app' || url.port || url.username || url.password) return null;
+  const segments = url.pathname.split('/');
+  if (segments.length < 4 || segments.length > 5 || segments[0] !== '' || !segments[1] || segments[2] !== 'issue' || !segments[3]) return null;
+  try {
+    return decodeURIComponent(segments[3]);
+  } catch {
+    return null;
+  }
+}
+
+/** Returns the destination UUID for an exact local `/issue/<uuid>` link. */
+function canonicalIssueId(destination: string): string | null {
+  if (!destination.startsWith('/issue/')) return null;
+  const value = destination.slice('/issue/'.length);
+  if (!value || value.includes('/') || /[?#]/.test(value)) return null;
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return null;
+  }
 }
 
 function isIdentifierContinuation(ch: string | undefined, next: string | undefined): boolean {
@@ -108,9 +243,18 @@ function isWord(ch: string | undefined): boolean {
   return ch !== undefined && /[\p{L}\p{N}_]/u.test(ch);
 }
 
-/** Replaces only exact run-scoped keys outside Markdown code and URL/link destinations. */
+/** Replaces exact run-scoped references and mapped Linear links outside Markdown code and protected URLs. */
 export function rewriteImportedReferences(text: string, mapping: ReadonlyMap<string, ImportedReferenceTarget | null>): ImportedReferenceRewrite {
-  const mask = markdownProtected(text, mapping);
+  const codeMask = markdownProtected(text);
+  const links = inlineMarkdownLinks(text, codeMask);
+  const linkMask = [...codeMask];
+  const linkEnds = new Map<number, number>();
+  for (const link of links) {
+    mark(linkMask, link.start, link.end);
+    linkEnds.set(link.start, link.end);
+  }
+  markProtectedUrls(text, mapping, linkMask);
+
   const keys = [...mapping.keys()].filter(Boolean).sort((a, b) => b.length - a.length || a.localeCompare(b));
   const root: { next: Map<string, typeof root>; keys: string[] } = { next: new Map(), keys: [] };
   for (const key of keys) {
@@ -122,13 +266,62 @@ export function rewriteImportedReferences(text: string, mapping: ReadonlyMap<str
     }
     node.keys.push(key);
   }
+
+  const targetsById = new Map<string, ImportedReferenceTarget>();
+  for (const target of mapping.values()) if (target) targetsById.set(target.id, target);
+
+  const linkEdits = new Map<number, ImportedReferenceEdit>();
   const edits: ImportedReferenceEdit[] = [];
   const unmapped = new Set<string>();
   let alreadyCorrect = 0;
   let skippedCodeReferences = 0;
+
+  for (const link of links) {
+    if (link.image) continue;
+    const localId = canonicalIssueId(link.destination);
+    if (localId !== null) {
+      const target = targetsById.get(localId);
+      if (target && text.slice(link.labelStart, link.labelEnd) === target.identifier) alreadyCorrect++;
+      continue;
+    }
+    const sourceKey = linearIssueKey(link.destination);
+    if (sourceKey === null) continue;
+    const target = mapping.get(sourceKey);
+    if (!target) {
+      unmapped.add(sourceKey);
+      continue;
+    }
+    const after = `[${target.identifier}](/issue/${encodeURIComponent(target.id)})`;
+    linkEdits.set(link.start, {
+      sourceKey,
+      destinationId: target.id,
+      identifier: target.identifier,
+      before: text.slice(link.start, link.end),
+      after,
+      start: link.start,
+      end: link.end,
+    });
+  }
+
   let rebuilt = '';
   let cursor = 0;
   for (let i = 0; i < text.length; ) {
+    const linkEnd = linkEnds.get(i);
+    if (linkEnd !== undefined) {
+      const edit = linkEdits.get(i);
+      if (edit) {
+        rebuilt += text.slice(cursor, i) + edit.after;
+        edits.push(edit);
+        cursor = linkEnd;
+      }
+      i = linkEnd;
+      continue;
+    }
+    if (linkMask[i] && !codeMask[i]) {
+      i++;
+      continue;
+    }
+
     let node = root;
     let end = i;
     let key: string | undefined;
@@ -142,8 +335,7 @@ export function rewriteImportedReferences(text: string, mapping: ReadonlyMap<str
     }
     if (!key) { i++; continue; }
     const matchEnd = i + key.length;
-    const protectedCount = mask.slice(i, matchEnd).some(Boolean);
-    if (protectedCount) {
+    if (codeMask.slice(i, matchEnd).some(Boolean)) {
       skippedCodeReferences++;
       i = matchEnd;
       continue;
@@ -160,12 +352,13 @@ export function rewriteImportedReferences(text: string, mapping: ReadonlyMap<str
       continue;
     }
     rebuilt += text.slice(cursor, i) + target.identifier;
-    edits.push({ sourceKey: key, destinationId: target.id, before: key, after: target.identifier, start: i, end: matchEnd });
+    edits.push({ sourceKey: key, destinationId: target.id, identifier: target.identifier, before: key, after: target.identifier, start: i, end: matchEnd });
     cursor = matchEnd;
     i = matchEnd;
   }
   if (edits.length) rebuilt += text.slice(cursor);
   else rebuilt = text;
+
   // Report recognizable references outside this run without guessing a destination for them.
   const unknownPatterns = [/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+#\d{1,15}/g, /[A-Za-z][A-Za-z0-9]{0,9}-\d{1,15}/g];
   for (const pattern of unknownPatterns) {
@@ -173,14 +366,15 @@ export function rewriteImportedReferences(text: string, mapping: ReadonlyMap<str
       const start = m.index ?? 0;
       const end = start + m[0].length;
       if (isIdentifierContinuation(text[start - 1], text[start]) || isIdentifierContinuation(text[end], text[end + 1]) || isWord(text[end]) || mapping.has(m[0])) continue;
-      if (mask.slice(start, end).some(Boolean)) { skippedCodeReferences++; continue; }
+      if (codeMask.slice(start, end).some(Boolean)) { skippedCodeReferences++; continue; }
+      if (linkMask.slice(start, end).some(Boolean)) continue;
       unmapped.add(m[0]);
     }
   }
   return { text: rebuilt, edits, unmapped: [...unmapped].sort((a, b) => text.indexOf(a) - text.indexOf(b)), skippedCodeReferences, alreadyCorrect };
 }
 
-/** Returns only exact keys from a persisted run map that occur in unprotected Markdown. */
+/** Returns only exact keys from a persisted run map that occur in unprotected Markdown or Linear inline links. */
 export function findImportedReferenceKeys(text: string, keys: Iterable<string>): string[] {
   const mapping = new Map([...keys].map((key) => [key, null] as const));
   const known = new Set(mapping.keys());

@@ -506,4 +506,65 @@ describe('historical import reference repair', () => {
     const issue = await h.pool.query<{ description_md: string }>("select i.description_md from issues i join import_items it on it.entity_id = i.id where it.run_id = $1 and it.kind = 'issue' and it.external_id = 'MISS-1'", [run.id]);
     expect(issue.rows[0]?.description_md).toBe('See MISS-2');
   });
+
+  it('repairs the historical split label and stale Linear destination form to zero on rescan', async () => {
+    const stale = '[DEZ-72](https://linear.app/saadiqhorton/issue/SAA-77/spec-tool-catalog-auto-discovery-output-cap-phase-1)';
+    const bundle: ImportBundle = {
+      source: 'linear',
+      teams: [{ externalId: 'linear-link', key: 'SAA', name: 'Linear links' }],
+      statuses: [{ teamExternalId: 'linear-link', name: 'Todo', category: 'todo' }],
+      users: [], labels: [], projects: [], cycles: [], warnings: [],
+      issues: [
+        { externalId: 'SAA-77', teamExternalId: 'linear-link', title: 'Destination', descriptionMd: 'Imported destination', statusName: 'Todo', labelNames: [], relations: [], comments: [], attachments: [] },
+      ],
+    };
+    const run = await h.services.importer.createRun(owner, { source: 'linear', bundle });
+    const mapping = run.mapping as ImportMapping;
+    await h.services.importer.updateMapping(owner, run.id, {
+      ...mapping,
+      teams: { 'linear-link': { mode: 'create', key: 'DEZ', name: 'Destination' } },
+    });
+    await h.services.importer.dryRun(owner, run.id);
+    await h.services.importer.commit(owner, run.id);
+    await h.services.importer.runCommit(run.id);
+
+    const imported = await h.pool.query<{ entity_id: string }>(
+      `select entity_id from import_items where run_id = $1 and kind = 'issue' and external_id = 'SAA-77'`,
+      [run.id],
+    );
+    const destinationId = imported.rows[0]!.entity_id;
+    await h.pool.query('update issues set number = 72, description_md = $1 where id = $2', [stale, destinationId]);
+
+    const service = h.services.importReferenceRepairs;
+    const scan = await service.startScan(owner, run.id);
+    await service.scanJob(scan.id, scan.previewVersion);
+    const preview = await service.get(owner, scan.id);
+    expect(preview?.summary).toMatchObject({ targets: 1, references: 1, unmapped: 0 });
+    expect(preview?.targets).toHaveLength(1);
+    const target = preview!.targets[0]!;
+    const repaired = `[DEZ-72](/issue/${destinationId})`;
+    expect(target).toMatchObject({
+      targetKind: 'issue_description',
+      targetId: destinationId,
+      sourceExternalId: 'SAA-77',
+      beforeMd: stale,
+      afterMd: repaired,
+      referenceCount: 1,
+      status: 'pending',
+      mappingSnapshot: [{
+        sourceExternalId: 'SAA-77',
+        destinationId,
+        identifier: 'DEZ-72',
+      }],
+    });
+
+    await service.apply(owner, scan.id, preview!.previewHash, true);
+    await service.applyJob(scan.id, preview!.previewHash);
+    const persisted = await h.pool.query<{ description_md: string }>('select description_md from issues where id = $1', [destinationId]);
+    expect(persisted.rows[0]!.description_md).toBe(repaired);
+
+    const rescan = await service.startScan(owner, run.id);
+    await service.scanJob(rescan.id, rescan.previewVersion);
+    expect((await service.get(owner, rescan.id))?.summary).toMatchObject({ targets: 0, references: 0, alreadyCorrect: 1 });
+  });
 });

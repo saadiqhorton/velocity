@@ -824,6 +824,7 @@ Approved by the repo owner. Where this amendment and earlier §4 text disagree, 
 - **Selection.** The board matches the list: `X` toggles, `Shift+X` selects a range, `Mod+A` selects all, `⌘/Ctrl`-click toggles and `Shift`-click selects a range. Selection clears when the view changes (new list, route or scope).
 - **Tooltips and keys.** Tooltips for registered commands show their shortcut from the command registry. `F` opens the filter menu.
 - **Editor (text-field rules, §4.12).** A selection shows a toolbar: bold, italic, strike, code, link. `/` opens the block menu (headings, lists, task list, quote, code block, divider). `#` searches issues and inserts a markdown link to the issue. `@` inserts `@username`; the server parses that syntax for comment mentions (§3.5.4).
+- **Editable links.** A primary click on a valid link in editable rich text activates it while the field remains editable. Root-relative internal links navigate in the app; external HTTP(S) links open in a safe new context. Modified and non-primary clicks retain normal browser behavior.
 - **Issue detail.** Empty sub-issue, relation and attachment sections collapse into one row of actions under the description. Sub-issue quick-add is an inline title field: Enter adds the sub-issue optimistically and keeps the field open. Activity rows carry glyphs (status, priority, assignee, labels, relations) and include the issue-created entry. Consecutive same-actor edits of the same property within 10 minutes collapse into one activity row.
 - **Create-issue modal.** Header breadcrumb `team › New issue`, plus a sub-issue chip when created under a parent. Borderless title. No Cancel button: `Esc` or × closes. The primary button carries a `⌘/Ctrl+Enter` hint. An empty title shows an inline error.
 - **Enter and Space.** `Enter` opens the focused issue's full page. `Space` peeks it in the side panel; `Space` again or `Esc` closes the peek. `⌘/Ctrl+Enter` opens the full page. In the inbox, `Enter` opens the peek panel. This supersedes "Enter opens the panel" in §4.10.2 and §4.12 and promotes the recorded U1 deviation to specification.
@@ -1206,6 +1207,8 @@ In-app + CLI (`packages/importers`), shared pipelines:
 | **Jira** | CSV (Cloud/DC wizard) | Project→team; types→labels; statuses→workflow with category map; priority map; sprint→cycle; story points→estimate; comments |
 
 Pipeline: parse (streamed) → mapping preview (unmapped values highlighted + suggested defaults) → dry-run report → commit in 500-row chunks → resumable (`import_runs`) → progress via subscription + webhooks.
+
+Linear issue links in imported Markdown are rewritten atomically only when their destination key has an exact mapping persisted by that same import run. The complete link becomes the destination's current identifier and canonical `/issue/{uuid}` URL (§6.8); the importer never infers a destination from numeric or team-key similarity. External and unmapped links remain unchanged. Historical repair previews the same destination change for split Markdown links whose labels were already rewritten over stale Linear destinations, applies it with provenance, lifecycle, and compare-and-set protections, and a subsequent rescan reports no remaining changes.
 
 ## 6.8 Issue Reference Syntax
 

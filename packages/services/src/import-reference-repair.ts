@@ -148,7 +148,7 @@ export class ImportReferenceRepairService extends ServiceBase {
         if (!rewritten.edits.length) continue;
         summary.targets++;
         const mappingSnapshot = [...new Map(rewritten.edits.map((edit) => [edit.sourceKey, {
-          sourceExternalId: edit.sourceKey, destinationId: edit.destinationId, identifier: edit.after,
+          sourceExternalId: edit.sourceKey, destinationId: edit.destinationId, identifier: edit.identifier,
         }])).values()];
         targets.push({
           repairId: repair.id,
