@@ -936,4 +936,112 @@ describe('bundle helper', () => {
       await c.h.close();
     }
   });
+
+  it('rewrites only exact mapped Linear links to canonical destination issue links', async () => {
+    const c = await start();
+    try {
+      const mappedLinear = '[DEZ-99](https://linear.app/saadiqhorton/issue/SAA-22/source-slug "Mapped source")';
+      const unmappedLinear = '[DEZ-404](https://linear.app/saadiqhorton/issue/SAA-404/unmapped)';
+      const external = '[external](https://example.com/issue/SAA-22)';
+      const nested = '[label](https://linear.app/saadiqhorton/issue/SAA-22/source-slug)';
+      const outerUrls = [
+        `https://example.test/?q=${nested}&ref=ENG-12`,
+        `<https://example.test/?q=${nested}&ref=ENG-12>`,
+        `//example.test/?q=${nested}&ref=ENG-12`,
+        `www.example.test/?q=${nested}&ref=ENG-12`,
+      ];
+      const bundle: ImportBundle = {
+        source: 'linear',
+        teams: [{ externalId: 'source', key: 'SAA', name: 'Source' }],
+        statuses: [{ teamExternalId: 'source', name: 'Todo', category: 'todo' }],
+        users: [], labels: [], projects: [], cycles: [], warnings: [],
+        issues: [
+          { externalId: 'SAA-22', teamExternalId: 'source', title: 'Mapped target', descriptionMd: 'No links', statusName: 'Todo', labelNames: [], relations: [], comments: [], attachments: [] },
+          { externalId: 'SAA-21', teamExternalId: 'source', title: 'Link source', descriptionMd: [...outerUrls, mappedLinear, unmappedLinear, external].join('\n'), statusName: 'Todo', labelNames: [], relations: [], comments: [], attachments: [] },
+        ],
+      };
+      const run = await c.h.services.importer.createRun(c.owner, { source: 'linear', bundle });
+      const mapping = mappingOf(run);
+      await c.h.services.importer.updateMapping(c.owner, run.id, {
+        ...mapping,
+        teams: { source: { mode: 'create', key: 'DEZ', name: 'Destination' } },
+      });
+
+      await importAll(c, run);
+
+      const imported = await q<{ external_id: string; entity_id: string; identifier: string; description_md: string }>(c.h,
+        `select item.external_id, item.entity_id, t.key || '-' || i.number as identifier, i.description_md
+           from import_items item join issues i on i.id = item.entity_id join teams t on t.id = i.team_id
+          where item.run_id = $1 and item.kind = 'issue'`, [run.id]);
+      const target = imported.find((row) => row.external_id === 'SAA-22')!;
+      const source = imported.find((row) => row.external_id === 'SAA-21')!;
+      expect(target.identifier).toBe('DEZ-1');
+      expect(source.description_md).toBe([
+        ...outerUrls,
+        `[${target.identifier}](/issue/${target.entity_id})`,
+        unmappedLinear,
+        external,
+      ].join('\n'));
+
+      await c.h.services.importer.runCommit(run.id);
+      const afterRetry = await q<{ description_md: string }>(c.h, 'select description_md from issues where id = $1', [source.entity_id]);
+      expect(afterRetry[0]!.description_md).toBe(source.description_md);
+    } finally {
+      await c.h.close();
+    }
+  });
+
+  it('does not resolve a source key persisted by another import run during rewrite or repair', async () => {
+    const c = await start();
+    try {
+      const priorBundle: ImportBundle = {
+        source: 'linear',
+        teams: [{ externalId: 'prior', key: 'SAA', name: 'Prior source' }],
+        statuses: [{ teamExternalId: 'prior', name: 'Todo', category: 'todo' }],
+        users: [], labels: [], projects: [], cycles: [], warnings: [],
+        issues: [
+          { externalId: 'SAA-10', teamExternalId: 'prior', title: 'Prior target', descriptionMd: 'No links', statusName: 'Todo', labelNames: [], relations: [], comments: [], attachments: [] },
+        ],
+      };
+      const priorRun = await c.h.services.importer.createRun(c.owner, { source: 'linear', bundle: priorBundle });
+      const priorMapping = mappingOf(priorRun);
+      await c.h.services.importer.updateMapping(c.owner, priorRun.id, {
+        ...priorMapping,
+        teams: { prior: { mode: 'create', key: 'OLD', name: 'Prior destination' } },
+      });
+      await importAll(c, priorRun);
+
+      const staleLinear = '[DEZ-72](https://linear.app/saadiqhorton/issue/SAA-10/prior-run)';
+      const currentBundle: ImportBundle = {
+        source: 'linear',
+        teams: [{ externalId: 'current', key: 'OPS', name: 'Current source' }],
+        statuses: [{ teamExternalId: 'current', name: 'Todo', category: 'todo' }],
+        users: [], labels: [], projects: [], cycles: [], warnings: [],
+        issues: [
+          { externalId: 'OPS-1', teamExternalId: 'current', title: 'Current source', descriptionMd: staleLinear, statusName: 'Todo', labelNames: [], relations: [], comments: [], attachments: [] },
+        ],
+      };
+      const currentRun = await c.h.services.importer.createRun(c.owner, { source: 'linear', bundle: currentBundle });
+      const currentMapping = mappingOf(currentRun);
+      await c.h.services.importer.updateMapping(c.owner, currentRun.id, {
+        ...currentMapping,
+        teams: { current: { mode: 'create', key: 'NEW', name: 'Current destination' } },
+      });
+      await importAll(c, currentRun);
+
+      expect(await count(c.h, 'import_items', `run_id = '${priorRun.id}' and kind = 'issue' and external_id = 'SAA-10'`)).toBe(1);
+      expect(await count(c.h, 'import_items', `run_id = '${currentRun.id}' and kind = 'issue' and external_id = 'SAA-10'`)).toBe(0);
+      const imported = await q<{ entity_id: string; description_md: string }>(c.h,
+        `select entity_id, description_md from import_items item join issues i on i.id = item.entity_id
+          where item.run_id = $1 and item.kind = 'issue' and item.external_id = 'OPS-1'`, [currentRun.id]);
+      expect(imported[0]!.description_md).toBe(staleLinear);
+
+      const repair = await c.h.services.importReferenceRepairs.startScan(c.owner, currentRun.id);
+      await c.h.services.importReferenceRepairs.scanJob(repair.id, repair.previewVersion);
+      const preview = await c.h.services.importReferenceRepairs.get(c.owner, repair.id);
+      expect(preview).toMatchObject({ status: 'preview', targets: [], summary: { targets: 0, references: 0, unmapped: 1 } });
+    } finally {
+      await c.h.close();
+    }
+  });
 });

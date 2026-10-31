@@ -4,8 +4,10 @@ import { useApolloClient } from '@apollo/client';
 import { EditorContent, useEditor } from '@tiptap/react';
 import { BubbleMenu } from '@tiptap/react/menus';
 import clsx from 'clsx';
+import { useNavigate } from 'react-router-dom';
 import { useWorkspace } from '@/app/workspace';
 import { GlobalSearchDocument } from '@/gql/graphql';
+import { activateEditorLink, openExternalEditorLink } from './linkActivation';
 import { createEditorExtensions, editorMarkdown } from './markdownExtensions';
 import { SelectionToolbar, shouldShowSelectionToolbar } from './SelectionToolbar';
 import { SuggestionPopup } from './SuggestionPopup';
@@ -61,6 +63,8 @@ export default function MarkdownEditor({
   handle,
   minHeight = 'md',
 }: MarkdownEditorProps) {
+  const navigate = useNavigate();
+  const getNavigate = useLatestValue(navigate);
   const callbacks = useRef({ onChange, onBlur, onSubmit, onEscape });
   useEffect(() => {
     callbacks.current = { onChange, onBlur, onSubmit, onEscape };
@@ -104,6 +108,11 @@ export default function MarkdownEditor({
         role: 'textbox',
         class: clsx('prose-vel outline-none', minHeight === 'sm' ? 'min-h-10' : 'min-h-20'),
       },
+      handleClick: (view, _pos, event) =>
+        activateEditorLink(view, event, {
+          navigate: (href) => getNavigate()(href),
+          openExternal: openExternalEditorLink,
+        }),
       handleKeyDown: (view, event) => {
         // An open `/`, `@` or `#` list owns Enter and Esc (its plugin runs next and closes itself on Esc).
         if (isSuggestionOpen(view.state)) return false;
