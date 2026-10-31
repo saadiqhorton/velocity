@@ -943,6 +943,13 @@ describe('bundle helper', () => {
       const mappedLinear = '[DEZ-99](https://linear.app/saadiqhorton/issue/SAA-22/source-slug "Mapped source")';
       const unmappedLinear = '[DEZ-404](https://linear.app/saadiqhorton/issue/SAA-404/unmapped)';
       const external = '[external](https://example.com/issue/SAA-22)';
+      const nested = '[label](https://linear.app/saadiqhorton/issue/SAA-22/source-slug)';
+      const outerUrls = [
+        `https://example.test/?q=${nested}&ref=ENG-12`,
+        `<https://example.test/?q=${nested}&ref=ENG-12>`,
+        `//example.test/?q=${nested}&ref=ENG-12`,
+        `www.example.test/?q=${nested}&ref=ENG-12`,
+      ];
       const bundle: ImportBundle = {
         source: 'linear',
         teams: [{ externalId: 'source', key: 'SAA', name: 'Source' }],
@@ -950,7 +957,7 @@ describe('bundle helper', () => {
         users: [], labels: [], projects: [], cycles: [], warnings: [],
         issues: [
           { externalId: 'SAA-22', teamExternalId: 'source', title: 'Mapped target', descriptionMd: 'No links', statusName: 'Todo', labelNames: [], relations: [], comments: [], attachments: [] },
-          { externalId: 'SAA-21', teamExternalId: 'source', title: 'Link source', descriptionMd: [mappedLinear, unmappedLinear, external].join('\n'), statusName: 'Todo', labelNames: [], relations: [], comments: [], attachments: [] },
+          { externalId: 'SAA-21', teamExternalId: 'source', title: 'Link source', descriptionMd: [...outerUrls, mappedLinear, unmappedLinear, external].join('\n'), statusName: 'Todo', labelNames: [], relations: [], comments: [], attachments: [] },
         ],
       };
       const run = await c.h.services.importer.createRun(c.owner, { source: 'linear', bundle });
@@ -970,11 +977,11 @@ describe('bundle helper', () => {
       const source = imported.find((row) => row.external_id === 'SAA-21')!;
       expect(target.identifier).toBe('DEZ-1');
       expect(source.description_md).toBe([
+        ...outerUrls,
         `[${target.identifier}](/issue/${target.entity_id})`,
         unmappedLinear,
         external,
       ].join('\n'));
-      expect(source.description_md).not.toContain('issue/SAA-22/source-slug');
 
       await c.h.services.importer.runCommit(run.id);
       const afterRetry = await q<{ description_md: string }>(c.h, 'select description_md from issues where id = $1', [source.entity_id]);

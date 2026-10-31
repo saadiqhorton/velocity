@@ -508,7 +508,16 @@ describe('historical import reference repair', () => {
   });
 
   it('repairs the historical split label and stale Linear destination form to zero on rescan', async () => {
-    const stale = '[DEZ-72](https://linear.app/saadiqhorton/issue/SAA-77/spec-tool-catalog-auto-discovery-output-cap-phase-1)';
+    const linear = 'https://linear.app/saadiqhorton/issue/SAA-77/spec-tool-catalog-auto-discovery-output-cap-phase-1';
+    const stale = `[DEZ-72](${linear})`;
+    const mapped = `[SAA-77](${linear})`;
+    const nested = `[label](${linear})`;
+    const outerUrls = [
+      `https://example.test/?q=${nested}&ref=ENG-12`,
+      `<https://example.test/?q=${nested}&ref=ENG-12>`,
+      `//example.test/?q=${nested}&ref=ENG-12`,
+      `www.example.test/?q=${nested}&ref=ENG-12`,
+    ];
     const bundle: ImportBundle = {
       source: 'linear',
       teams: [{ externalId: 'linear-link', key: 'SAA', name: 'Linear links' }],
@@ -533,23 +542,25 @@ describe('historical import reference repair', () => {
       [run.id],
     );
     const destinationId = imported.rows[0]!.entity_id;
-    await h.pool.query('update issues set number = 72, description_md = $1 where id = $2', [stale, destinationId]);
+    const body = [...outerUrls, stale, mapped].join('\n');
+    await h.pool.query('update issues set number = 72, description_md = $1 where id = $2', [body, destinationId]);
 
     const service = h.services.importReferenceRepairs;
     const scan = await service.startScan(owner, run.id);
     await service.scanJob(scan.id, scan.previewVersion);
     const preview = await service.get(owner, scan.id);
-    expect(preview?.summary).toMatchObject({ targets: 1, references: 1, unmapped: 0 });
+    expect(preview?.summary).toMatchObject({ targets: 1, references: 2, unmapped: 0 });
     expect(preview?.targets).toHaveLength(1);
     const target = preview!.targets[0]!;
     const repaired = `[DEZ-72](/issue/${destinationId})`;
+    const repairedBody = [...outerUrls, repaired, repaired].join('\n');
     expect(target).toMatchObject({
       targetKind: 'issue_description',
       targetId: destinationId,
       sourceExternalId: 'SAA-77',
-      beforeMd: stale,
-      afterMd: repaired,
-      referenceCount: 1,
+      beforeMd: body,
+      afterMd: repairedBody,
+      referenceCount: 2,
       status: 'pending',
       mappingSnapshot: [{
         sourceExternalId: 'SAA-77',
@@ -561,10 +572,10 @@ describe('historical import reference repair', () => {
     await service.apply(owner, scan.id, preview!.previewHash, true);
     await service.applyJob(scan.id, preview!.previewHash);
     const persisted = await h.pool.query<{ description_md: string }>('select description_md from issues where id = $1', [destinationId]);
-    expect(persisted.rows[0]!.description_md).toBe(repaired);
+    expect(persisted.rows[0]!.description_md).toBe(repairedBody);
 
     const rescan = await service.startScan(owner, run.id);
     await service.scanJob(rescan.id, rescan.previewVersion);
-    expect((await service.get(owner, rescan.id))?.summary).toMatchObject({ targets: 0, references: 0, alreadyCorrect: 1 });
+    expect((await service.get(owner, rescan.id))?.summary).toMatchObject({ targets: 0, references: 0, alreadyCorrect: 2 });
   });
 });

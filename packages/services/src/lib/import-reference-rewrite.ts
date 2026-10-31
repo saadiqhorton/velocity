@@ -249,14 +249,15 @@ function isWord(ch: string | undefined): boolean {
  */
 export function rewriteImportedReferences(text: string, mapping: ReadonlyMap<string, ImportedReferenceTarget | null>): ImportedReferenceRewrite {
   const codeMask = markdownProtected(text);
-  const links = inlineMarkdownLinks(text, codeMask);
-  const linkMask = [...codeMask];
+  const protectedMask = [...codeMask];
+  markProtectedUrls(text, mapping, protectedMask);
+  const links = inlineMarkdownLinks(text, codeMask).filter((link) => !protectedMask[link.start]);
+  const linkMask = [...protectedMask];
   const linkEnds = new Map<number, number>();
   for (const link of links) {
     mark(linkMask, link.start, link.end);
     linkEnds.set(link.start, link.end);
   }
-  markProtectedUrls(text, mapping, linkMask);
 
   const keys = [...mapping.keys()].filter(Boolean).sort((a, b) => b.length - a.length || a.localeCompare(b));
   const root: { next: Map<string, typeof root>; keys: string[] } = { next: new Map(), keys: [] };

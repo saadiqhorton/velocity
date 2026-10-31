@@ -57,6 +57,22 @@ describe('rewriteImportedReferences', () => {
     );
   });
 
+  it('keeps mapped Linear links nested inside bare URLs byte-for-byte while repairing standalone links', () => {
+    const nested = '[label](' + LINEAR_LINK + ')';
+    const outerUrls = [
+      `https://example.test/?q=${nested}&ref=ENG-12`,
+      `<https://example.test/?q=${nested}&ref=ENG-12>`,
+      `//example.test/?q=${nested}&ref=ENG-12`,
+      `www.example.test/?q=${nested}&ref=ENG-12`,
+    ];
+    const source = [...outerUrls, mappedLink('SAA-77')].join('\n');
+    const result = rewriteImportedReferences(source, linkMapping);
+
+    expect(result.text).toBe([...outerUrls, CANONICAL_LINK].join('\n'));
+    expect(result.edits).toHaveLength(1);
+    expect(result.unmapped).toEqual([]);
+  });
+
   it('does not infer from a suffix, prefix, or a missing map entry', () => {
     const result = rewriteImportedReferences('ENG-13 ENG-12x XENG-12', mapping);
     expect(result.text).toBe('ENG-13 ENG-12x XENG-12');
