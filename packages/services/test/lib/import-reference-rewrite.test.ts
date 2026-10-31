@@ -44,6 +44,19 @@ describe('rewriteImportedReferences', () => {
     expect(rewriteImportedReferences(source, mapping).text).toBe('//example.test/?ref=ENG-12\nSee OPS-4');
   });
 
+  it('protects complete bare URLs when Markdown-like text partially overlaps them', () => {
+    const source = [
+      '<https://example.test/?q=[label](value)&ref=ENG-12>',
+      '//example.test/?q=[label](value)&ref=ENG-12',
+      'www.example.test/?q=[label](value)&ref=ENG-12',
+      'See ENG-12',
+    ].join('\n');
+
+    expect(rewriteImportedReferences(source, mapping).text).toBe(
+      source.replace(/\nSee ENG-12$/, '\nSee OPS-4'),
+    );
+  });
+
   it('does not infer from a suffix, prefix, or a missing map entry', () => {
     const result = rewriteImportedReferences('ENG-13 ENG-12x XENG-12', mapping);
     expect(result.text).toBe('ENG-13 ENG-12x XENG-12');
@@ -230,6 +243,16 @@ describe('rewriteImportedReferences', () => {
     expect(once.text).toBe(CANONICAL_LINK);
     expect(once.alreadyCorrect).toBe(0);
     expect(twice).toMatchObject({ text: CANONICAL_LINK, edits: [], unmapped: [], alreadyCorrect: 1 });
+  });
+
+  it('leaves an existing canonical destination unchanged if a later mapping label differs', () => {
+    const changed = new Map([['SAA-77', { id: DESTINATION_ID, identifier: 'DEZ-73' }]]);
+    expect(rewriteImportedReferences(CANONICAL_LINK, changed)).toMatchObject({
+      text: CANONICAL_LINK,
+      edits: [],
+      unmapped: [],
+      alreadyCorrect: 0,
+    });
   });
 
   it('finds exact persisted keys in a split-label Linear destination but not in code or external links', () => {

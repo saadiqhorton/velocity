@@ -128,6 +128,7 @@ describe('activateEditorLink', () => {
 
   it.each([
     ['missing href', undefined],
+    ['fragment-only URL', '#section'],
     ['relative path without a root slash', 'issue/DEZ-72'],
     ['network path', '//example.com/phishing'],
     ['script URL', 'javascript:alert(1)'],

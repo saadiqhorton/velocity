@@ -983,4 +983,58 @@ describe('bundle helper', () => {
       await c.h.close();
     }
   });
+
+  it('does not resolve a source key persisted by another import run during rewrite or repair', async () => {
+    const c = await start();
+    try {
+      const priorBundle: ImportBundle = {
+        source: 'linear',
+        teams: [{ externalId: 'prior', key: 'SAA', name: 'Prior source' }],
+        statuses: [{ teamExternalId: 'prior', name: 'Todo', category: 'todo' }],
+        users: [], labels: [], projects: [], cycles: [], warnings: [],
+        issues: [
+          { externalId: 'SAA-10', teamExternalId: 'prior', title: 'Prior target', descriptionMd: 'No links', statusName: 'Todo', labelNames: [], relations: [], comments: [], attachments: [] },
+        ],
+      };
+      const priorRun = await c.h.services.importer.createRun(c.owner, { source: 'linear', bundle: priorBundle });
+      const priorMapping = mappingOf(priorRun);
+      await c.h.services.importer.updateMapping(c.owner, priorRun.id, {
+        ...priorMapping,
+        teams: { prior: { mode: 'create', key: 'OLD', name: 'Prior destination' } },
+      });
+      await importAll(c, priorRun);
+
+      const staleLinear = '[DEZ-72](https://linear.app/saadiqhorton/issue/SAA-10/prior-run)';
+      const currentBundle: ImportBundle = {
+        source: 'linear',
+        teams: [{ externalId: 'current', key: 'OPS', name: 'Current source' }],
+        statuses: [{ teamExternalId: 'current', name: 'Todo', category: 'todo' }],
+        users: [], labels: [], projects: [], cycles: [], warnings: [],
+        issues: [
+          { externalId: 'OPS-1', teamExternalId: 'current', title: 'Current source', descriptionMd: staleLinear, statusName: 'Todo', labelNames: [], relations: [], comments: [], attachments: [] },
+        ],
+      };
+      const currentRun = await c.h.services.importer.createRun(c.owner, { source: 'linear', bundle: currentBundle });
+      const currentMapping = mappingOf(currentRun);
+      await c.h.services.importer.updateMapping(c.owner, currentRun.id, {
+        ...currentMapping,
+        teams: { current: { mode: 'create', key: 'NEW', name: 'Current destination' } },
+      });
+      await importAll(c, currentRun);
+
+      expect(await count(c.h, 'import_items', `run_id = '${priorRun.id}' and kind = 'issue' and external_id = 'SAA-10'`)).toBe(1);
+      expect(await count(c.h, 'import_items', `run_id = '${currentRun.id}' and kind = 'issue' and external_id = 'SAA-10'`)).toBe(0);
+      const imported = await q<{ entity_id: string; description_md: string }>(c.h,
+        `select entity_id, description_md from import_items item join issues i on i.id = item.entity_id
+          where item.run_id = $1 and item.kind = 'issue' and item.external_id = 'OPS-1'`, [currentRun.id]);
+      expect(imported[0]!.description_md).toBe(staleLinear);
+
+      const repair = await c.h.services.importReferenceRepairs.startScan(c.owner, currentRun.id);
+      await c.h.services.importReferenceRepairs.scanJob(repair.id, repair.previewVersion);
+      const preview = await c.h.services.importReferenceRepairs.get(c.owner, repair.id);
+      expect(preview).toMatchObject({ status: 'preview', targets: [], summary: { targets: 0, references: 0, unmapped: 1 } });
+    } finally {
+      await c.h.close();
+    }
+  });
 });

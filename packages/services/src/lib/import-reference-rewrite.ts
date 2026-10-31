@@ -105,12 +105,11 @@ function markdownProtected(text: string): boolean[] {
   return mask;
 }
 
-/** Protects bare URLs that are not already part of a parsed inline link. */
+/** Protects every bare URL range, even when a Markdown construct masks part of it. */
 function markProtectedUrls(text: string, mapping: ReadonlyMap<string, unknown>, mask: boolean[]): void {
   for (const m of text.matchAll(/\b([A-Za-z][A-Za-z0-9+.-]*):[^\s<>]+/g)) {
     const start = m.index ?? 0;
     const end = start + m[0].length;
-    if (mask.slice(start, end).some(Boolean)) continue;
     const scheme = m[1]!;
     const colon = start + scheme.length;
     if (mapping.has(scheme) && text[colon + 1] !== '/') continue;
@@ -120,12 +119,12 @@ function markProtectedUrls(text: string, mapping: ReadonlyMap<string, unknown>, 
     const prefixLength = m[1]!.length;
     const start = (m.index ?? 0) + prefixLength;
     const end = start + m[0].length - prefixLength;
-    if (!mask.slice(start, end).some(Boolean)) mark(mask, start, end);
+    mark(mask, start, end);
   }
   for (const m of text.matchAll(/\bwww\.[^\s<>]+/gi)) {
     const start = m.index ?? 0;
     const end = start + m[0].length;
-    if (!mask.slice(start, end).some(Boolean)) mark(mask, start, end);
+    mark(mask, start, end);
   }
 }
 
@@ -243,7 +242,11 @@ function isWord(ch: string | undefined): boolean {
   return ch !== undefined && /[\p{L}\p{N}_]/u.test(ch);
 }
 
-/** Replaces exact run-scoped references and mapped Linear links outside Markdown code and protected URLs. */
+/**
+ * Replaces exact run-scoped references and mapped Linear links outside Markdown code and protected URLs.
+ * Callers must pass only mappings persisted for the import run being rewritten.
+ * This function never consults workspace-level issue data.
+ */
 export function rewriteImportedReferences(text: string, mapping: ReadonlyMap<string, ImportedReferenceTarget | null>): ImportedReferenceRewrite {
   const codeMask = markdownProtected(text);
   const links = inlineMarkdownLinks(text, codeMask);
