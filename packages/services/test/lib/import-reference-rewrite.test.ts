@@ -221,6 +221,7 @@ describe('rewriteImportedReferences', () => {
       '[SAA-77](https://example.test/' + LINEAR_LINK + ')',
       '[SAA-77](https://linear.app.attacker.test/saadiqhorton/issue/SAA-77/slug)',
       '[SAA-77](http://linear.app/saadiqhorton/issue/SAA-77/slug)',
+      '[SAA-77](https://linear.app:443/saadiqhorton/issue/SAA-77/slug)',
       '[SAA-77](https://linear.app:444/saadiqhorton/issue/SAA-77/slug)',
       '[SAA-77](https://linear.app/saadiqhorton/issues/SAA-77/slug)',
       '[SAA-77](https://linear.app/saadiqhorton/issue/SAA-77/slug/extra)',

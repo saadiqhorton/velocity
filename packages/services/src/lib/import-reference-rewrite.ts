@@ -204,6 +204,9 @@ function inlineMarkdownLinks(text: string, mask: boolean[]): InlineMarkdownLink[
 }
 
 function linearIssueKey(destination: string): string | null {
+  // WHATWG removes an explicit default :443 port, so compare the raw authority first.
+  const authority = /^https?:\/\/([^/?#]*)/i.exec(destination)?.[1];
+  if (authority?.toLowerCase() !== 'linear.app') return null;
   let url: URL;
   try {
     url = new URL(destination);
